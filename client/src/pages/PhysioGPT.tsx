@@ -1521,6 +1521,12 @@ export default function PhysioGPT() {
     testChainActive,
     selectedRomJoint,
     romValues,
+    // Autopilot governor state — persisted in the snapshot so reopen
+    // guards work without relying on localStorage.
+    autopilotStatus: autopilotStatus === 'done' || autopilotStatus === 'converged' || autopilotStatus === 'error'
+      ? autopilotStatus
+      : undefined,
+    lastReasoningTrigger: lastReasoningTriggerRef.current || undefined,
   }), [
     modelConfig,
     painMarkers,
@@ -1566,6 +1572,7 @@ export default function PhysioGPT() {
     testChainActive,
     selectedRomJoint,
     romValues,
+    autopilotStatus,
   ]);
 
   // Hydrate the workspace from caseSnapshot when the loaded conversation
@@ -1766,20 +1773,35 @@ export default function PhysioGPT() {
     setMonitorStability({ topLabel: null, stableForRuns: 0, converged: false, destabilized: false });
     voiceTriggeredRef.current = false;
     setMonitorStages(initialMonitorStages);
-    // Hydrate persisted autopilot status for this conversation (re-entry
-    // guard). If the chain previously settled, restore its terminal
-    // state on the dock so it doesn't re-fire automatically.
-    try {
-      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
-      const map = raw ? JSON.parse(raw) : {};
-      const persisted = map[String(selectedConversationId)];
-      if (persisted === 'done' || persisted === 'converged' || persisted === 'error') {
-        setAutopilotStatus(persisted);
-        voiceTriggeredRef.current = false;
-      } else {
-        setAutopilotStatus('idle');
-      }
-    } catch { /* ignore */ }
+    // Hydrate persisted autopilot status + last-reasoning trigger from
+    // the case snapshot (primary). Falls back to the legacy localStorage
+    // map for cases written before the snapshot field existed. Restoring
+    // lastReasoningTrigger lets the existing triggerKey dedup recognise
+    // a reopened case as already-handled WITHOUT a hard early-return —
+    // any material change to inputs (which shifts the triggerKey)
+    // re-engages reasoning automatically.
+    let restoredStatus: 'idle' | 'running' | 'done' | 'converged' | 'error' = 'idle';
+    const snapStatus = snap && typeof snap === 'object' ? (snap as PhysioGptCaseSnapshot).autopilotStatus : undefined;
+    const snapTriggerKey = snap && typeof snap === 'object' ? (snap as PhysioGptCaseSnapshot).lastReasoningTrigger : undefined;
+    if (snapStatus === 'done' || snapStatus === 'converged' || snapStatus === 'error') {
+      restoredStatus = snapStatus;
+    } else {
+      try {
+        const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        const persisted = map[String(selectedConversationId)];
+        if (persisted === 'done' || persisted === 'converged' || persisted === 'error') {
+          restoredStatus = persisted;
+        }
+      } catch { /* ignore */ }
+    }
+    setAutopilotStatus(restoredStatus);
+    lastReasoningTriggerRef.current = typeof snapTriggerKey === 'string' ? snapTriggerKey : '';
+    if (restoredStatus === 'converged') {
+      // Keep the stability ribbon consistent with the persisted state so
+      // the dock UI shows the case as converged on reopen.
+      setMonitorStability({ topLabel: null, stableForRuns: 2, converged: true, destabilized: false });
+    }
     // Use the next-saved-snapshot serialization as the baseline so the
     // immediately-following auto-save effect skips the redundant write.
     try {
@@ -5088,14 +5110,6 @@ ${ddxList}`;
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
     if (skeletonModeRef.current === 'movement') return;
-    // Past-case re-entry guard. forceRefresh=true bypasses.
-    if (!forceRefresh) {
-      const cid = selectedConversationIdRef.current;
-      if (cid) {
-        const persisted = readAutopilotStatusMap()[String(cid)];
-        if (persisted === 'done' || persisted === 'converged') return;
-      }
-    }
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -5241,6 +5255,20 @@ ${ddxList}`;
       // clinicians can see the AI didn't burn another call.
       markStageEnd('reason', 'skipped', 'inputs unchanged');
       return;
+    }
+    // Inputs drifted from the last run (manual edit, marker placement,
+    // ROM tweak, posture change, new camera finding). Reset the
+    // convergence flag and clear the persisted terminal status so the
+    // chain can re-engage on the new evidence. Without this, downstream
+    // stages (gated by monitorConvergedRef) would refuse to re-fire
+    // even though reasoning itself is about to run with new inputs.
+    if (lastReasoningTriggerRef.current && lastReasoningTriggerRef.current !== triggerKey) {
+      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+      const cidNow = selectedConversationIdRef.current;
+      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
+        setAutopilotStatus('idle');
+        writeAutopilotStatusForConv(cidNow, null);
+      }
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
     // NOTE: convergence does NOT block reasoning here. The triggerKey
@@ -5410,7 +5438,7 @@ ${ddxList}`;
     } finally {
       setClinicalReasoningProcessing(false);
     }
-  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd, readAutopilotStatusMap]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd, writeAutopilotStatusForConv]);
 
   triggerClinicalReasoningAnalysisRef.current = triggerClinicalReasoningAnalysis;
 
@@ -5441,7 +5469,13 @@ ${ddxList}`;
   useEffect(() => {
     if (pendingCameraAnalysisRef.current && focusedCameraResult) {
       pendingCameraAnalysisRef.current = null;
-      triggerClinicalReasoningAnalysis(true);
+      // Pass forceRefresh=false so the camera-driven trigger participates
+      // in the input-hash dedup. The camera result mutates pain markers /
+      // posture, so when it surfaces a genuinely new finding the
+      // triggerKey naturally shifts and reasoning re-fires; if the camera
+      // returns the same finding twice in a row, the existing dedup
+      // skips the redundant call instead of burning AI tokens.
+      triggerClinicalReasoningAnalysis(false);
     }
   }, [focusedCameraResult, triggerClinicalReasoningAnalysis]);
 
@@ -5857,12 +5891,13 @@ ${ddxList}`;
     // snapshot-opted-in set.
     const cid = selectedConversationIdRef.current;
     if (!cid || !snapshotEligibleRef.current.has(cid)) return;
-    // Re-entry guard — if this conversation already has a terminal
-    // status persisted, don't auto-rerun. The clinician must use
-    // "Re-run from here" on the dock to bypass it.
-    const persistedStatus = readAutopilotStatusMap()[String(cid)];
-    if (persistedStatus === 'done' || persistedStatus === 'converged') return;
-
+    // No hard re-entry guard here. Reasoning already short-circuits on
+    // unchanged inputs via lastReasoningTriggerRef (restored from the
+    // case snapshot on hydration), and each downstream stage below has
+    // its own per-stage input-hash dedup + monitorConverged gate. That
+    // combination lets the chain re-engage automatically when new
+    // findings shift the structural inputs, while still skipping
+    // identical replays after a reload.
     const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
     const stab = monitorStabilityRef.current;
     const topLabel = top?.condition?.trim() || null;
@@ -5987,7 +6022,7 @@ ${ddxList}`;
         markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
       }
     }, 3500);
-  }, [handleAutoBuildClick, markStageEnd, markStageStart, readAutopilotStatusMap]);
+  }, [handleAutoBuildClick, markStageEnd, markStageStart]);
 
   // Bind the actual implementation to the ref so the reasoning
   // trigger (defined earlier in render order) can call it.

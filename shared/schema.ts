@@ -3174,6 +3174,13 @@ export interface PhysioGptCaseSnapshot {
   movementFindings?: unknown;
   selectedRegion?: string | null;
   planCartItems?: unknown;
+  // Terminal autopilot status for the case so reopening a settled
+  // conversation does not auto-rerun the AI chain. Restored on hydration.
+  autopilotStatus?: 'idle' | 'running' | 'done' | 'converged' | 'error';
+  // Persisted structural input hash from the last successful reasoning
+  // run. Restored so the in-memory triggerKey dedup still recognises the
+  // case as already-handled after a reload / conversation switch.
+  lastReasoningTrigger?: string;
   // Reserved for forward compatibility — additional panels add fields here.
   [key: string]: unknown;
 }

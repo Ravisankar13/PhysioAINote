@@ -1209,7 +1209,7 @@ export default function PhysioGPT() {
     // no fresh voice trigger required.
     if (!next) {
       window.setTimeout(() => {
-        try { triggerClinicalReasoningAnalysisRef.current(false); } catch { /* re-engage best-effort */ }
+        triggerClinicalReasoningAnalysisRef.current(false);
       }, 100);
     }
     try { window.localStorage.setItem(AUTOPILOT_PAUSED_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
@@ -1268,11 +1268,9 @@ export default function PhysioGPT() {
     // Evidence: fire evidence directly, then re-run downstream (research + plan)
     // via chainAutopilotAfterReasoning using the already-cached reasoning data.
     if (id === 'evidence') {
-      try { handleEvidenceQueryRef.current({ autopilot: true }); } catch { /* fail-soft */ }
+      handleEvidenceQueryRef.current({ autopilot: true });
       const cached = clinicalReasoningDataRef.current;
-      if (cached) {
-        try { chainAutopilotAfterReasoningRef.current(cached); } catch { /* fail-soft */ }
-      }
+      if (cached) chainAutopilotAfterReasoningRef.current(cached);
       return;
     }
     // Research: fire research directly via the panel handle; chain
@@ -1280,12 +1278,14 @@ export default function PhysioGPT() {
     if (id === 'research') {
       const cached = clinicalReasoningDataRef.current;
       if (cached) {
-        try { chainAutopilotAfterReasoningRef.current(cached); } catch { /* fail-soft */ }
+        chainAutopilotAfterReasoningRef.current(cached);
       } else {
         const r = caseResearchPanelRef.current;
         if (r && !r.isRunning()) {
           markStageStartRef.current('research');
-          try { r.trigger(true); } catch (e) {
+          try {
+            r.trigger(true);
+          } catch (e) {
             markStageEndRef.current('research', 'error', e instanceof Error ? e.message : 'trigger failed');
           }
         }
@@ -1849,11 +1849,11 @@ export default function PhysioGPT() {
   useEffect(() => {
     return () => {
       if (reasoningAbortRef.current) {
-        try { reasoningAbortRef.current.abort(); } catch { /* fail-soft */ }
+        reasoningAbortRef.current.abort();
         reasoningAbortRef.current = null;
       }
       if (evidenceAbortRef.current) {
-        try { evidenceAbortRef.current.abort(); } catch { /* fail-soft */ }
+        evidenceAbortRef.current.abort();
         evidenceAbortRef.current = null;
       }
       if (autoEvidenceTimerRef.current) {
@@ -2903,18 +2903,16 @@ export default function PhysioGPT() {
         : predictionText;
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
-      // Autopilot toggle gate: only auto-fire downstream reasoning
-      // from a voice-driven parse when (a) autopilot is enabled AND
-      // (b) it isn't paused. With autopilot OFF, voice transcription
-      // + parse remain fully functional but the AI cascade does not
-      // engage — clinicians must hit Re-run-from-here or click into
-      // a stage manually. Manual UI-driven parse paths (paste +
-      // parse from the Clinical Text panel) are not gated here:
-      // they're handled by the painMarkers/modelConfig effect, which
-      // never required the autopilot toggle.
-      if (isVoiceParse && !autopilotEnabledRef.current) {
-        return;
-      }
+      // Voice parses cascade into reasoning only when autopilot is
+      // enabled, not paused, and the originating conversation is
+      // snapshot-eligible. Manual UI parses are not gated here.
+      const cidNow = selectedConversationIdRef.current;
+      const voiceCascadeAllowed = !isVoiceParse || (
+        autopilotEnabledRef.current &&
+        cidNow != null &&
+        snapshotEligibleRef.current.has(cidNow)
+      );
+      if (!voiceCascadeAllowed) return;
       setTimeout(() => {
         if (autopilotPausedRef.current) return;
         if (isVoiceParse && !autopilotEnabledRef.current) return;
@@ -5311,13 +5309,9 @@ ${ddxList}`;
       markStageEnd('reason', 'skipped', 'inputs unchanged');
       return;
     }
-    // Material-change signature: a stable hash of ONLY the clinical
-    // findings (marker IDs + severity + mechanism, ROM joint+rounded
-    // value, posture region.parameter+rounded value, compensation
-    // restrictions). Subjective text drift (a fresh transcript chunk
-    // that doesn't introduce new findings) does NOT change this
-    // signature — so once the chain converges, evolving narration
-    // alone will not re-fire reasoning.
+    // Material-change signature: structural findings only. Excludes
+    // subjective text so transcript drift after convergence cannot
+    // re-fire reasoning.
     const materialSig = JSON.stringify({
       markers: painMarkersRef.current
         .map(m => `${m.id}:${m.severity ?? 0}:${m.painMechanism ?? ''}`)
@@ -5330,12 +5324,8 @@ ${ddxList}`;
         .sort(),
       compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
     });
-    // Convergence gate at REASONING ENTRY (not just downstream).
-    // Once the chain has converged, only force-refresh (manual
-    // re-run-from-here) or a material change in clinical findings
-    // is allowed to spend another reasoning AI call. This prevents
-    // every transcript chunk from re-firing reasoning after
-    // convergence even though triggerKey drifted via subjective text.
+    // Convergence gate: skip reasoning when chain is converged and
+    // structural findings are unchanged. Force-refresh bypasses.
     if (
       !forceRefresh &&
       monitorConvergedRef.current &&
@@ -5344,10 +5334,8 @@ ${ddxList}`;
       markStageEnd('reason', 'converged', 'no material change');
       return;
     }
-    // Inputs drifted from the last run (manual edit, marker placement,
-    // ROM tweak, posture change, new camera finding). Reset the
-    // convergence flag and clear the persisted terminal status so the
-    // chain can re-engage on the new evidence.
+    // Inputs drifted from the last run — reset convergence so the
+    // chain re-engages on new findings.
     if (lastReasoningTriggerRef.current && lastReasoningTriggerRef.current !== triggerKey) {
       setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
       const cidNow = selectedConversationIdRef.current;
@@ -5432,7 +5420,7 @@ ${ddxList}`;
 
     // Cancel any in-flight reasoning request before starting a new one.
     if (reasoningAbortRef.current) {
-      try { reasoningAbortRef.current.abort(); } catch { /* fail-soft */ }
+      reasoningAbortRef.current.abort();
       reasoningAbortRef.current = null;
     }
     const reasoningAbort = new AbortController();
@@ -5541,7 +5529,7 @@ ${ddxList}`;
         reasoningOriginCid != null &&
         snapshotEligibleRef.current.has(reasoningOriginCid)
       ) {
-        try { chainAutopilotAfterReasoningRef.current(reasoningSnapshot); } catch { /* fail-soft */ }
+        chainAutopilotAfterReasoningRef.current(reasoningSnapshot);
       }
     } catch (error) {
       if ((error as { name?: string })?.name === 'AbortError') return;
@@ -5604,6 +5592,27 @@ ${ddxList}`;
     lastReasoningTriggerRef.current = '';
     triggerClinicalReasoningAnalysis(true);
   }, [subjectiveHistoryInput, triggerClinicalReasoningAnalysis]);
+
+  // Typed-text auto-trigger: when the clinician types directly into
+  // the subjective history textarea (not during voice recording),
+  // re-engage reasoning after a 1500ms idle pause. The dedup
+  // governor (lastReasoningTriggerRef + lastMaterialSignatureRef)
+  // suppresses redundant runs; this effect only schedules the call.
+  // During recording the voice cascade owns reasoning, so we skip.
+  const typedTextTriggerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isRecording) return;
+    if (skeletonMode === 'movement') return;
+    if (subjectiveHistoryInput.trim().length < 10) return;
+    if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
+    typedTextTriggerRef.current = setTimeout(() => {
+      subjectiveHistoryRef.current = subjectiveHistoryInput;
+      triggerClinicalReasoningAnalysisRef.current(false);
+    }, 1500);
+    return () => {
+      if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
+    };
+  }, [subjectiveHistoryInput, isRecording, skeletonMode]);
 
   const handleCompensationChange = useCallback((result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => {
     compensationDataRef.current = { result, movementName, restrictions };
@@ -6063,11 +6072,7 @@ ${ddxList}`;
       return true;
     };
 
-    /** Promise wrapper around the research panel's running flag. */
-    /** Wait for the in-flight evidence query to settle (success / fail /
-     *  cancel). Polls evidenceLoadingRef which is synced from React
-     *  state on every render, so we observe the same lifecycle the UI
-     *  does. Times out after 60s to avoid hanging the chain. */
+    /** Polls evidenceLoadingRef until the query settles (60s cap). */
     const awaitEvidence = (): Promise<'done' | 'error' | 'cancelled'> =>
       new Promise(resolve => {
         const startedAt = Date.now();
@@ -6077,8 +6082,6 @@ ${ddxList}`;
           if (Date.now() - startedAt > 60_000) return resolve('error');
           window.setTimeout(tick, 200);
         };
-        // Give React a frame so the loading flag actually flips true
-        // before we start polling.
         window.setTimeout(tick, 250);
       });
 
@@ -6135,9 +6138,7 @@ ${ddxList}`;
       if (!stillEligible()) return;
 
       // ── Stage: evidence ─────────────────────────────────
-      // Owned by the chain so it always runs BEFORE research. Replaces
-      // the previous setTimeout-based fire-and-forget in
-      // triggerClinicalReasoningAnalysis.
+      // Owned by the chain so it runs deterministically before research.
       const evidenceForced = forced.has('evidence');
       if (!evidenceForced && stageInputHashRef.current['evidence'] === downstreamInputHash) {
         markStageEnd('evidence', 'skipped', 'inputs unchanged');
@@ -6189,11 +6190,9 @@ ${ddxList}`;
       if (!stillEligible()) return;
 
       // ── Stage: goal-profile auto-compute (silent — no chip) ─
-      // Derive activeGoalProfile from the predicted condition AND the
-      // matching activeGoalGap from a baseline SessionSnapshot built
-      // out of the current ROM / pain markers. The gap is what
-      // downstream consumers (timeline, plan generator) actually read,
-      // so leaving it null defeats the purpose of the silent step.
+      // Sets activeGoalProfile + activeGoalGap from the predicted
+      // condition and a session-zero baseline snapshot (predicted ==
+      // current for every measurable field).
       try {
         const conditionProfile = findConditionProfile(topLabel);
         const profile = conditionProfile
@@ -6202,10 +6201,6 @@ ${ddxList}`;
         if (!stillEligible()) return;
         setActiveGoalProfile(profile);
 
-        // Build a session-zero baseline snapshot: predicted == current
-        // for every measurable field, so computeGoalGap quantifies the
-        // distance from where the patient is today to the target ROM /
-        // pain / sling integrity defined by the profile.
         const roms = romMeasurementsRef.current;
         const baselineRomPredictions: RomPrediction[] = roms.map(m => ({
           jointId: m.jointId,

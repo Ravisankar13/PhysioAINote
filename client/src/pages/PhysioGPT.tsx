@@ -2831,12 +2831,19 @@ export default function PhysioGPT() {
         : predictionText;
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
-      lastReasoningTriggerRef.current = '';
       // Pause AI gate — when the autopilot is paused, transcription/
       // parse keep running but no new AI calls auto-fire.
+      // Voice-driven reasoning intentionally uses forceRefresh=false
+      // and does NOT reset lastReasoningTriggerRef so the governor's
+      // input-hash dedup (triggerKey) skips this run when structural
+      // inputs (markers + history + posture + compensation) are
+      // unchanged, AND the convergence guard inside
+      // triggerClinicalReasoningAnalysis can suppress further runs
+      // once the chain is converged. Use Re-run-from-here for the
+      // forced-refresh path.
       setTimeout(() => {
         if (autopilotPausedRef.current) return;
-        triggerClinicalReasoningAnalysisRef.current(true);
+        triggerClinicalReasoningAnalysisRef.current(false);
       }, 300);
     }
 
@@ -2945,10 +2952,12 @@ export default function PhysioGPT() {
       const cleaned = subjectiveHistoryRef.current.replace(applied.predictionText, '').replace(/\n{3,}/g, '\n\n').trim();
       subjectiveHistoryRef.current = cleaned;
       setSubjectiveHistoryInput(cleaned);
-      lastReasoningTriggerRef.current = '';
+      // See note above on parse-driven reasoning: do NOT reset
+      // lastReasoningTriggerRef here; pass forceRefresh=false so the
+      // dedup hash + convergence guards apply.
       setTimeout(() => {
         if (autopilotPausedRef.current) return;
-        triggerClinicalReasoningAnalysisRef.current(true);
+        triggerClinicalReasoningAnalysisRef.current(false);
       }, 300);
     }
 
@@ -5226,10 +5235,19 @@ ${ddxList}`;
       return;
     }
     if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
-    // NOTE: convergence does NOT block reasoning here — once inputs
-    // change (triggerKey diff above), reasoning must re-engage so
-    // we can detect destabilization. Convergence only suppresses
-    // downstream stages (research/plan) in chainAutopilotAfterReasoning.
+    // Convergence guard — when the chain has converged AND the caller
+    // didn't explicitly force a rerun, suppress further reasoning. The
+    // triggerKey/lastReasoningTriggerRef check above proves the inputs
+    // are MATERIALLY different; we still suppress so converged cases
+    // don't keep re-firing on minor fluctuations during continuous
+    // voice. An explicit Re-run-from-here (forceRefresh=true) bypasses
+    // this. Convergence is broken (destabilized=true) when the top
+    // hypothesis changes inside chainAutopilotAfterReasoning, so the
+    // gate naturally re-opens on truly new findings.
+    if (!forceRefresh && monitorConvergedRef.current) {
+      markStageEnd('reason', 'converged', 'top hypothesis stable');
+      return;
+    }
 
     lastReasoningTriggerRef.current = triggerKey;
     // Cache the input hash on the dedup ref so per-stage governor

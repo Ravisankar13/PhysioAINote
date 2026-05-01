@@ -5610,15 +5610,28 @@ ${ddxList}`;
   // the subjective history textarea (not during voice recording),
   // re-engage the chain after a 1500ms idle pause. Manual edits
   // explicitly RESET convergence (clearing lastMaterialSignatureRef +
-  // monitorStability.converged) so reasoning re-fires even if the
-  // structural signature hasn't changed — typed text is treated as
-  // an authoritative user signal, distinct from passive voice
-  // transcript drift.
+  // lastReasoningTriggerRef + monitorStability.converged) so the
+  // governor's normal dedup/convergence path will let the call
+  // through — we do NOT pass forceRefresh=true. A hydration guard
+  // (lastTypedTextSeenRef) skips the first run after a saved case
+  // is restored so reopening a settled history does not auto-rerun.
   const typedTextTriggerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypedTextSeenRef = useRef<string | null>(null);
   useEffect(() => {
+    if (lastTypedTextSeenRef.current === null) {
+      // First observation of subjectiveHistoryInput in this mount
+      // (covers both a fresh case and a hydrated saved case). Adopt
+      // it as the baseline without firing the cascade.
+      lastTypedTextSeenRef.current = subjectiveHistoryInput;
+      return;
+    }
+    if (lastTypedTextSeenRef.current === subjectiveHistoryInput) return;
+    lastTypedTextSeenRef.current = subjectiveHistoryInput;
+
     if (isRecording) return;
     if (skeletonMode === 'movement') return;
     if (subjectiveHistoryInput.trim().length < 10) return;
+
     if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
     typedTextTriggerRef.current = setTimeout(() => {
       subjectiveHistoryRef.current = subjectiveHistoryInput;
@@ -5630,12 +5643,19 @@ ${ddxList}`;
         setAutopilotStatus('idle');
         writeAutopilotStatusForConv(cidNow, null);
       }
-      triggerClinicalReasoningAnalysisRef.current(true);
+      triggerClinicalReasoningAnalysisRef.current(false);
     }, 1500);
     return () => {
       if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
     };
   }, [subjectiveHistoryInput, isRecording, skeletonMode]);
+
+  // When the user switches conversations, reset the typed-text
+  // baseline so the next saved-history hydration is again treated
+  // as a no-fire baseline.
+  useEffect(() => {
+    lastTypedTextSeenRef.current = null;
+  }, [selectedConversationId]);
 
   const handleCompensationChange = useCallback((result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => {
     compensationDataRef.current = { result, movementName, restrictions };
@@ -5644,7 +5664,10 @@ ${ddxList}`;
       clearTimeout(clinicalReasoningTimerRef.current);
     }
     clinicalReasoningTimerRef.current = setTimeout(() => {
-      triggerClinicalReasoningAnalysis(true);
+      // Compensation change is an AUTOMATIC trigger — go through the
+      // governor's input-hash dedup. forceRefresh=true is reserved
+      // for explicit manual user actions (rerun-from-here, reset).
+      triggerClinicalReasoningAnalysis(false);
     }, 1500);
   }, [triggerClinicalReasoningAnalysis]);
 

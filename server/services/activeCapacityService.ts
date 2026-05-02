@@ -16,6 +16,25 @@
  */
 import { openai } from '../openai';
 
+export type PainfulArc = {
+  start: number;
+  end: number;
+  intensity: number;
+  /** Direction of joint motion that triggers pain. `ascending` = pain when the
+   *  angle is increasing (e.g. lifting arm into abduction), `descending` =
+   *  pain when decreasing (e.g. lowering arm — classic impingement),
+   *  `either` / omitted = pain regardless of direction. */
+  direction?: 'ascending' | 'descending' | 'either';
+  /** Dominant agonist contraction mode that triggers pain. `eccentric` =
+   *  lengthening under load (e.g. quad on squat descent for PFPS),
+   *  `concentric` = shortening under load, `isometric` = no length change,
+   *  `any` / omitted = pain regardless of contraction mode. */
+  loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+  /** Short clinical phrase surfaced in the on-body halo (e.g. "Painful on
+   *  descent" or "Impingement zone"). ≤60 chars. Optional. */
+  label?: string;
+};
+
 export type ActiveCapacityRow = {
   joint: string;
   movement: string;
@@ -23,7 +42,7 @@ export type ActiveCapacityRow = {
   passiveRomMax: number;
   activeRomMin: number;
   activeRomMax: number;
-  painfulArc: { start: number; end: number; intensity: number } | null;
+  painfulArc: PainfulArc | null;
   activeStrengthPct: number;
   painInhibitionFactor: number;
   source: 'pathology-baseline' | 'ai' | 'manual';
@@ -42,7 +61,7 @@ export type ActiveCapacityOverridePatch = {
   movement: string;
   activeRomMin?: number;
   activeRomMax?: number;
-  painfulArc?: { start: number; end: number; intensity: number } | null;
+  painfulArc?: PainfulArc | null;
   activeStrengthPct?: number;
   painInhibitionFactor?: number;
   editedAt?: string;
@@ -189,7 +208,7 @@ function applyPathologyBaseline(rows: ActiveCapacityRow[], pathologies: string[]
   return Array.from(map.values());
 }
 
-const SYSTEM_PROMPT = `You are a senior physiotherapist specialised in assessing active movement capacity. You receive a case (free-text condition + case summary + AI-inferred phenotype variables + a short literature summary) and a deterministic baseline table of joints × movements with passive ROM and a literature-anchored default active ROM. Your job is to PATCH the table with case-specific active-movement findings.
+const SYSTEM_PROMPT = `You are a senior physiotherapist specialised in assessing active movement capacity. You receive a case (free-text condition + case summary + AI-inferred phenotype variables + a literature summary + clinician-placed pain markers + the live patient-context intake) and a deterministic baseline table of joints × movements with passive ROM and a literature-anchored default active ROM. Your job is to PATCH the table with case-specific active-movement findings AND infer painful arcs for ANY plausible diagnosis — not only pre-coded ones.
 
 Return JSON of the shape:
 {
@@ -199,7 +218,14 @@ Return JSON of the shape:
       "movement": "<key from input>",
       "activeRomMin": <signed number, can be negative for bidirectional DOFs>,
       "activeRomMax": <signed number>,
-      "painfulArc": null | { "start": <signed number>, "end": <signed number>, "intensity": <1-10> },
+      "painfulArc": null | {
+        "start": <signed number>,
+        "end": <signed number>,
+        "intensity": <1-10>,
+        "direction": "ascending" | "descending" | "either",
+        "loadingMode": "concentric" | "eccentric" | "isometric" | "any",
+        "label": "<≤60-char clinical phrase, e.g. 'Impingement on lowering' or 'PFPS on squat descent'>"
+      },
       "activeStrengthPct": <number 0-100>,
       "painInhibitionFactor": <number 0-1>,
       "rationale": "<one short sentence, ≤140 chars, citing pathology mechanism>"
@@ -214,11 +240,40 @@ Signed-DOF convention:
 - A pathology that restricts the positive end (e.g. capsular flexion loss) should NOT expand the negative end. Mirror the restriction proportionally if both directions are clinically affected.
 - Painful arc start/end are in the same signed coordinate as the DOF.
 
+Direction & loading-mode encoding (CRITICAL — this drives the on-body pain visualisation):
+- "direction" describes how the JOINT ANGLE is changing when pain is reproduced:
+  * "ascending"  = pain when the angle is INCREASING (e.g. lifting arm into abduction; flexing knee into a deeper squat).
+  * "descending" = pain when the angle is DECREASING (e.g. LOWERING the arm — classic subacromial impingement; extending knee on stair-up — PFPS on stair ascent).
+  * "either"     = pain in both directions across the arc (default if unsure).
+- "loadingMode" describes what the dominant agonist is doing when pain occurs:
+  * "concentric" = agonist shortening under load.
+  * "eccentric"  = agonist lengthening under load (e.g. quad on squat DESCENT — PFPS; deltoid on arm LOWERING — impingement; hamstring on terminal swing).
+  * "isometric"  = no length change (e.g. plank holds, isometric grip).
+  * "any"        = pain regardless of contraction mode.
+- "label" is the short clinical phrase the on-body halo will display. Be specific: "Impingement on lowering", "PFPS on squat descent", "Frozen capsule end-range", "Baastrup's pinch on extension", "Hamstring eccentric overload".
+
+Universal pain-arc inference (this is the core capability — do not restrict to a small named list):
+- ANY condition that mechanically loads tissue can produce a painful arc. Always reason about WHICH motion direction (ascending vs descending) and WHICH contraction mode loads the suspected pain generator.
+- Examples (illustrative — apply the same reasoning to ANY diagnosis you encounter):
+  * Subacromial impingement: shoulder abduction 60-120°, direction="descending" (lowering pinches the bursa), loadingMode="eccentric".
+  * Patellofemoral pain (PFPS): knee flexion 60°+, direction="ascending" (going DOWN into squat — angle increasing), loadingMode="eccentric"; OR knee extension descending direction on stair-up.
+  * Baastrup's syndrome (kissing spines): lumbar extension 10°+, direction="ascending", loadingMode="concentric/isometric".
+  * Frozen shoulder (adhesive capsulitis): end-range abduction/external-rotation, direction="ascending", loadingMode="any" (capsular block in both phases).
+  * Achilles tendinopathy: calf raise descent, direction="descending" plantarflexion, loadingMode="eccentric".
+  * Hip labral tear: deep flexion + IR, direction="ascending", loadingMode="any".
+  * Cervical facet sprain: rotation toward painful side, direction="ascending", loadingMode="any".
+- Use the painMarkers (location + symptomType + severity + mechanism) as a PRIMARY signal — they tell you exactly where the patient hurts and the irritability. Cross-reference with the intake (aggravating activities, easing positions, time of day, occupation) to deduce the loading mode.
+
+Pain-marker integration:
+- A painMarker with type="referred" + a nerveRoot suggests neuropathic source — keep painfulArc null on the joint itself unless mechanical loading reproduces it.
+- High severity (≥7) painMarkers with mechanical descriptions in the intake → set higher intensity (7-9) and tighter painInhibitionFactor (0.5-0.8).
+- Multiple painMarkers in the same anatomical region → likely a single pathology — generate consistent arcs across the related DOFs (e.g. shoulder flexion + abduction + ER all painful for impingement).
+
 Rules:
 - Patch ONLY the joint × movement combinations that are clinically relevant. Leave the rest at baseline by NOT including them.
-- Painful arcs only when there is a clear pathomechanical reason.
+- Painful arcs only when there is a clear pathomechanical reason inferable from the case + markers + intake.
 - Use the case's age, sex and inferred pathologies as context for severity and irritability.
-- Be conservative: prefer mild reductions unless the case clearly warrants severe restriction.
+- Be conservative on ROM reduction: prefer mild reductions unless the case clearly warrants severe restriction. Be DIRECTIONAL on painful arcs: ALWAYS specify direction + loadingMode when you set a painful arc.
 `;
 
 function safeJSONParse(s: string): unknown {
@@ -245,11 +300,20 @@ function applyPatches(baseline: ActiveCapacityRow[], patches: unknown): ActiveCa
       const end = Number(pa.end);
       const intensity = Number(pa.intensity);
       if (Number.isFinite(start) && Number.isFinite(end) && Number.isFinite(intensity)) {
-        next.painfulArc = {
+        const arc: PainfulArc = {
           start: Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, start)),
           end: Math.max(row.passiveRomMin, Math.min(row.passiveRomMax, end)),
           intensity: Math.max(1, Math.min(10, Math.round(intensity))),
         };
+        const dir = pa.direction;
+        if (dir === 'ascending' || dir === 'descending' || dir === 'either') arc.direction = dir;
+        const lm = pa.loadingMode;
+        if (lm === 'concentric' || lm === 'eccentric' || lm === 'isometric' || lm === 'any') arc.loadingMode = lm;
+        if (typeof pa.label === 'string') {
+          const trimmed = pa.label.trim();
+          if (trimmed) arc.label = trimmed.slice(0, 80);
+        }
+        next.painfulArc = arc;
       }
     }
     if (typeof patch.activeStrengthPct === 'number') next.activeStrengthPct = Math.max(0, Math.min(100, patch.activeStrengthPct));
@@ -260,6 +324,43 @@ function applyPatches(baseline: ActiveCapacityRow[], patches: unknown): ActiveCa
   return Array.from(map.values());
 }
 
+/** Slim shape of a clinician-placed pain marker that we forward to the AI. */
+export type PainMarkerHint = {
+  /** anatomical label (e.g. "Right anterolateral knee") or nearest bone name */
+  location: string;
+  /** point | area | referred | line | paint */
+  type?: string;
+  /** pain | tingling | numbness | weakness | stiffness | etc. */
+  symptomType?: string;
+  /** clinician-entered description / patient quote */
+  description?: string;
+  /** patient-reported subjective history fragment */
+  subjectiveHistory?: string;
+  /** free-text mechanism if assigned (mechanical | inflammatory | neuropathic | …) */
+  painMechanism?: string;
+  /** dermatomal nerve root (C5, L5, …) if classified */
+  nerveRoot?: string;
+  /** 0-10 clinician-assigned severity if set */
+  severity?: number;
+};
+
+/** Slim shape of the patient-context intake we forward as additional grounding. */
+export type IntakeContextHint = {
+  occupation?: string;
+  hand_dominance?: string;
+  sport_activity?: string;
+  aggravating_activities?: string;
+  easing_positions?: string;
+  time_of_day_pattern?: string;
+  comorbidities?: string;
+  medications?: string;
+  prior_episodes?: string;
+  red_flag_screen?: string;
+  goals?: string;
+  // Free-form catch-all so callers can pass extra fields without us throwing.
+  [extra: string]: string | number | boolean | undefined;
+};
+
 export async function generateActiveCapacities(input: {
   condition: string;
   caseSummary: string;
@@ -267,6 +368,12 @@ export async function generateActiveCapacities(input: {
   age?: number;
   sex?: string;
   inferredPathologies?: string[];
+  /** NEW (Task #331) — clinician-placed pain markers. Drive painful-arc
+   *  inference for ANY diagnosis, not just pre-coded ones. */
+  painMarkers?: PainMarkerHint[];
+  /** NEW (Task #331) — patient-context intake for additional grounding
+   *  (aggravating activities, easing positions, occupation, …). */
+  intakeContext?: IntakeContextHint;
 }): Promise<ActiveCapacityProfile> {
   // Compose the deterministic baseline first so the result is never blank.
   const baseline = applyPathologyBaseline(buildBaselineRows(), input.inferredPathologies || []);
@@ -282,6 +389,33 @@ export async function generateActiveCapacities(input: {
     painInhibitionFactor: r.painInhibitionFactor,
   }));
 
+  // Cap the marker list to 24 to keep the prompt bounded.
+  const markersPayload = (input.painMarkers || []).slice(0, 24).map(m => ({
+    location: (m.location || '').slice(0, 120),
+    type: m.type,
+    symptomType: m.symptomType,
+    description: typeof m.description === 'string' ? m.description.slice(0, 300) : undefined,
+    subjectiveHistory: typeof m.subjectiveHistory === 'string' ? m.subjectiveHistory.slice(0, 300) : undefined,
+    painMechanism: m.painMechanism,
+    nerveRoot: m.nerveRoot,
+    severity: typeof m.severity === 'number' ? m.severity : undefined,
+  }));
+
+  // Strip empty/undefined intake fields and clamp string values to 400 chars.
+  const intakePayload: Record<string, string | number | boolean> = {};
+  if (input.intakeContext) {
+    for (const [k, v] of Object.entries(input.intakeContext)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'string') {
+        const trimmed = v.trim();
+        if (!trimmed) continue;
+        intakePayload[k] = trimmed.slice(0, 400);
+      } else if (typeof v === 'number' || typeof v === 'boolean') {
+        intakePayload[k] = v;
+      }
+    }
+  }
+
   const userPrompt = JSON.stringify({
     condition: input.condition,
     age: input.age,
@@ -289,6 +423,8 @@ export async function generateActiveCapacities(input: {
     inferredPathologies: input.inferredPathologies || [],
     caseSummary: input.caseSummary.slice(0, 6000),
     literatureSummary: (input.literatureSummary || '').slice(0, 4000),
+    painMarkers: markersPayload,
+    intakeContext: intakePayload,
     baseline: baselinePayload,
   });
 

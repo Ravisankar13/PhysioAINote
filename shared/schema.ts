@@ -6109,7 +6109,24 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
       passiveRomMax: number;
       activeRomMin: number;
       activeRomMax: number;
-      painfulArc: { start: number; end: number; intensity: number } | null;
+      painfulArc: {
+        start: number;
+        end: number;
+        intensity: number;
+        /** Direction of joint motion that triggers pain. `ascending` = pain when the
+         *  angle is increasing, `descending` = pain when decreasing, `either`/omitted
+         *  = pain regardless of direction. Lets the AI encode e.g. PFPS knee descent
+         *  pain or shoulder impingement on the lowering phase. */
+        direction?: 'ascending' | 'descending' | 'either';
+        /** Dominant agonist contraction mode that triggers pain. `eccentric` =
+         *  lengthening under load (e.g. quad on squat descent), `concentric` =
+         *  shortening under load, `isometric` = no length change, `any`/omitted =
+         *  pain regardless of contraction mode. */
+        loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+        /** Short clinical phrase the UI surfaces in the on-body halo (e.g. "Painful
+         *  on descent" or "Impingement zone"). ≤60 chars. Optional. */
+        label?: string;
+      } | null;
       activeStrengthPct: number;
       painInhibitionFactor: number;
       source: 'pathology-baseline' | 'ai' | 'manual';
@@ -6182,7 +6199,14 @@ export const activeCapacityRowSchema = z.object({
   passiveRomMax: z.number(),
   activeRomMin: z.number(),
   activeRomMax: z.number(),
-  painfulArc: z.object({ start: z.number(), end: z.number(), intensity: z.number().min(0).max(10) }).nullable(),
+  painfulArc: z.object({
+    start: z.number(),
+    end: z.number(),
+    intensity: z.number().min(0).max(10),
+    direction: z.enum(['ascending', 'descending', 'either']).optional(),
+    loadingMode: z.enum(['concentric', 'eccentric', 'isometric', 'any']).optional(),
+    label: z.string().max(80).optional(),
+  }).nullable(),
   activeStrengthPct: z.number().min(0).max(100),
   painInhibitionFactor: z.number().min(0).max(1),
   source: z.enum(['pathology-baseline', 'ai', 'manual']),

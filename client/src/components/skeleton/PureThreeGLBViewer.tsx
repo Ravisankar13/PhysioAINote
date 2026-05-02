@@ -1648,7 +1648,14 @@ interface PureThreeGLBViewerProps {
     activeRomMax: number;
     passiveRomMin?: number;
     passiveRomMax: number;
-    painfulArc?: { start: number; end: number; intensity?: number } | null;
+    painfulArc?: {
+      start: number;
+      end: number;
+      intensity?: number;
+      direction?: 'ascending' | 'descending' | 'either';
+      loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+      label?: string;
+    } | null;
     strengthGrade?: string;
     inhibitionLevel?: number;
     notes?: string;
@@ -2866,8 +2873,26 @@ export default function PureThreeGLBViewer({
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
   const [movementSelectedJoint, setMovementSelectedJoint] = useState<{ key: string; x: number; y: number } | null>(null);
-  const [painToast, setPainToast] = useState<{ angle: number; intensity: number; movement: string; expiresAt: number } | null>(null);
+  // Task #331: on-body painful-arc indicator. Drives the pulsing red halo +
+  // clinical label rendered AT the affected joint anchor (replaces the old
+  // top-of-screen toast banner). Carries the direction + loadingMode the AI
+  // assigned so the halo can show e.g. "Impingement on lowering" rather than
+  // just an angle readout.
+  const [painToast, setPainToast] = useState<{
+    angle: number;
+    intensity: number;
+    movement: string;
+    expiresAt: number;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null>(null);
   const lastPainfulArcStateRef = useRef<boolean>(false);
+  /** Task #331: most-recent dominant-agonist length state from the
+   *  throttled top-movers compute. Used by the per-tick painful-arc gate
+   *  so we can match the AI's `loadingMode` field without re-running
+   *  computeFullMuscleAnalysis every frame. */
+  const lastDominantLengthStateRef = useRef<'concentric' | 'eccentric' | 'isometric' | null>(null);
   const [movementMuscleActivation, setMovementMuscleActivation] = useState<MuscleActivationLevels | null>(null);
   // Task #323: live joint reaction force readout while a Movement Mode drag
   // is active. Cleared on drag-release / mode-leave so the chip disappears.
@@ -2954,7 +2979,14 @@ export default function PureThreeGLBViewer({
       activeRomMin: number;
       activeRomMax: number;
       passiveRomMax: number;
-      painfulArc?: { start: number; end: number; intensity: number } | null;
+      painfulArc?: {
+        start: number;
+        end: number;
+        intensity: number;
+        direction?: 'ascending' | 'descending' | 'either';
+        loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+        label?: string;
+      } | null;
       painInhibitionFactor?: number;
       activeStrengthPct?: number;
     } | null;
@@ -6361,7 +6393,35 @@ export default function PureThreeGLBViewer({
         if (row.painfulArc) {
           const lo2 = Math.min(row.painfulArc.start, row.painfulArc.end);
           const hi2 = Math.max(row.painfulArc.start, row.painfulArc.end);
-          if (newValue >= lo2 && newValue <= hi2) inPainfulArc = true;
+          // Task #331: angle-range gate is necessary but no longer sufficient.
+          // The AI now also tags painful arcs with a `direction` (ascending /
+          // descending of the joint angle) and a `loadingMode` (concentric /
+          // eccentric / isometric of the dominant agonist), so e.g. shoulder
+          // impingement only flares on the LOWERING phase (descending +
+          // eccentric), and PFPS only flares on the squat DESCENT (ascending
+          // knee flexion + eccentric quad). When the field is omitted or set
+          // to 'either' / 'any' we fall back to the legacy "any motion through
+          // the arc" behaviour.
+          if (newValue >= lo2 && newValue <= hi2) {
+            const dir = row.painfulArc.direction;
+            const lm = row.painfulArc.loadingMode;
+            // Direction check — only meaningful while there's actual delta;
+            // a stationary slider held inside the arc continues the prior
+            // state (handled by lastPainfulArcStateRef below).
+            let dirMatches = true;
+            if (dir === 'ascending') dirMatches = delta > 0.5;
+            else if (dir === 'descending') dirMatches = delta < -0.5;
+            // Loading-mode check — uses the most recent dominant-agonist
+            // length state from the throttled top-movers compute. When we
+            // haven't computed one yet (very first ticks of a drag) we
+            // optimistically pass so the arc isn't silently suppressed.
+            let lmMatches = true;
+            if (lm && lm !== 'any') {
+              const dom = lastDominantLengthStateRef.current;
+              if (dom) lmMatches = dom === lm;
+            }
+            if (dirMatches && lmMatches) inPainfulArc = true;
+          }
         }
       }
       drag.lastValue = newValue;
@@ -6487,8 +6547,13 @@ export default function PureThreeGLBViewer({
               if (top.length > 0) {
                 const [j, mv] = drag.configKey.split('.');
                 setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
+                // Task #331: cache the dominant agonist's length state so the
+                // per-tick painful-arc gate above can match the AI's loadingMode
+                // without re-running computeFullMuscleAnalysis on every frame.
+                lastDominantLengthStateRef.current = top[0].lengthState;
               } else {
                 setMovementTopMovers(null);
+                lastDominantLengthStateRef.current = null;
               }
             } catch {
               setMovementMuscleStatesOverlay(null);
@@ -6522,7 +6587,13 @@ export default function PureThreeGLBViewer({
           angle: newValue,
           intensity: row.painfulArc.intensity,
           movement: mv,
-          expiresAt: Date.now() + 1800,
+          // Task #331: longer hold (3.2s vs old 1.8s) since the on-body halo
+          // replaces the top-of-screen banner — clinicians need a moment to
+          // read the clinical label.
+          expiresAt: Date.now() + 3200,
+          direction: row.painfulArc.direction,
+          loadingMode: row.painfulArc.loadingMode,
+          label: row.painfulArc.label,
         });
         onPainfulArcFlareRef.current?.({
           joint: j,
@@ -6650,7 +6721,14 @@ export default function PureThreeGLBViewer({
           activeRomMin: number;
           activeRomMax: number;
           passiveRomMax: number;
-          painfulArc: { start: number; end: number; intensity: number } | null;
+          painfulArc: {
+            start: number;
+            end: number;
+            intensity: number;
+            direction?: 'ascending' | 'descending' | 'either';
+            loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+            label?: string;
+          } | null;
           painInhibitionFactor: number;
           activeStrengthPct: number;
         } | null = null;
@@ -6663,7 +6741,14 @@ export default function PureThreeGLBViewer({
               activeRomMax: r.activeRomMax,
               passiveRomMax: r.passiveRomMax,
               painfulArc: r.painfulArc
-                ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
+                ? {
+                    start: r.painfulArc.start,
+                    end: r.painfulArc.end,
+                    intensity: r.painfulArc.intensity ?? 5,
+                    direction: r.painfulArc.direction,
+                    loadingMode: r.painfulArc.loadingMode,
+                    label: r.painfulArc.label,
+                  }
                 : null,
               painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
               activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
@@ -7183,7 +7268,21 @@ export default function PureThreeGLBViewer({
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
-          let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number; activeStrengthPct: number } | null = null;
+          let activeRow: {
+            activeRomMin: number;
+            activeRomMax: number;
+            passiveRomMax: number;
+            painfulArc: {
+              start: number;
+              end: number;
+              intensity: number;
+              direction?: 'ascending' | 'descending' | 'either';
+              loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+              label?: string;
+            } | null;
+            painInhibitionFactor: number;
+            activeStrengthPct: number;
+          } | null = null;
           if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
             const lookupKey = a.def.configKey.replace('.', ':');
             const r = activeCapacitiesRef.current[lookupKey];
@@ -7193,7 +7292,14 @@ export default function PureThreeGLBViewer({
                 activeRomMax: r.activeRomMax,
                 passiveRomMax: r.passiveRomMax,
                 painfulArc: r.painfulArc
-                  ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
+                  ? {
+                      start: r.painfulArc.start,
+                      end: r.painfulArc.end,
+                      intensity: r.painfulArc.intensity ?? 5,
+                      direction: r.painfulArc.direction,
+                      loadingMode: r.painfulArc.loadingMode,
+                      label: r.painfulArc.label,
+                    }
                   : null,
                 painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
                 activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
@@ -7298,7 +7404,21 @@ export default function PureThreeGLBViewer({
             const screenDir = computeScreenDir(anchor, primaryArrow.dirWorld);
             const startValue = getCurrentValue(primaryArrow.def.configKey);
             const lim = DOF_LIMIT_INDEX.get(primaryArrow.def.configKey);
-            let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number; activeStrengthPct: number } | null = null;
+            let activeRow: {
+              activeRomMin: number;
+              activeRomMax: number;
+              passiveRomMax: number;
+              painfulArc: {
+                start: number;
+                end: number;
+                intensity: number;
+                direction?: 'ascending' | 'descending' | 'either';
+                loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+                label?: string;
+              } | null;
+              painInhibitionFactor: number;
+              activeStrengthPct: number;
+            } | null = null;
             if (activeCapacitiesRef.current) {
               const lookupKey = primaryArrow.def.configKey.replace('.', ':');
               const r = activeCapacitiesRef.current[lookupKey];
@@ -7308,7 +7428,14 @@ export default function PureThreeGLBViewer({
                   activeRomMax: r.activeRomMax,
                   passiveRomMax: r.passiveRomMax,
                   painfulArc: r.painfulArc
-                    ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
+                    ? {
+                        start: r.painfulArc.start,
+                        end: r.painfulArc.end,
+                        intensity: r.painfulArc.intensity ?? 5,
+                        direction: r.painfulArc.direction,
+                        loadingMode: r.painfulArc.loadingMode,
+                        label: r.painfulArc.label,
+                      }
                     : null,
                   painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
                   activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
@@ -11017,18 +11144,93 @@ export default function PureThreeGLBViewer({
           </div>
         );
       })()}
-      {skeletonMode === 'movement' && movementSelectedJoint && painToast && Date.now() < painToast.expiresAt && (
-        <div
-          className="absolute pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-150"
-          style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y, transform: 'translate(-50%, -50%)' }}
-          data-testid="painful-arc-wedge"
-        >
+      {/* Task #331: on-body painful-arc halo + clinical label. Replaces the
+          top-of-screen toast banner so the clinician's eye stays on the
+          affected joint. The halo pulses red with intensity-keyed brightness
+          and surfaces the AI's clinical phrase ("Impingement on lowering",
+          "PFPS on squat descent", …) plus a direction/loading-mode badge so
+          they can see WHY the pain just fired without scanning a side panel. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && painToast && Date.now() < painToast.expiresAt && (() => {
+        const anchor = selectedJointAnchorRef.current ?? { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        const intensity = painToast.intensity;
+        const ringSize = 42 + Math.min(28, intensity * 3);
+        const haloTint = intensity >= 7
+          ? { ring: 'border-red-500', glow: 'bg-red-500/35', shadow: 'shadow-red-500/60' }
+          : intensity >= 4
+            ? { ring: 'border-orange-400', glow: 'bg-orange-400/30', shadow: 'shadow-orange-400/50' }
+            : { ring: 'border-amber-400', glow: 'bg-amber-400/25', shadow: 'shadow-amber-400/40' };
+        const dirIcon = painToast.direction === 'ascending' ? '↑'
+          : painToast.direction === 'descending' ? '↓'
+            : '↕';
+        const lmShort = painToast.loadingMode === 'eccentric' ? 'ECC'
+          : painToast.loadingMode === 'concentric' ? 'CON'
+            : painToast.loadingMode === 'isometric' ? 'ISO'
+              : null;
+        const movementText = painToast.movement.replace(/([A-Z])/g, ' $1').trim();
+        return (
           <div
-            className="rounded-full border-2 border-red-500 bg-red-500/25 animate-pulse"
-            style={{ width: 44, height: 44, clipPath: 'polygon(50% 50%, 100% 0%, 100% 100%)' }}
-          />
-        </div>
-      )}
+            className="absolute pointer-events-none z-30 animate-in fade-in zoom-in-90 duration-200"
+            style={{ left: anchor.x, top: anchor.y, transform: 'translate(-50%, -50%)' }}
+            data-testid="painful-arc-halo"
+            data-direction={painToast.direction || 'either'}
+            data-loading-mode={painToast.loadingMode || 'any'}
+          >
+            {/* Outer pulsing halo — sits AT the joint and breathes red so the
+                clinician sees pain on the body, not in a banner. */}
+            <div
+              className={`absolute rounded-full border-2 ${haloTint.ring} ${haloTint.glow} ${haloTint.shadow} shadow-2xl animate-pulse`}
+              style={{
+                width: ringSize,
+                height: ringSize,
+                left: -ringSize / 2,
+                top: -ringSize / 2,
+              }}
+            />
+            {/* Inner solid pip — keeps the joint center visually anchored. */}
+            <div
+              className={`absolute rounded-full ${haloTint.ring} border bg-white/90`}
+              style={{ width: 6, height: 6, left: -3, top: -3 }}
+            />
+            {/* Directional arrow — shows ascending vs descending so the
+                clinician can see at-a-glance WHICH way of moving hurt. */}
+            <div
+              className={`absolute text-[18px] font-bold leading-none ${
+                intensity >= 7 ? 'text-red-200' : intensity >= 4 ? 'text-orange-200' : 'text-amber-200'
+              } drop-shadow-lg`}
+              style={{ left: ringSize / 2 + 2, top: -10 }}
+              data-testid="painful-arc-direction-arrow"
+            >
+              {dirIcon}
+            </div>
+            {/* Clinical label chip — the AI-supplied phrase + angle + intensity.
+                Positioned just below the halo so it doesn't crowd the joint. */}
+            <div
+              className="absolute"
+              style={{ left: 0, top: ringSize / 2 + 4, transform: 'translate(-50%, 0)' }}
+            >
+              <div className={`whitespace-nowrap px-2 py-1 rounded-md shadow-xl backdrop-blur text-white text-[11px] font-medium border ${
+                intensity >= 7 ? 'bg-red-600/90 border-red-300' :
+                intensity >= 4 ? 'bg-orange-500/90 border-orange-200' :
+                'bg-amber-500/90 border-amber-200'
+              }`}
+              data-testid="painful-arc-label"
+              >
+                {painToast.label ? (
+                  <span className="font-semibold">{painToast.label}</span>
+                ) : (
+                  <span className="font-semibold capitalize">{movementText}</span>
+                )}
+                <span className="ml-1.5 opacity-90 tabular-nums">{painToast.angle}° · {intensity}/10</span>
+                {lmShort && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-white/20 text-[9px] tracking-wider font-bold">
+                    {lmShort}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Task #323: Live joint reaction force chip — renders during a
           Movement Mode drag near the moving joint anchor. Shows total
           Newtons (primary) + body-weight multiple (secondary). Suppressed
@@ -11204,7 +11406,14 @@ export default function PureThreeGLBViewer({
               passiveRomMin: row?.passiveRomMin ?? null,
               passiveRomMax: row?.passiveRomMax ?? null,
               painfulArc: row?.painfulArc
-                ? { start: row.painfulArc.start, end: row.painfulArc.end, intensity: row.painfulArc.intensity }
+                ? {
+                    start: row.painfulArc.start,
+                    end: row.painfulArc.end,
+                    intensity: row.painfulArc.intensity,
+                    direction: row.painfulArc.direction,
+                    loadingMode: row.painfulArc.loadingMode,
+                    label: row.painfulArc.label,
+                  }
                 : null,
               pinned: lockedMovementConfigKeys.has(def.configKey),
             };
@@ -11233,22 +11442,10 @@ export default function PureThreeGLBViewer({
           />
         );
       })()}
-      {painToast && Date.now() < painToast.expiresAt && (
-        <div
-          className="absolute pointer-events-none z-30 top-3 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-top-2 duration-200"
-          data-testid="pain-toast"
-        >
-          <div className={`px-3 py-1.5 rounded-lg shadow-xl backdrop-blur text-white text-sm font-medium border ${
-            painToast.intensity >= 7 ? 'bg-red-600/90 border-red-300' :
-            painToast.intensity >= 4 ? 'bg-orange-500/90 border-orange-200' :
-            'bg-amber-500/90 border-amber-200'
-          }`}>
-            <span className="text-[10px] uppercase tracking-wider opacity-80 mr-1.5">Painful arc</span>
-            <span className="font-bold">{painToast.movement.replace(/([A-Z])/g, ' $1').trim()}</span>
-            <span className="ml-1.5 tabular-nums">{painToast.angle}° · {painToast.intensity}/10</span>
-          </div>
-        </div>
-      )}
+      {/* Task #331: top-of-screen pain toast banner removed — pain is now
+          surfaced on-body as a pulsing halo + clinical label at the affected
+          joint anchor (rendered above with data-testid="painful-arc-halo").
+          Keeps the clinician's eye on the body, not on a corner banner. */}
       {/* Force value tooltip */}
       {hoverData && (
         <div 

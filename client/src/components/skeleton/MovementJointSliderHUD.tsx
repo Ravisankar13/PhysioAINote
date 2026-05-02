@@ -10,7 +10,14 @@ export interface SliderDof {
   activeRomMax: number | null;
   passiveRomMin: number | null;
   passiveRomMax: number | null;
-  painfulArc: { start: number; end: number; intensity?: number } | null;
+  painfulArc: {
+    start: number;
+    end: number;
+    intensity?: number;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null;
   pinned: boolean;
 }
 
@@ -230,17 +237,79 @@ export default function MovementJointSliderHUD({
                     width: `${Math.max(0, valueToPct(aMax, dof.hardMin, dof.hardMax) - valueToPct(aMin, dof.hardMin, dof.hardMax))}%`,
                   }}
                 />
-                {dof.painfulArc && arcHi > arcLo && (
-                  <div
-                    className="absolute rounded-full bg-red-500/65"
-                    style={{
-                      top: 5,
-                      height: TRACK_HEIGHT_PX,
-                      left: `${valueToPct(arcLo, dof.hardMin, dof.hardMax)}%`,
-                      width: `${Math.max(0, valueToPct(arcHi, dof.hardMin, dof.hardMax) - valueToPct(arcLo, dof.hardMin, dof.hardMax))}%`,
-                    }}
-                  />
-                )}
+                {dof.painfulArc && arcHi > arcLo && (() => {
+                  // Task #331: directional shading + chevron on the painful-arc
+                  // band. When the AI tags an arc with `direction`, render a
+                  // tiny chevron at the leading edge that points the way the
+                  // joint must move to enter pain (↑ for ascending, ↓ for
+                  // descending) and stripe the band so it visually reads as a
+                  // one-way zone. Loading-mode is shown as a 1-2-letter pill
+                  // anchored above the band.
+                  const arcLeftPct = valueToPct(arcLo, dof.hardMin, dof.hardMax);
+                  const arcRightPct = valueToPct(arcHi, dof.hardMin, dof.hardMax);
+                  const arcWidthPct = Math.max(0, arcRightPct - arcLeftPct);
+                  const dir = dof.painfulArc.direction;
+                  const lm = dof.painfulArc.loadingMode;
+                  // Diagonal stripe pattern conveys "directional" at a glance;
+                  // angle flips for descending so the eye reads the slope as
+                  // moving the right way.
+                  const stripeAngle = dir === 'descending' ? '-45deg' : dir === 'ascending' ? '45deg' : null;
+                  const bandStyle: React.CSSProperties = {
+                    top: 5,
+                    height: TRACK_HEIGHT_PX,
+                    left: `${arcLeftPct}%`,
+                    width: `${arcWidthPct}%`,
+                  };
+                  if (stripeAngle) {
+                    bandStyle.background = `repeating-linear-gradient(${stripeAngle}, rgba(239,68,68,0.85) 0, rgba(239,68,68,0.85) 3px, rgba(220,38,38,0.55) 3px, rgba(220,38,38,0.55) 6px)`;
+                  }
+                  const chevron = dir === 'ascending' ? '▶' : dir === 'descending' ? '◀' : null;
+                  // Chevron sits at the LEADING edge of the painful zone — the
+                  // edge the joint angle must cross to ENTER pain, in the
+                  // direction the AI flagged.
+                  const chevronLeftPct = dir === 'ascending' ? arcLeftPct : dir === 'descending' ? arcRightPct : null;
+                  const lmShort = lm === 'eccentric' ? 'ECC'
+                    : lm === 'concentric' ? 'CON'
+                      : lm === 'isometric' ? 'ISO'
+                        : null;
+                  return (
+                    <>
+                      <div
+                        className={stripeAngle ? 'absolute rounded-full' : 'absolute rounded-full bg-red-500/65'}
+                        style={bandStyle}
+                        data-testid={`slider-painful-arc-${dof.configKey}`}
+                        data-direction={dir || 'either'}
+                        data-loading-mode={lm || 'any'}
+                        title={dof.painfulArc.label || 'Painful arc'}
+                      />
+                      {chevron && chevronLeftPct !== null && (
+                        <div
+                          className="absolute text-[9px] leading-none text-red-200 font-bold drop-shadow"
+                          style={{
+                            top: 4,
+                            left: `calc(${chevronLeftPct}% - 4px)`,
+                          }}
+                          data-testid={`slider-painful-arc-chevron-${dof.configKey}`}
+                        >
+                          {chevron}
+                        </div>
+                      )}
+                      {lmShort && (
+                        <div
+                          className="absolute text-[8px] leading-none px-1 py-0.5 rounded bg-red-600/90 text-white font-bold tracking-wider border border-red-300/60"
+                          style={{
+                            top: -8,
+                            left: `calc(${arcLeftPct + arcWidthPct / 2}% - 10px)`,
+                          }}
+                          data-testid={`slider-painful-arc-loading-${dof.configKey}`}
+                          title={`Painful on ${lm} loading`}
+                        >
+                          {lmShort}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 {dof.hardMin < 0 && dof.hardMax > 0 && (
                   <div
                     className="absolute bg-slate-400/50"

@@ -65,7 +65,14 @@ export interface ActiveCapacityRow {
   passiveRomMax: number;
   activeRomMin: number;
   activeRomMax: number;
-  painfulArc: { start: number; end: number; intensity: number } | null;
+  painfulArc: {
+    start: number;
+    end: number;
+    intensity: number;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null;
   activeStrengthPct: number;
   painInhibitionFactor: number;
   source: 'pathology-baseline' | 'ai' | 'manual';

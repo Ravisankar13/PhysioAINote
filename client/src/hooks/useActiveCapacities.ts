@@ -18,7 +18,14 @@ export type ActiveCapacityRow = {
   passiveRomMax: number;
   activeRomMin: number;
   activeRomMax: number;
-  painfulArc: { start: number; end: number; intensity: number } | null;
+  painfulArc: {
+    start: number;
+    end: number;
+    intensity: number;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null;
   activeStrengthPct: number;
   painInhibitionFactor: number;
   source: 'pathology-baseline' | 'ai' | 'manual';
@@ -85,9 +92,19 @@ export function useActiveCapacities(caseId: string | null, enabled: boolean) {
   });
 
   const generate = useMutation({
-    mutationFn: async (refresh: boolean = false) => {
+    /** Pass `extras` to forward additional grounding context (painMarkers,
+     *  intakeContext) to the AI generator. Backwards-compatible with the
+     *  legacy `generate.mutate(false)` boolean shape. */
+    mutationFn: async (
+      arg: boolean | {
+        refresh?: boolean;
+        painMarkers?: Array<Record<string, unknown>>;
+        intakeContext?: Record<string, string | number | boolean | undefined>;
+      } = false,
+    ) => {
       if (!caseId) throw new Error('No caseId');
-      return apiRequest(`/api/active-capacity/${caseId}`, 'POST', { refresh });
+      const body = typeof arg === 'boolean' ? { refresh: arg } : { refresh: false, ...arg };
+      return apiRequest(`/api/active-capacity/${caseId}`, 'POST', body);
     },
     onSuccess: () => {
       if (caseId) queryClient.invalidateQueries({ queryKey: ['/api/case-research', caseId] });

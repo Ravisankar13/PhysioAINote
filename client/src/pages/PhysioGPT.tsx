@@ -7349,6 +7349,38 @@ ${ddxList}`;
     = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
   void activeCapacityEffective;
 
+  // Task #331: build the slim painMarkers + intakeContext payloads forwarded
+  // to the AI so it can infer painful arcs for ANY plausible diagnosis (not
+  // just pre-coded ones). Memoised on the marker IDs/types/locations and the
+  // patient-context signature so we only re-fire when the clinician actually
+  // changes the case — not on every render.
+  const activeCapacityAiContext = useMemo(() => {
+    const markers = painMarkers.map(m => ({
+      location: m.anatomicalLabel || m.nearestBone,
+      type: m.type,
+      symptomType: m.symptomType,
+      description: m.description,
+      subjectiveHistory: m.subjectiveHistory,
+      painMechanism: m.painMechanism,
+      nerveRoot: m.nerveRoot,
+      severity: m.severity,
+    })).filter(m => m.location);
+    // Flatten the patient-context payload into a key→value object the AI can
+    // consume. We use the prompt id (or a stable index) as the key and the
+    // clinician's free-form answer as the value, plus the free-form paragraph
+    // under the well-known `free_form` key.
+    const intake: Record<string, string | number | boolean> = {};
+    if (patientContextPayload.free_form) intake.free_form = patientContextPayload.free_form.slice(0, 1500);
+    for (const a of patientContextPayload.answers) {
+      if (!a.answer || !a.prompt) continue;
+      // Use the prompt text (truncated) as the key so the AI sees the question
+      // alongside the answer instead of an opaque id.
+      const key = a.prompt.slice(0, 80);
+      intake[key] = a.answer.slice(0, 400);
+    }
+    return { markers, intake };
+  }, [painMarkers, patientContextPayload]);
+
   // Auto-generate the capacity profile the first time the clinician
   // enters Movement Mode for a case that has a research synthesis but
   // no active-capacity rows yet.
@@ -7358,12 +7390,60 @@ ${ddxList}`;
     if (activeCapacityProfile) return;
     if (generatingActiveCapacity) return;
     const t = window.setTimeout(() => {
-      generateActiveCapacity.mutate(false);
+      generateActiveCapacity.mutate({
+        refresh: false,
+        painMarkers: activeCapacityAiContext.markers,
+        intakeContext: activeCapacityAiContext.intake,
+      });
     }, 250);
     return () => window.clearTimeout(t);
     // generateActiveCapacity is a stable mutation object from React Query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
+
+  // Task #331: re-infer painful arcs when the clinician adds / edits / removes
+  // pain markers OR submits new patient-context answers. Debounced 1.5s so a
+  // burst of marker placements triggers a single refresh, not one per click.
+  // Only fires when Movement Mode is engaged AND a profile already exists
+  // (initial generation is handled by the effect above so we don't double-fire
+  // on first entry).
+  const lastAiContextSigRef = useRef<string>('');
+  useEffect(() => {
+    if (skeletonMode !== 'movement') return;
+    if (!activeCaseId) return;
+    if (!activeCapacityProfile) return;
+    if (generatingActiveCapacity) return;
+    // Build a stable signature from the marker shape + intake keys/values so
+    // we can dedupe and avoid re-firing on irrelevant churn (e.g. timestamps).
+    const sig = JSON.stringify({
+      markers: activeCapacityAiContext.markers.map(m => [m.location, m.type, m.symptomType, m.severity, (m.description || '').slice(0, 40)]),
+      intake: activeCapacityAiContext.intake,
+    });
+    // Skip the very first run after entry — the auto-generate effect already
+    // fired with this exact context. Record the sig and exit.
+    if (!lastAiContextSigRef.current) {
+      lastAiContextSigRef.current = sig;
+      return;
+    }
+    if (lastAiContextSigRef.current === sig) return;
+    const t = window.setTimeout(() => {
+      lastAiContextSigRef.current = sig;
+      generateActiveCapacity.mutate({
+        refresh: true,
+        painMarkers: activeCapacityAiContext.markers,
+        intakeContext: activeCapacityAiContext.intake,
+      });
+    }, 1500);
+    return () => window.clearTimeout(t);
+    // generateActiveCapacity is a stable mutation object from React Query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity, activeCapacityAiContext]);
+
+  // Reset the dedup signature when the case changes so the next case doesn't
+  // inherit a stale context hash.
+  useEffect(() => {
+    lastAiContextSigRef.current = '';
+  }, [activeCaseId]);
 
   const [painfulArcFlares, setPainfulArcFlares] = useState<Array<{
     joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number; timestamp: number;

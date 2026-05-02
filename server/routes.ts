@@ -9913,6 +9913,26 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
         ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
         : [];
+      // Task #331 — accept clinician-placed pain markers + intake context so the
+      // AI can infer painful arcs for ANY plausible diagnosis (not just the
+      // pre-coded baselines). Both are optional and validated leniently.
+      const painMarkersRaw = body.painMarkers;
+      const painMarkers = Array.isArray(painMarkersRaw)
+        ? (painMarkersRaw as unknown[]).filter((m): m is Record<string, unknown> => !!m && typeof m === 'object').map(m => ({
+            location: typeof m.location === 'string' ? m.location : (typeof m.anatomicalLabel === 'string' ? m.anatomicalLabel : (typeof m.nearestBone === 'string' ? m.nearestBone : '')),
+            type: typeof m.type === 'string' ? m.type : undefined,
+            symptomType: typeof m.symptomType === 'string' ? m.symptomType : undefined,
+            description: typeof m.description === 'string' ? m.description : undefined,
+            subjectiveHistory: typeof m.subjectiveHistory === 'string' ? m.subjectiveHistory : undefined,
+            painMechanism: typeof m.painMechanism === 'string' ? m.painMechanism : undefined,
+            nerveRoot: typeof m.nerveRoot === 'string' ? m.nerveRoot : undefined,
+            severity: typeof m.severity === 'number' ? m.severity : undefined,
+          })).filter(m => m.location)
+        : undefined;
+      const intakeRaw = body.intakeContext;
+      const intakeContext = (intakeRaw && typeof intakeRaw === 'object' && !Array.isArray(intakeRaw))
+        ? (intakeRaw as Record<string, string | number | boolean | undefined>)
+        : undefined;
       const { generateActiveCapacities } = await import("./services/activeCapacityService");
       const profile = await generateActiveCapacities({
         condition,
@@ -9921,6 +9941,8 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
         sex: typeof sexRaw === 'string' ? sexRaw : undefined,
         inferredPathologies,
+        painMarkers,
+        intakeContext,
       });
       const saved = await storage.upsertCaseResearchSynthesis({
         caseId,
@@ -9960,7 +9982,14 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         activeRomMax: z.number().optional(),
         painfulArc: z.union([
           z.null(),
-          z.object({ start: z.number(), end: z.number(), intensity: z.number() }),
+          z.object({
+            start: z.number(),
+            end: z.number(),
+            intensity: z.number(),
+            direction: z.enum(['ascending', 'descending', 'either']).optional(),
+            loadingMode: z.enum(['concentric', 'eccentric', 'isometric', 'any']).optional(),
+            label: z.string().max(80).optional(),
+          }),
         ]).optional(),
         activeStrengthPct: z.number().optional(),
         painInhibitionFactor: z.number().optional(),

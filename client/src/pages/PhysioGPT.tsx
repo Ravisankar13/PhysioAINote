@@ -5125,13 +5125,14 @@ ${ddxList}`;
     const seeds: Seed[] = [];
     const seenKeys = new Set<string>();
 
+    const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
     for (const mv of provocationMovements) {
       for (const site of mv.expectedProvocationSites ?? []) {
         const region = site.region as AnatomicalRegion;
         const bones = REGION_BONE_MAPPING[region];
         const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
         if (!nearestBone) continue;
-        const key = `region-${region}`;
+        const key = `region-${region}-${slugify(site.label)}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
         seeds.push({
@@ -5139,7 +5140,7 @@ ${ddxList}`;
           bone: nearestBone,
           label: site.label,
           severity: typeof site.severity === "number" ? site.severity : 5,
-          description: `AI-predicted symptom site (${site.label})`,
+          description: `Auto-placed from clinical prediction: ${site.label}`,
         });
       }
     }
@@ -5164,23 +5165,36 @@ ${ddxList}`;
         bone: nearestBone,
         label: entry?.label ?? tissueId,
         severity: typeof ct.severity === "number" ? ct.severity : 5,
-        description: `Compromised ${ct.tissue_type}: ${entry?.label ?? tissueId}`,
+        description: `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`,
       });
     }
 
     setPainMarkers(prev => {
       const dismissed = dismissedSeedIdsRef.current;
       const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
-      const seedIds = new Set(filteredSeeds.map(s => s.id));
-      const kept = prev.filter(m =>
-        !m.id.startsWith('pred-seed-') ||
-        m.source !== 'prediction' ||
-        seedIds.has(m.id)
-      );
-      const keptIds = new Set(kept.map(m => m.id));
-      const additions: PainMarker[] = filteredSeeds
-        .filter(s => !keptIds.has(s.id))
-        .map(s => ({
+      const seedById = new Map(filteredSeeds.map(s => [s.id, s]));
+      let mutated = false;
+      // Drop pred-seed markers no longer in the seed set (and still owned by prediction);
+      // refresh the bone/label/severity/description of those that remain.
+      const updated: PainMarker[] = [];
+      for (const m of prev) {
+        if (m.id.startsWith('pred-seed-') && m.source === 'prediction') {
+          const s = seedById.get(m.id);
+          if (!s) { mutated = true; continue; }
+          if (m.nearestBone !== s.bone || m.anatomicalLabel !== s.label || m.severity !== s.severity || m.description !== s.description) {
+            updated.push({ ...m, nearestBone: s.bone, anatomicalLabel: s.label, severity: s.severity, description: s.description });
+            mutated = true;
+          } else {
+            updated.push(m);
+          }
+        } else {
+          updated.push(m);
+        }
+      }
+      const keptIds = new Set(updated.map(m => m.id));
+      for (const s of filteredSeeds) {
+        if (keptIds.has(s.id)) continue;
+        updated.push({
           id: s.id,
           type: 'point' as PainMarkerType,
           symptomType: 'pain' as SymptomType,
@@ -5190,9 +5204,10 @@ ${ddxList}`;
           description: s.description,
           severity: s.severity,
           source: 'prediction' as const,
-        }));
-      if (additions.length === 0 && kept.length === prev.length) return prev;
-      return [...kept, ...additions];
+        });
+        mutated = true;
+      }
+      return mutated ? updated : prev;
     });
   }, [provocationMovements, compromisedTissues]);
 
@@ -7923,16 +7938,21 @@ ${ddxList}`;
     }
   }, [skeletonMode, slingsOverlayPinned]);
 
-  // Auto-pin the slings overlay when entering Movement Mode if a prediction is active.
-  const prevSkeletonModeRef = useRef<typeof skeletonMode>(skeletonMode);
+  // Auto-pin the slings overlay in Movement Mode when a prediction is active.
+  // Tracks whether we've auto-pinned for the current Movement Mode entry so a
+  // manual unpin by the clinician is not undone, while still allowing a late-
+  // arriving slingAnalysis to trigger the pin after we've already entered.
+  const movementAutoPinnedRef = useRef(false);
   useEffect(() => {
-    const prev = prevSkeletonModeRef.current;
-    prevSkeletonModeRef.current = skeletonMode;
-    if (prev !== 'movement' && skeletonMode === 'movement') {
-      const hasPredSeed = painMarkers.some(m => m.source === 'prediction');
-      if (hasPredSeed && slingAnalysis && !slingsOverlayPinned) {
-        setSlingsOverlayPinned(true);
-      }
+    if (skeletonMode !== 'movement') {
+      movementAutoPinnedRef.current = false;
+      return;
+    }
+    if (movementAutoPinnedRef.current || slingsOverlayPinned) return;
+    const hasPredSeed = painMarkers.some(m => m.source === 'prediction');
+    if (hasPredSeed && slingAnalysis) {
+      movementAutoPinnedRef.current = true;
+      setSlingsOverlayPinned(true);
     }
   }, [skeletonMode, painMarkers, slingAnalysis, slingsOverlayPinned]);
 
@@ -9867,11 +9887,16 @@ ${ddxList}`;
                                       {i > 0 && <span className="text-slate-600">, </span>}
                                       <button
                                         type="button"
-                                        onClick={() => setClinicalBubbleMarker(m)}
+                                        onClick={() => {
+                                          setClinicalBubbleMarker(m);
+                                          setEditingMarkerId(m.id);
+                                        }}
+                                        title={m.source === 'prediction' ? `Auto-placed from clinical prediction: ${m.anatomicalLabel ?? ''}` : (m.description ?? m.anatomicalLabel ?? '')}
                                         className="text-rose-300 hover:text-rose-200 underline-offset-2 hover:underline"
                                         data-testid={`poor-sling-marker-${m.id}`}
                                       >
                                         {m.anatomicalLabel || m.nearestBone || 'marker'}
+                                        {m.source === 'prediction' && <span className="ml-1 text-cyan-300/70">[AI]</span>}
                                       </button>
                                     </span>
                                   ))}

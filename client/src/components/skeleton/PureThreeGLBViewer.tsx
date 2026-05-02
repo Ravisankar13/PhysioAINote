@@ -6860,6 +6860,22 @@ export default function PureThreeGLBViewer({
       // ceremony (Task #319). In Posture Mode this remains a plain
       // selection — the clinician must subsequently click an arrow.
       const boneName = findBoneFromRaycast(ndc);
+      // Task #322: in Movement Mode, a single click on empty 3D space
+      // (no arrow, no bone, no shift-segment) dismisses the slider HUD
+      // and clears the joint selection. The HUD's own click-outside
+      // listener intentionally skips canvas-targeted clicks so it
+      // doesn't fight bone-switch / arrow-drag picks; this is the
+      // background-miss path that closes the chip from inside the
+      // canvas. We don't preventDefault here so OrbitControls is still
+      // free to begin a camera drag from the same gesture.
+      if (
+        (!boneName || !POSE_BONE_MAP[boneName]) &&
+        skeletonModeRef.current === 'movement' &&
+        (selectedJointKey || selectedAnchorBoneName || selectedBoneSegmentId)
+      ) {
+        deselectJoint();
+        return;
+      }
       if (boneName && POSE_BONE_MAP[boneName]) {
         selectJoint(boneName);
         if (skeletonModeRef.current === 'movement') {

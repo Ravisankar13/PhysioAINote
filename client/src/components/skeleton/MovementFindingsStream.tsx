@@ -47,13 +47,14 @@ export default function MovementFindingsStream({ findings, onClear, className = 
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
-  // Collapsible UI (Task #320). The panel defaults to collapsed so an empty
-  // Movement Mode session doesn't visually dominate the 3D skeleton viewer.
-  // It auto-expands exactly once when the first finding arrives in this
-  // session, after which the clinician's manual toggle is the source of
-  // truth. State is per-mount, so leaving and re-entering Movement Mode
-  // resets to the default — that's the desired behaviour.
-  const [collapsed, setCollapsed] = useState(true);
+  // Collapsible UI (Task #320). The panel defaults to collapsed when there
+  // are no findings yet so an empty Movement Mode session doesn't visually
+  // dominate the 3D skeleton viewer. If findings already exist on mount
+  // (e.g. a previous session restored them) it starts expanded. After mount
+  // it auto-expands exactly once when the first finding arrives, and from
+  // there the clinician's manual toggle is the source of truth. State is
+  // per-mount, so leaving and re-entering Movement Mode resets the default.
+  const [collapsed, setCollapsed] = useState(() => findings.length === 0);
   const userToggledRef = useRef(false);
   const lastCountRef = useRef(findings.length);
   useEffect(() => {
@@ -67,14 +68,25 @@ export default function MovementFindingsStream({ findings, onClear, className = 
     userToggledRef.current = true;
     setCollapsed(c => !c);
   };
+  const onHeaderKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleCollapsed();
+    }
+  };
   const ChevIcon = collapsed ? ChevronDown : ChevronUp;
 
   return (
     <Card className={`bg-emerald-950/50 border-emerald-700/50 text-emerald-50 ${className}`}>
-      <button
-        type="button"
+      {/* Header: a clickable container (not a <button>) so the inner
+          "Clear" Button isn't a nested interactive element, which would
+          be invalid HTML and cause inconsistent a11y behaviour. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={toggleCollapsed}
-        className={`w-full flex items-center justify-between p-3 text-left hover:bg-emerald-900/40 transition-colors ${collapsed ? '' : 'border-b border-emerald-700/40'}`}
+        onKeyDown={onHeaderKeyDown}
+        className={`w-full flex items-center justify-between p-3 text-left cursor-pointer select-none hover:bg-emerald-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 transition-colors ${collapsed ? '' : 'border-b border-emerald-700/40'}`}
         data-testid="movement-findings-toggle"
         aria-expanded={!collapsed}
         title={collapsed ? 'Expand Movement Findings' : 'Collapse Movement Findings'}
@@ -99,7 +111,7 @@ export default function MovementFindingsStream({ findings, onClear, className = 
           )}
           <ChevIcon className="h-3.5 w-3.5 text-emerald-300" />
         </div>
-      </button>
+      </div>
       {!collapsed && (
       <ScrollArea className="max-h-[260px]" data-testid="movement-findings-body">
         <div className="p-2 space-y-1.5">

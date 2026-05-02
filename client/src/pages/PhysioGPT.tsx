@@ -3175,7 +3175,12 @@ export default function PhysioGPT() {
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
-    setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, position, nearestBone, anatomicalLabel } : m));
+    // Task #332: when the clinician moves an AI-seeded marker, flip its
+    // source to 'clinician' so the auto-seed effect stops managing it
+    // (preserves the clinician edit across re-seeds).
+    setPainMarkers(prev => prev.map(m => m.id === id
+      ? { ...m, position, nearestBone, anatomicalLabel, source: m.source === 'prediction' ? 'clinician' : m.source }
+      : m));
   }, []);
 
   const handlePainMarkerRemove = useCallback((id: string) => {
@@ -3188,7 +3193,11 @@ export default function PhysioGPT() {
   }, [editingMarkerId]);
 
   const handlePainMarkerUpdate = useCallback((id: string, updates: Partial<PainMarker>) => {
-    setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    // Task #332: clinician edits to AI-seeded markers flip source → 'clinician'
+    // so the auto-seed effect leaves them alone.
+    setPainMarkers(prev => prev.map(m => m.id === id
+      ? { ...m, ...updates, source: m.source === 'prediction' && updates.source === undefined ? 'clinician' : (updates.source ?? m.source) }
+      : m));
   }, []);
 
   const handleClinicalBubbleDeepDive = useCallback((markerId: string, data: ClinicalBubbleData, answers: Record<string, string>) => {
@@ -5107,6 +5116,105 @@ ${ddxList}`;
       );
     };
   }, []);
+
+  /**
+   * Task #332 — Auto-seed pain markers from the active clinical prediction.
+   *
+   * Two sources feed the seed set:
+   *   1. The active provocation hypothesis' `expectedProvocationSites`
+   *      (regions where the predicted condition would expect symptoms),
+   *   2. The current `compromisedTissues` from clinical text/voice parsing.
+   *
+   * Seeded markers are id-prefixed `pred-seed-` and tagged `source: 'prediction'`,
+   * which makes them render with a dashed cyan ring + "AI" badge in the 3D
+   * viewer (see PainMarker rendering useEffect in PureThreeGLBViewer.tsx).
+   *
+   * Clinician edits are preserved: as soon as the clinician moves, removes,
+   * or updates a `pred-seed-*` marker (handlers below), its `source` flips
+   * to 'clinician' and this effect stops auto-managing it. We only ever add
+   * a seed when no marker with that ID exists, and only remove pred-seed
+   * markers whose `source` is still 'prediction' AND whose seed key is no
+   * longer in the current prediction.
+   */
+  useEffect(() => {
+    // Aggregate seed sites: regions from expected provocation + bones from
+    // compromised tissues. Each yields a stable seed key so re-seeding from
+    // the same prediction produces the same IDs (idempotent).
+    type Seed = { id: string; bone: string; label: string; severity: number; description: string };
+    const seeds: Seed[] = [];
+    const seenKeys = new Set<string>();
+
+    const allSites = provocationMovements.flatMap(mv =>
+      (mv.expectedProvocationSites ?? []).map(s => ({ mv, site: s }))
+    );
+    for (const { site } of allSites) {
+      const region = site.region as AnatomicalRegion;
+      const bones = REGION_BONE_MAPPING[region];
+      const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
+      if (!nearestBone) continue;
+      const key = `region-${region}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      seeds.push({
+        id: `pred-seed-${key}`,
+        bone: nearestBone,
+        label: site.label,
+        severity: typeof site.severity === "number" ? site.severity : 5,
+        description: `AI-predicted symptom site (${site.label})`,
+      });
+    }
+
+    for (const ct of compromisedTissues) {
+      const tissueId = ct.tissue_id;
+      if (!tissueId) continue;
+      const dataset =
+        ct.tissue_type === 'tendon' ? TENDON_DATA :
+        ct.tissue_type === 'joint' ? JOINT_SURFACE_DATA :
+        ct.tissue_type === 'nerve' ? NERVE_PATHWAY_DATA :
+        ct.tissue_type === 'fascia' ? FASCIAL_LAYER_DATA :
+        [];
+      const entry = dataset.find(e => e.id === tissueId);
+      const nearestBone = entry?.bones?.[0];
+      if (!nearestBone) continue;
+      const key = `tissue-${ct.tissue_type}-${tissueId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      seeds.push({
+        id: `pred-seed-${key}`,
+        bone: nearestBone,
+        label: entry?.label ?? tissueId,
+        severity: typeof ct.severity === "number" ? ct.severity : 5,
+        description: `Compromised ${ct.tissue_type}: ${entry?.label ?? tissueId}`,
+      });
+    }
+
+    setPainMarkers(prev => {
+      const seedIds = new Set(seeds.map(s => s.id));
+      // Drop pred-seed markers that are no longer in the seed set AND are
+      // still owned by the prediction (clinician-touched ones survive).
+      const kept = prev.filter(m =>
+        !m.id.startsWith('pred-seed-') ||
+        m.source !== 'prediction' ||
+        seedIds.has(m.id)
+      );
+      const keptIds = new Set(kept.map(m => m.id));
+      const additions: PainMarker[] = seeds
+        .filter(s => !keptIds.has(s.id))
+        .map(s => ({
+          id: s.id,
+          type: 'point' as PainMarkerType,
+          symptomType: 'pain' as SymptomType,
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone: s.bone,
+          anatomicalLabel: s.label,
+          description: s.description,
+          severity: s.severity,
+          source: 'prediction' as const,
+        }));
+      if (additions.length === 0 && kept.length === prev.length) return prev;
+      return [...kept, ...additions];
+    });
+  }, [provocationMovements, compromisedTissues]);
 
   const handleRePoseToRefined = useCallback(() => {
     if (!stalePoseHint) return;
@@ -7835,6 +7943,24 @@ ${ddxList}`;
     }
   }, [skeletonMode, slingsOverlayPinned]);
 
+  // Task #332: when entering Movement Mode, auto-pin the slings overlay if
+  // a prediction is active (i.e. there is at least one AI-seeded pain marker
+  // and a sling analysis is available). Tracks the last skeletonMode in a
+  // ref so this only fires on the transition into 'movement', allowing the
+  // clinician to manually toggle it back off without us re-pinning every
+  // re-render.
+  const prevSkeletonModeRef = useRef<typeof skeletonMode>(skeletonMode);
+  useEffect(() => {
+    const prev = prevSkeletonModeRef.current;
+    prevSkeletonModeRef.current = skeletonMode;
+    if (prev !== 'movement' && skeletonMode === 'movement') {
+      const hasPredSeed = painMarkers.some(m => m.source === 'prediction');
+      if (hasPredSeed && slingAnalysis && !slingsOverlayPinned) {
+        setSlingsOverlayPinned(true);
+      }
+    }
+  }, [skeletonMode, painMarkers, slingAnalysis, slingsOverlayPinned]);
+
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
       left_hip: 'Hip_L', right_hip: 'Hip_R',
@@ -9677,6 +9803,61 @@ ${ddxList}`;
                     Updating pain map…
                   </div>
                 )}
+                {/* Task #332: Poor Slings callout — surfaces every sling whose
+                    status is not normal so the clinician sees, at a glance,
+                    which slings are driving the dysfunction in this movement.
+                    Only renders when the slings overlay is pinned. */}
+                {slingsOverlayPinned && slingAnalysis && (() => {
+                  const poor = slingAnalysis.slings.filter(s => s.status !== 'normal');
+                  if (poor.length === 0) return null;
+                  const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; label: string }> = {
+                    underperforming: { bg: 'bg-orange-500/15', ring: 'ring-orange-400/60', dot: 'bg-orange-400', label: 'Underperforming' },
+                    overloaded: { bg: 'bg-red-500/15', ring: 'ring-red-400/60', dot: 'bg-red-400', label: 'Overloaded' },
+                    compensating: { bg: 'bg-amber-500/15', ring: 'ring-amber-400/60', dot: 'bg-amber-400', label: 'Compensating' },
+                  };
+                  return (
+                    <div
+                      className="absolute bottom-2 right-2 z-30 max-w-[240px] rounded-lg border border-slate-700/70 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-2 space-y-1.5"
+                      data-testid="poor-slings-callout"
+                    >
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-200 uppercase tracking-wide">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        Poor Slings
+                        <span className="ml-auto text-slate-500 font-normal normal-case">{poor.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {poor.map(s => {
+                          const style = STATUS_STYLE[s.status] ?? STATUS_STYLE.compensating;
+                          const isSelected = selectedSlingId === s.slingId;
+                          return (
+                            <button
+                              key={s.slingId}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSlingId(s.slingId);
+                                setExpandedSlingDetailId(prev => prev === s.slingId ? null : s.slingId);
+                              }}
+                              className={`w-full text-left rounded-md px-2 py-1.5 ring-1 ${style.bg} ${style.ring} ${isSelected ? 'ring-2 ring-cyan-400/70' : ''} hover:bg-slate-800/80 transition-colors`}
+                              data-testid={`poor-sling-${s.slingId}`}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span className={`h-2 w-2 rounded-full ${style.dot} shrink-0`} />
+                                <span className="text-[11px] font-medium text-slate-100 truncate flex-1">{s.label}</span>
+                                <span className="text-[9px] text-slate-400 font-mono shrink-0">{Math.round(s.activationScore)}%</span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                <span className={`px-1 py-px rounded text-[8px] font-semibold uppercase ${style.bg} text-slate-200`}>{style.label}</span>
+                                {s.weakLinks.length > 0 && (
+                                  <span className="text-slate-500">· {s.weakLinks.length} weak</span>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ); return __viewer; })()}
 

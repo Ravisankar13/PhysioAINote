@@ -3175,15 +3175,15 @@ export default function PhysioGPT() {
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
-    // Task #332: when the clinician moves an AI-seeded marker, flip its
-    // source to 'clinician' so the auto-seed effect stops managing it
-    // (preserves the clinician edit across re-seeds).
     setPainMarkers(prev => prev.map(m => m.id === id
       ? { ...m, position, nearestBone, anatomicalLabel, source: m.source === 'prediction' ? 'clinician' : m.source }
       : m));
   }, []);
 
   const handlePainMarkerRemove = useCallback((id: string) => {
+    if (id.startsWith('pred-seed-')) {
+      dismissedSeedIdsRef.current.add(id);
+    }
     setPainMarkers(prev => prev.filter(m => m.id !== id));
     if (editingMarkerId === id) {
       setEditingMarkerId(null);
@@ -3193,8 +3193,6 @@ export default function PhysioGPT() {
   }, [editingMarkerId]);
 
   const handlePainMarkerUpdate = useCallback((id: string, updates: Partial<PainMarker>) => {
-    // Task #332: clinician edits to AI-seeded markers flip source → 'clinician'
-    // so the auto-seed effect leaves them alone.
     setPainMarkers(prev => prev.map(m => m.id === id
       ? { ...m, ...updates, source: m.source === 'prediction' && updates.source === undefined ? 'clinician' : (updates.source ?? m.source) }
       : m));
@@ -5117,51 +5115,33 @@ ${ddxList}`;
     };
   }, []);
 
-  /**
-   * Task #332 — Auto-seed pain markers from the active clinical prediction.
-   *
-   * Two sources feed the seed set:
-   *   1. The active provocation hypothesis' `expectedProvocationSites`
-   *      (regions where the predicted condition would expect symptoms),
-   *   2. The current `compromisedTissues` from clinical text/voice parsing.
-   *
-   * Seeded markers are id-prefixed `pred-seed-` and tagged `source: 'prediction'`,
-   * which makes them render with a dashed cyan ring + "AI" badge in the 3D
-   * viewer (see PainMarker rendering useEffect in PureThreeGLBViewer.tsx).
-   *
-   * Clinician edits are preserved: as soon as the clinician moves, removes,
-   * or updates a `pred-seed-*` marker (handlers below), its `source` flips
-   * to 'clinician' and this effect stops auto-managing it. We only ever add
-   * a seed when no marker with that ID exists, and only remove pred-seed
-   * markers whose `source` is still 'prediction' AND whose seed key is no
-   * longer in the current prediction.
-   */
+  // Tombstones: seed IDs the clinician explicitly removed. Stored in a ref so
+  // adding to it doesn't itself retrigger the seed effect; the effect re-reads
+  // the set on its next run (driven by prediction/tissue changes).
+  const dismissedSeedIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    // Aggregate seed sites: regions from expected provocation + bones from
-    // compromised tissues. Each yields a stable seed key so re-seeding from
-    // the same prediction produces the same IDs (idempotent).
     type Seed = { id: string; bone: string; label: string; severity: number; description: string };
     const seeds: Seed[] = [];
     const seenKeys = new Set<string>();
 
-    const allSites = provocationMovements.flatMap(mv =>
-      (mv.expectedProvocationSites ?? []).map(s => ({ mv, site: s }))
-    );
-    for (const { site } of allSites) {
-      const region = site.region as AnatomicalRegion;
-      const bones = REGION_BONE_MAPPING[region];
-      const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
-      if (!nearestBone) continue;
-      const key = `region-${region}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      seeds.push({
-        id: `pred-seed-${key}`,
-        bone: nearestBone,
-        label: site.label,
-        severity: typeof site.severity === "number" ? site.severity : 5,
-        description: `AI-predicted symptom site (${site.label})`,
-      });
+    for (const mv of provocationMovements) {
+      for (const site of mv.expectedProvocationSites ?? []) {
+        const region = site.region as AnatomicalRegion;
+        const bones = REGION_BONE_MAPPING[region];
+        const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
+        if (!nearestBone) continue;
+        const key = `region-${region}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        seeds.push({
+          id: `pred-seed-${key}`,
+          bone: nearestBone,
+          label: site.label,
+          severity: typeof site.severity === "number" ? site.severity : 5,
+          description: `AI-predicted symptom site (${site.label})`,
+        });
+      }
     }
 
     for (const ct of compromisedTissues) {
@@ -5189,16 +5169,16 @@ ${ddxList}`;
     }
 
     setPainMarkers(prev => {
-      const seedIds = new Set(seeds.map(s => s.id));
-      // Drop pred-seed markers that are no longer in the seed set AND are
-      // still owned by the prediction (clinician-touched ones survive).
+      const dismissed = dismissedSeedIdsRef.current;
+      const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
+      const seedIds = new Set(filteredSeeds.map(s => s.id));
       const kept = prev.filter(m =>
         !m.id.startsWith('pred-seed-') ||
         m.source !== 'prediction' ||
         seedIds.has(m.id)
       );
       const keptIds = new Set(kept.map(m => m.id));
-      const additions: PainMarker[] = seeds
+      const additions: PainMarker[] = filteredSeeds
         .filter(s => !keptIds.has(s.id))
         .map(s => ({
           id: s.id,
@@ -7943,12 +7923,7 @@ ${ddxList}`;
     }
   }, [skeletonMode, slingsOverlayPinned]);
 
-  // Task #332: when entering Movement Mode, auto-pin the slings overlay if
-  // a prediction is active (i.e. there is at least one AI-seeded pain marker
-  // and a sling analysis is available). Tracks the last skeletonMode in a
-  // ref so this only fires on the transition into 'movement', allowing the
-  // clinician to manually toggle it back off without us re-pinning every
-  // re-render.
+  // Auto-pin the slings overlay when entering Movement Mode if a prediction is active.
   const prevSkeletonModeRef = useRef<typeof skeletonMode>(skeletonMode);
   useEffect(() => {
     const prev = prevSkeletonModeRef.current;
@@ -9803,10 +9778,6 @@ ${ddxList}`;
                     Updating pain map…
                   </div>
                 )}
-                {/* Task #332: Poor Slings callout — surfaces every sling whose
-                    status is not normal so the clinician sees, at a glance,
-                    which slings are driving the dysfunction in this movement.
-                    Only renders when the slings overlay is pinned. */}
                 {slingsOverlayPinned && slingAnalysis && (() => {
                   const poor = slingAnalysis.slings.filter(s => s.status !== 'normal');
                   if (poor.length === 0) return null;
@@ -9817,41 +9788,102 @@ ${ddxList}`;
                   };
                   return (
                     <div
-                      className="absolute bottom-2 right-2 z-30 max-w-[240px] rounded-lg border border-slate-700/70 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-2 space-y-1.5"
+                      className="absolute bottom-2 right-2 z-30 w-[300px] max-h-[60%] overflow-y-auto rounded-lg border border-slate-700/70 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-2 space-y-1.5"
                       data-testid="poor-slings-callout"
                     >
-                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-200 uppercase tracking-wide">
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-200 uppercase tracking-wide sticky top-0 bg-slate-900/95 pb-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                         Poor Slings
                         <span className="ml-auto text-slate-500 font-normal normal-case">{poor.length}</span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         {poor.map(s => {
                           const style = STATUS_STYLE[s.status] ?? STATUS_STYLE.compensating;
                           const isSelected = selectedSlingId === s.slingId;
+                          const slingBones = new Set(getSlingBonePathway(s.slingId));
+                          const supportingMarkers = painMarkers.filter(m => m.nearestBone && slingBones.has(m.nearestBone));
+                          const compensatingFrom = s.compensations[0];
+                          const rationale = s.clinicalConsequences[0];
                           return (
-                            <button
+                            <div
                               key={s.slingId}
-                              type="button"
-                              onClick={() => {
-                                setSelectedSlingId(s.slingId);
-                                setExpandedSlingDetailId(prev => prev === s.slingId ? null : s.slingId);
-                              }}
-                              className={`w-full text-left rounded-md px-2 py-1.5 ring-1 ${style.bg} ${style.ring} ${isSelected ? 'ring-2 ring-cyan-400/70' : ''} hover:bg-slate-800/80 transition-colors`}
+                              className={`rounded-md p-2 ring-1 ${style.bg} ${style.ring} ${isSelected ? 'ring-2 ring-cyan-400/70' : ''} space-y-1.5`}
                               data-testid={`poor-sling-${s.slingId}`}
                             >
-                              <div className="flex items-center gap-1.5">
-                                <span className={`h-2 w-2 rounded-full ${style.dot} shrink-0`} />
-                                <span className="text-[11px] font-medium text-slate-100 truncate flex-1">{s.label}</span>
-                                <span className="text-[9px] text-slate-400 font-mono shrink-0">{Math.round(s.activationScore)}%</span>
-                              </div>
-                              <div className="text-[9px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                <span className={`px-1 py-px rounded text-[8px] font-semibold uppercase ${style.bg} text-slate-200`}>{style.label}</span>
-                                {s.weakLinks.length > 0 && (
-                                  <span className="text-slate-500">· {s.weakLinks.length} weak</span>
-                                )}
-                              </div>
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSlingId(s.slingId);
+                                  setExpandedSlingDetailId(prev => prev === s.slingId ? null : s.slingId);
+                                }}
+                                className="w-full text-left hover:opacity-90"
+                                data-testid={`poor-sling-header-${s.slingId}`}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`h-2 w-2 rounded-full ${style.dot} shrink-0`} />
+                                  <span className="text-[11px] font-medium text-slate-100 truncate flex-1">{s.label}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono shrink-0">{Math.round(s.activationScore)}%</span>
+                                </div>
+                                <div className="text-[9px] text-slate-400 mt-0.5">
+                                  <span className={`px-1 py-px rounded text-[8px] font-semibold uppercase ${style.bg} text-slate-200`}>{style.label}</span>
+                                </div>
+                              </button>
+
+                              {s.weakLinks.length > 0 && (
+                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-weaklinks-${s.slingId}`}>
+                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Weak:</span>
+                                  {s.weakLinks.map((wl, i) => (
+                                    <span key={wl.muscle}>
+                                      {i > 0 && <span className="text-slate-600">, </span>}
+                                      <span className="text-orange-300">{wl.muscle}</span>
+                                      <span className="text-slate-500"> ({Math.round(wl.activationPct)}%)</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {compensatingFrom && (
+                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-comp-${s.slingId}`}>
+                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Compensated by:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSlingId(compensatingFrom.compensatingSling);
+                                      setExpandedSlingDetailId(compensatingFrom.compensatingSling);
+                                    }}
+                                    className="text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
+                                  >
+                                    {compensatingFrom.compensatingSlingLabel}
+                                  </button>
+                                  <span className="text-slate-500"> · +{Math.round(compensatingFrom.additionalLoadPct)}% load</span>
+                                </div>
+                              )}
+
+                              {supportingMarkers.length > 0 && (
+                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-markers-${s.slingId}`}>
+                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Markers:</span>
+                                  {supportingMarkers.map((m, i) => (
+                                    <span key={m.id}>
+                                      {i > 0 && <span className="text-slate-600">, </span>}
+                                      <button
+                                        type="button"
+                                        onClick={() => setClinicalBubbleMarker(m)}
+                                        className="text-rose-300 hover:text-rose-200 underline-offset-2 hover:underline"
+                                        data-testid={`poor-sling-marker-${m.id}`}
+                                      >
+                                        {m.anatomicalLabel || m.nearestBone || 'marker'}
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {rationale && (
+                                <div className="text-[9px] text-slate-400 italic leading-snug border-t border-slate-700/50 pt-1" data-testid={`poor-sling-rationale-${s.slingId}`}>
+                                  {rationale}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

@@ -2815,7 +2815,7 @@ export default function PureThreeGLBViewer({
   const treatmentBoneNamesRef = useRef(treatmentBoneNames);
   treatmentBoneNamesRef.current = treatmentBoneNames;
   const treatmentFrameCounter = useRef(0);
-  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
+  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } }>>(new Map());
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
@@ -5213,6 +5213,71 @@ export default function PureThreeGLBViewer({
       }
     };
 
+    const buildAiDecoration = (
+      sc: THREE.Scene,
+      markerId: string,
+      pos: THREE.Vector3,
+      baseOuterRadius: number,
+      markerType: string,
+    ): { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } => {
+      const ringRadius = (markerType === 'area' ? baseOuterRadius : 0.13) * 1.15;
+      const ringSegments = 48;
+      const ringPts: THREE.Vector3[] = [];
+      for (let i = 0; i <= ringSegments; i++) {
+        const a = (i / ringSegments) * Math.PI * 2;
+        ringPts.push(new THREE.Vector3(Math.cos(a) * ringRadius, Math.sin(a) * ringRadius, 0));
+      }
+      const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+      const ringMat = new THREE.LineDashedMaterial({
+        color: 0x22d3ee, dashSize: 0.025, gapSize: 0.018,
+        transparent: true, opacity: 0.85, depthTest: false, depthWrite: false,
+      });
+      ringMat.userData.baseOpacity = 0.85;
+      const ring = new THREE.LineLoop(ringGeo, ringMat);
+      ring.computeLineDistances();
+      ring.position.copy(pos);
+      ring.lookAt(pos.x, pos.y, pos.z + 1);
+      ring.renderOrder = 1002;
+      ring.userData.isPainMarker = true;
+      ring.userData.markerId = markerId;
+      sc.add(ring);
+
+      const aiCanvas = document.createElement('canvas');
+      aiCanvas.width = 96; aiCanvas.height = 48;
+      const aictx = aiCanvas.getContext('2d');
+      if (aictx) {
+        aictx.fillStyle = 'rgba(8, 47, 73, 0.95)';
+        aictx.beginPath(); aictx.roundRect(2, 2, 92, 44, 10); aictx.fill();
+        aictx.strokeStyle = '#22d3ee'; aictx.lineWidth = 2;
+        aictx.beginPath(); aictx.roundRect(2, 2, 92, 44, 10); aictx.stroke();
+        aictx.font = 'bold 24px sans-serif'; aictx.fillStyle = '#67e8f9';
+        aictx.textAlign = 'center'; aictx.textBaseline = 'middle';
+        aictx.fillText('AI', 48, 26);
+      }
+      const aiTex = new THREE.CanvasTexture(aiCanvas);
+      aiTex.needsUpdate = true;
+      const aiMat = new THREE.SpriteMaterial({ map: aiTex, transparent: true, depthTest: false, opacity: 0.95 });
+      const sprite = new THREE.Sprite(aiMat);
+      sprite.position.set(pos.x + ringRadius * 0.95, pos.y + ringRadius * 0.95, pos.z);
+      sprite.scale.set(0.06, 0.03, 1);
+      sprite.renderOrder = 1003;
+      sprite.userData.isPainMarker = true;
+      sprite.userData.markerId = markerId;
+      sc.add(sprite);
+
+      return { ring, sprite, ringRadius };
+    };
+
+    const disposeAiDecoration = (sc: THREE.Scene, dec: { ring: THREE.LineLoop; sprite: THREE.Sprite }) => {
+      sc.remove(dec.ring);
+      dec.ring.geometry.dispose();
+      (dec.ring.material as THREE.Material).dispose();
+      sc.remove(dec.sprite);
+      const sm = dec.sprite.material as THREE.SpriteMaterial;
+      if (sm.map) sm.map.dispose();
+      sm.dispose();
+    };
+
     const existingIds = new Set(painMarkers.map(m => m.id));
     painMarkerMeshesRef.current.forEach((meshes, id) => {
       if (!existingIds.has(id)) {
@@ -5234,6 +5299,7 @@ export default function PureThreeGLBViewer({
             }
           });
         }
+        if (meshes.aiDecoration) disposeAiDecoration(scene, meshes.aiDecoration);
         painMarkerMeshesRef.current.delete(id);
       }
     });
@@ -5264,6 +5330,22 @@ export default function PureThreeGLBViewer({
         const meshes = painMarkerMeshesRef.current.get(marker.id)!;
         meshes.inner.position.copy(pos);
         meshes.outer.position.copy(pos);
+
+        const wantsAi = marker.source === 'prediction';
+        if (wantsAi && !meshes.aiDecoration) {
+          const baseRadiusForRing = (meshes.outer.userData.baseRadius as number | undefined) ?? (markerType === 'area' ? (marker.radius || 0.15) : 0.1);
+          meshes.aiDecoration = buildAiDecoration(scene, marker.id, pos, baseRadiusForRing, markerType);
+        } else if (!wantsAi && meshes.aiDecoration) {
+          disposeAiDecoration(scene, meshes.aiDecoration);
+          meshes.aiDecoration = undefined;
+        } else if (wantsAi && meshes.aiDecoration) {
+          meshes.aiDecoration.ring.position.copy(pos);
+          meshes.aiDecoration.sprite.position.set(
+            pos.x + meshes.aiDecoration.ringRadius * 0.95,
+            pos.y + meshes.aiDecoration.ringRadius * 0.95,
+            pos.z,
+          );
+        }
 
         if (markerType === 'referred' && marker.referralTarget && meshes.extra && meshes.extra.length >= 3) {
           const tp = new THREE.Vector3(marker.referralTarget.x, marker.referralTarget.y, marker.referralTarget.z);
@@ -5479,79 +5561,14 @@ export default function PureThreeGLBViewer({
         }
       }
 
-      // Task #332: AI-sourced (prediction-seeded) marker decoration —
-      // dashed circular ring around the marker + a small "AI" badge sprite.
-      // This visually distinguishes auto-seeded markers from clinician-placed
-      // ones until the clinician edits them (at which point the seed effect
-      // flips marker.source to 'clinician' and re-renders without the badge).
+      const newMeshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } } = {
+        inner: innerMesh,
+        outer: outerMesh,
+        extra: extraObjects.length > 0 ? extraObjects : undefined,
+      };
       if (marker.source === 'prediction') {
-        const ringRadius = (markerType === 'area' ? baseOuterRadius : 0.13) * 1.15;
-        const ringSegments = 48;
-        const ringPts: THREE.Vector3[] = [];
-        for (let i = 0; i <= ringSegments; i++) {
-          const a = (i / ringSegments) * Math.PI * 2;
-          ringPts.push(new THREE.Vector3(Math.cos(a) * ringRadius, Math.sin(a) * ringRadius, 0));
-        }
-        const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
-        const ringMat = new THREE.LineDashedMaterial({
-          color: 0x22d3ee,
-          dashSize: 0.025,
-          gapSize: 0.018,
-          transparent: true,
-          opacity: 0.85,
-          depthTest: false,
-          depthWrite: false,
-        });
-        ringMat.userData.baseOpacity = 0.85;
-        const ringLine = new THREE.LineLoop(ringGeo, ringMat);
-        ringLine.computeLineDistances();
-        ringLine.position.copy(pos);
-        ringLine.lookAt(pos.x, pos.y, pos.z + 1);
-        ringLine.renderOrder = 1002;
-        ringLine.userData.isPainMarker = true;
-        ringLine.userData.markerId = marker.id;
-        scene.add(ringLine);
-        extraObjects.push(ringLine);
-
-        const aiCanvas = document.createElement('canvas');
-        aiCanvas.width = 96;
-        aiCanvas.height = 48;
-        const aictx = aiCanvas.getContext('2d');
-        if (aictx) {
-          aictx.fillStyle = 'rgba(8, 47, 73, 0.95)';
-          aictx.beginPath();
-          aictx.roundRect(2, 2, 92, 44, 10);
-          aictx.fill();
-          aictx.strokeStyle = '#22d3ee';
-          aictx.lineWidth = 2;
-          aictx.beginPath();
-          aictx.roundRect(2, 2, 92, 44, 10);
-          aictx.stroke();
-          aictx.font = 'bold 24px sans-serif';
-          aictx.fillStyle = '#67e8f9';
-          aictx.textAlign = 'center';
-          aictx.textBaseline = 'middle';
-          aictx.fillText('AI', 48, 26);
-        }
-        const aiTex = new THREE.CanvasTexture(aiCanvas);
-        aiTex.needsUpdate = true;
-        const aiMat = new THREE.SpriteMaterial({
-          map: aiTex,
-          transparent: true,
-          depthTest: false,
-          opacity: 0.95,
-        });
-        const aiSprite = new THREE.Sprite(aiMat);
-        aiSprite.position.set(pos.x + ringRadius * 0.95, pos.y + ringRadius * 0.95, pos.z);
-        aiSprite.scale.set(0.06, 0.03, 1);
-        aiSprite.renderOrder = 1003;
-        aiSprite.userData.isPainMarker = true;
-        aiSprite.userData.markerId = marker.id;
-        scene.add(aiSprite);
-        extraObjects.push(aiSprite);
+        newMeshes.aiDecoration = buildAiDecoration(scene, marker.id, pos, baseOuterRadius, markerType);
       }
-
-      const newMeshes = { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined };
       painMarkerMeshesRef.current.set(marker.id, newMeshes);
       applyPainMarkerSeverity(newMeshes, marker, markerType);
     }
@@ -5572,6 +5589,16 @@ export default function PureThreeGLBViewer({
             if (obj instanceof THREE.Mesh) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
             else if (obj instanceof THREE.Line) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
           });
+        }
+        if (meshes.aiDecoration) {
+          const dec = meshes.aiDecoration;
+          if (dec.ring.parent) dec.ring.parent.remove(dec.ring);
+          dec.ring.geometry.dispose();
+          (dec.ring.material as THREE.Material).dispose();
+          if (dec.sprite.parent) dec.sprite.parent.remove(dec.sprite);
+          const sm = dec.sprite.material as THREE.SpriteMaterial;
+          if (sm.map) sm.map.dispose();
+          sm.dispose();
         }
       });
       painMarkerMeshesRef.current.clear();

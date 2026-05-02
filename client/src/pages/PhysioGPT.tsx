@@ -9848,7 +9848,13 @@ ${ddxList}`;
                               : pathway
                           );
                           const supportingMarkers = painMarkers.filter(m => m.nearestBone && targetBones.has(m.nearestBone));
-                          const compensatingFrom = s.compensations[0];
+                          // s.compensations only contains entries where THIS sling
+                          // is the compensator. To show "which sling is taking load
+                          // FOR this failing sling", look up crossSlingCompensations
+                          // where compensatedSling === s.slingId.
+                          const compensatingFrom = slingAnalysis?.crossSlingCompensations.find(
+                            c => c.compensatedSling === s.slingId
+                          );
                           const rationale = s.clinicalConsequences[0];
                           return (
                             <div

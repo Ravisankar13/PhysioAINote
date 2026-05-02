@@ -3198,6 +3198,25 @@ export default function PhysioGPT() {
       : m));
   }, []);
 
+  // Human-readable source attribution for prediction-seeded markers.
+  const formatMarkerSourceAttribution = useCallback((m: PainMarker | null | undefined): string | null => {
+    if (!m) return null;
+    if (m.sourceKind === 'tissue' && m.sourceTissueLabel) {
+      const sevBlurb = typeof m.sourceTissueSeverity === 'number'
+        ? ` · severity ${m.sourceTissueSeverity.toFixed(1)}/10`
+        : '';
+      const tissueType = m.sourceTissueType ? `${m.sourceTissueType} ` : '';
+      const cond = m.sourceHypothesisCondition ? ` (${m.sourceHypothesisCondition})` : '';
+      return `From compromised ${tissueType}${m.sourceTissueLabel}${sevBlurb}${cond}`;
+    }
+    if (m.sourceKind === 'provocation' && m.sourceProvocationLabel) {
+      const cond = m.sourceHypothesisCondition ? ` for ${m.sourceHypothesisCondition}` : '';
+      const movement = m.sourceProvocationMovement ? ` (${m.sourceProvocationMovement})` : '';
+      return `From provocation site${cond}: ${m.sourceProvocationLabel}${movement}`;
+    }
+    return null;
+  }, []);
+
   const handleClinicalBubbleDeepDive = useCallback((markerId: string, data: ClinicalBubbleData, answers: Record<string, string>) => {
     const marker = painMarkers.find(m => m.id === markerId);
     if (!marker) return;
@@ -5116,9 +5135,28 @@ ${ddxList}`;
   const predictionHasSeededRef = useRef<boolean>(false);
 
   useEffect(() => {
-    type Seed = { id: string; bone: string; label: string; severity: number; description: string };
+    type Seed = {
+      id: string;
+      bone: string;
+      label: string;
+      severity: number;
+      description: string;
+      attribution: Pick<PainMarker,
+        | 'sourceKind'
+        | 'sourceHypothesisId'
+        | 'sourceHypothesisCondition'
+        | 'sourceProvocationMovement'
+        | 'sourceProvocationLabel'
+        | 'sourceTissueType'
+        | 'sourceTissueId'
+        | 'sourceTissueLabel'
+        | 'sourceTissueSeverity'
+      >;
+    };
     const seeds: Seed[] = [];
     const seenKeys = new Set<string>();
+    const hypId = provocationHypothesis?.id;
+    const hypCondition = provocationHypothesis?.condition;
 
     const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
     for (const mv of provocationMovements) {
@@ -5136,6 +5174,13 @@ ${ddxList}`;
           label: site.label,
           severity: typeof site.severity === "number" ? site.severity : 5,
           description: `Auto-placed from clinical prediction: ${site.label}`,
+          attribution: {
+            sourceKind: 'provocation',
+            sourceHypothesisId: hypId,
+            sourceHypothesisCondition: hypCondition,
+            sourceProvocationMovement: mv.name,
+            sourceProvocationLabel: site.label,
+          },
         });
       }
     }
@@ -5158,12 +5203,22 @@ ${ddxList}`;
       // Normalize 0–1 severity sources to the 0–10 marker scale.
       const rawSev = typeof ct.severity === "number" ? ct.severity : 0.5;
       const normalisedSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
+      const sevClamped = Math.max(0, Math.min(10, normalisedSev));
       seeds.push({
         id: `pred-seed-${key}`,
         bone: nearestBone,
         label: entry?.label ?? tissueId,
-        severity: Math.max(0, Math.min(10, normalisedSev)),
+        severity: sevClamped,
         description: `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`,
+        attribution: {
+          sourceKind: 'tissue',
+          sourceHypothesisId: hypId,
+          sourceHypothesisCondition: hypCondition,
+          sourceTissueType: ct.tissue_type,
+          sourceTissueId: tissueId,
+          sourceTissueLabel: entry?.label ?? tissueId,
+          sourceTissueSeverity: sevClamped,
+        },
       });
     }
 
@@ -5185,8 +5240,44 @@ ${ddxList}`;
         if (m.id.startsWith('pred-seed-') && m.source === 'prediction') {
           const s = seedById.get(m.id);
           if (!s) { mutated = true; continue; }
-          if (m.nearestBone !== s.bone || m.anatomicalLabel !== s.label || m.severity !== s.severity || m.description !== s.description) {
-            updated.push({ ...m, nearestBone: s.bone, anatomicalLabel: s.label, severity: s.severity, description: s.description });
+          if (
+            m.nearestBone !== s.bone ||
+            m.anatomicalLabel !== s.label ||
+            m.severity !== s.severity ||
+            m.description !== s.description ||
+            m.sourceHypothesisCondition !== s.attribution.sourceHypothesisCondition
+          ) {
+            updated.push({
+              ...m,
+              nearestBone: s.bone,
+              anatomicalLabel: s.label,
+              severity: s.severity,
+              description: s.description,
+              ...s.attribution,
+            });
+            mutated = true;
+          } else {
+            updated.push(m);
+          }
+        } else if (m.id.startsWith('pred-seed-') && seedById.has(m.id)) {
+          // Edited seed (source: 'clinician'): refresh stored attribution so
+          // the Re-seed affordance always reflects the current prediction.
+          const s = seedById.get(m.id)!;
+          const newAttrs = s.attribution;
+          const attrKeys: Array<keyof typeof newAttrs> = [
+            'sourceKind',
+            'sourceHypothesisId',
+            'sourceHypothesisCondition',
+            'sourceProvocationMovement',
+            'sourceProvocationLabel',
+            'sourceTissueType',
+            'sourceTissueId',
+            'sourceTissueLabel',
+            'sourceTissueSeverity',
+          ];
+          const attrChanged = attrKeys.some(k => m[k] !== newAttrs[k]);
+          if (attrChanged) {
+            updated.push({ ...m, ...newAttrs });
             mutated = true;
           } else {
             updated.push(m);
@@ -5208,12 +5299,93 @@ ${ddxList}`;
           description: s.description,
           severity: s.severity,
           source: 'prediction' as const,
+          ...s.attribution,
         });
         mutated = true;
       }
       return mutated ? updated : prev;
     });
-  }, [provocationMovements, compromisedTissues]);
+  }, [provocationMovements, compromisedTissues, provocationHypothesis?.id, provocationHypothesis?.condition]);
+
+  // Restore an edited prediction-seeded marker back to its AI-suggested
+  // placement. We re-derive the live seed (bone/label/severity/description)
+  // from the active provocation movements / compromised tissues and flip the
+  // source back to 'prediction' so the dashed AI ring + auto-management
+  // returns. Falls back to the marker's stored attribution metadata when the
+  // prediction no longer surfaces this site.
+  const handleReSeedPredictionMarker = useCallback((id: string) => {
+    if (!id.startsWith('pred-seed-')) return;
+    setPainMarkers(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+      let bone: string | undefined;
+      let label: string | undefined;
+      let severity: number | undefined;
+      let description: string | undefined;
+      for (const mv of provocationMovements) {
+        for (const site of mv.expectedProvocationSites ?? []) {
+          const region = site.region as AnatomicalRegion;
+          const bones = REGION_BONE_MAPPING[region];
+          const nb = bones && bones.length > 0 ? bones[0] : undefined;
+          if (!nb) continue;
+          const key = `region-${region}-${slugify(site.label)}`;
+          if (`pred-seed-${key}` === id) {
+            bone = nb;
+            label = site.label;
+            severity = typeof site.severity === 'number' ? site.severity : 5;
+            description = `Auto-placed from clinical prediction: ${site.label}`;
+          }
+        }
+      }
+      if (!bone) {
+        for (const ct of compromisedTissues) {
+          const tissueId = ct.tissue_id;
+          if (!tissueId) continue;
+          const dataset =
+            ct.tissue_type === 'tendon' ? TENDON_DATA :
+            ct.tissue_type === 'joint' ? JOINT_SURFACE_DATA :
+            ct.tissue_type === 'nerve' ? NERVE_PATHWAY_DATA :
+            ct.tissue_type === 'fascia' ? FASCIAL_LAYER_DATA :
+            [];
+          const entry = dataset.find(e => e.id === tissueId);
+          const nb = entry?.bones?.[0];
+          if (!nb) continue;
+          const key = `tissue-${ct.tissue_type}-${tissueId}`;
+          if (`pred-seed-${key}` === id) {
+            const rawSev = typeof ct.severity === 'number' ? ct.severity : 0.5;
+            const normSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
+            bone = nb;
+            label = entry?.label ?? tissueId;
+            severity = Math.max(0, Math.min(10, normSev));
+            description = `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`;
+          }
+        }
+      }
+      // Fallback to the marker's stored attribution if the prediction no
+      // longer offers this seed - still useful: clears clinician edits.
+      if (!bone) {
+        bone = m.nearestBone;
+        label = m.sourceTissueLabel ?? m.sourceProvocationLabel ?? m.anatomicalLabel;
+        severity = m.sourceTissueSeverity ?? m.severity;
+        description = m.sourceTissueLabel
+          ? `Auto-placed from clinical prediction: compromised ${m.sourceTissueType ?? 'tissue'} ${m.sourceTissueLabel}`
+          : m.sourceProvocationLabel
+            ? `Auto-placed from clinical prediction: ${m.sourceProvocationLabel}`
+            : m.description;
+      }
+      return {
+        ...m,
+        nearestBone: bone || m.nearestBone,
+        anatomicalLabel: label || m.anatomicalLabel,
+        severity,
+        description,
+        position: { x: 0, y: 0, z: 0 },
+        source: 'prediction' as const,
+      };
+    }));
+    dismissedSeedIdsRef.current.delete(id);
+    toast({ title: 'Re-seeded', description: 'Restored AI-suggested placement.' });
+  }, [provocationMovements, compromisedTissues, toast]);
 
   const handleRePoseToRefined = useCallback(() => {
     if (!stalePoseHint) return;
@@ -9833,6 +10005,9 @@ ${ddxList}`;
                               : pathway
                           );
                           const supportingMarkers = painMarkers.filter(m => m.nearestBone && targetBones.has(m.nearestBone));
+                          const aiSeededMarkerCount = supportingMarkers.filter(
+                            m => m.id.startsWith('pred-seed-') || m.source === 'prediction' || m.sourceKind != null
+                          ).length;
                           // s.compensations attaches to the compensator; for the failing
                           // sling we need the inverse direction.
                           const compensatingFrom = slingAnalysis?.crossSlingCompensations.find(
@@ -9878,6 +10053,15 @@ ${ddxList}`;
                                       <span className="text-slate-500"> ({Math.round(wl.activationPct)}%)</span>
                                     </span>
                                   ))}
+                                  {aiSeededMarkerCount > 0 && (
+                                    <span
+                                      className="ml-1.5 text-[8px] px-1 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-500/30"
+                                      title={`${aiSeededMarkerCount} marker${aiSeededMarkerCount === 1 ? '' : 's'} on weak-link bones were AI-seeded from the active prediction`}
+                                      data-testid={`poor-sling-ai-seed-count-${s.slingId}`}
+                                    >
+                                      {aiSeededMarkerCount} AI-seeded
+                                    </span>
+                                  )}
                                 </div>
                               )}
 
@@ -12247,6 +12431,8 @@ ${ddxList}`;
                       line: { bg: 'bg-pink-500', shadow: '#ff4488', label: 'Line' },
                     };
                     const tc = typeColors[m.type || 'point'] || typeColors.point;
+                    const sourceText = formatMarkerSourceAttribution(m);
+                    const canReSeed = m.id.startsWith('pred-seed-') && m.source !== 'prediction' && (m.sourceKind != null);
                     return (
                     <div key={m.id} className="bg-white/5 rounded px-2 py-1.5">
                       <div className="flex items-center gap-2 group">
@@ -12254,6 +12440,7 @@ ${ddxList}`;
                         <div className="flex-1 min-w-0">
                           <span
                             className="text-[11px] text-white truncate block font-medium cursor-pointer hover:text-teal-300 transition-colors"
+                            title={sourceText ?? m.anatomicalLabel}
                             onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); setClinicalBubbleSeverity("moderate"); }}
                           >{m.anatomicalLabel}</span>
                           <div className="flex items-center gap-1 flex-wrap">
@@ -12261,11 +12448,22 @@ ${ddxList}`;
                             {m.source === 'prediction' && (
                               <span
                                 className="text-[8px] px-1 rounded bg-cyan-900/50 text-cyan-300 border border-cyan-500/40"
-                                title="Auto-placed from clinical prediction"
+                                title={sourceText ?? 'Auto-placed from clinical prediction'}
                                 data-testid={`marker-source-ai-${m.id}`}
                               >
                                 AI
                               </span>
+                            )}
+                            {canReSeed && (
+                              <button
+                                type="button"
+                                className="text-[8px] px-1 rounded bg-cyan-900/30 text-cyan-300/80 border border-cyan-500/30 hover:bg-cyan-900/60 hover:text-cyan-200 transition-colors"
+                                title={sourceText ? `Re-seed from AI: ${sourceText}` : 'Restore AI-suggested placement'}
+                                data-testid={`marker-reseed-${m.id}`}
+                                onClick={(e) => { e.stopPropagation(); handleReSeedPredictionMarker(m.id); }}
+                              >
+                                Re-seed
+                              </button>
                             )}
                             {m.painMechanism && (
                               <span className={`text-[8px] px-1 rounded ${m.painMechanism === 'neuropathic' ? 'bg-blue-900/40 text-blue-300' : m.painMechanism === 'myofascial' ? 'bg-orange-900/40 text-orange-300' : m.painMechanism === 'central_sensitization' ? 'bg-pink-900/40 text-pink-300' : 'bg-red-900/40 text-red-300'}`}>
@@ -12309,6 +12507,14 @@ ${ddxList}`;
                           onClick={() => { setEditingMarkerId(m.id); setMarkerDescription(m.description || ''); }}
                         >
                           "{m.description}"
+                        </p>
+                      )}
+                      {sourceText && (
+                        <p
+                          className="text-[10px] text-cyan-300/80 mt-1 ml-4 leading-snug"
+                          data-testid={`marker-source-attribution-${m.id}`}
+                        >
+                          {sourceText}
                         </p>
                       )}
                       {editingMarkerId === m.id ? (
@@ -12417,6 +12623,26 @@ ${ddxList}`;
                 onSubjectiveHistoryChange={(mId, history) => {
                   setPainMarkers(prev => prev.map(m => m.id === mId ? { ...m, subjectiveHistory: history } : m));
                 }}
+                sourceAttribution={formatMarkerSourceAttribution(
+                  painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker
+                )}
+                onReSeed={(() => {
+                  const live = painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker;
+                  // Only expose Re-seed when the seed has been edited by the
+                  // clinician; an active 'prediction' marker is already at the
+                  // AI-suggested placement.
+                  if (!live.id.startsWith('pred-seed-') || live.source === 'prediction' || live.sourceKind == null) {
+                    return undefined;
+                  }
+                  return (mId: string) => {
+                    handleReSeedPredictionMarker(mId);
+                    setPainMarkers(curr => {
+                      const fresh = curr.find(m => m.id === mId);
+                      if (fresh) setClinicalBubbleMarker(fresh);
+                      return curr;
+                    });
+                  };
+                })()}
               />
               </Suspense>
             )}

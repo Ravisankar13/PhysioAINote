@@ -91,6 +91,12 @@ interface ClinicalBubbleProps {
   onDataLoaded?: (markerId: string, data: ClinicalBubbleData, severity: string) => void;
   subjectiveHistory?: string;
   onSubjectiveHistoryChange?: (markerId: string, history: string) => void;
+  /** Optional human-readable attribution describing why the AI placed this
+   *  marker (e.g. "From provocation site for L4 disc bulge: lateral thigh"). */
+  sourceAttribution?: string | null;
+  /** Optional handler shown as a "Re-seed" button when the AI-seeded marker
+   *  has been edited by the clinician. */
+  onReSeed?: (markerId: string) => void;
 }
 
 type TabType = "ddx" | "questions" | "subjective" | "assessment" | "treatment" | "exercises" | "behaviour";
@@ -121,6 +127,8 @@ export default function ClinicalBubble({
   onDataLoaded,
   subjectiveHistory,
   onSubjectiveHistoryChange,
+  sourceAttribution,
+  onReSeed,
 }: ClinicalBubbleProps) {
   const [activeTab, setActiveTab] = useState<TabType>("ddx");
   const [data, setData] = useState<ClinicalBubbleData | null>(null);
@@ -261,6 +269,27 @@ export default function ClinicalBubble({
                 <span>{flag}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {sourceAttribution && (
+          <div
+            className="px-3 py-1.5 bg-cyan-900/20 border-b border-cyan-700/30 flex items-start gap-1.5"
+            data-testid="clinical-bubble-source-attribution"
+          >
+            <span className="mt-px text-[8px] px-1 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-500/40 flex-shrink-0">AI</span>
+            <span className="text-[10px] text-cyan-200 leading-snug flex-1">{sourceAttribution}</span>
+            {onReSeed && (
+              <button
+                type="button"
+                className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-900/40 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-900/70 hover:text-white transition-colors flex-shrink-0"
+                onClick={() => onReSeed(markerId)}
+                data-testid="clinical-bubble-reseed"
+                title="Restore the AI-suggested placement"
+              >
+                Re-seed
+              </button>
+            )}
           </div>
         )}
 

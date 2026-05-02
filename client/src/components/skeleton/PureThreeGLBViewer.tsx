@@ -710,6 +710,18 @@ export interface PainMarker {
    *  AI badge and is auto-managed by the seed effect), 'transient' = short-lived
    *  flash markers tied to an active provocation movement. */
   source?: 'clinician' | 'prediction' | 'transient';
+  /** Attribution metadata for prediction-seeded markers. Persists even after the
+   *  clinician edits a seed (which flips `source` to 'clinician') so a Re-seed
+   *  affordance can restore the original placement. */
+  sourceKind?: 'provocation' | 'tissue';
+  sourceHypothesisId?: string;
+  sourceHypothesisCondition?: string;
+  sourceProvocationMovement?: string;
+  sourceProvocationLabel?: string;
+  sourceTissueType?: string;
+  sourceTissueId?: string;
+  sourceTissueLabel?: string;
+  sourceTissueSeverity?: number;
 }
 
 export interface RomMovement {

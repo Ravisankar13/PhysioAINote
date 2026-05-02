@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pin, PinOff } from 'lucide-react';
+import { Pin, PinOff, X } from 'lucide-react';
 
 export interface SliderDof {
   configKey: string;
@@ -23,6 +23,8 @@ export interface MovementJointSliderHUDProps {
   onDrag: (configKey: string, targetValue: number) => void;
   onDragEnd: (configKey: string) => void;
   onTogglePin: (configKey: string) => void;
+  /** Task #322: dismiss the chip (close button + click-outside). */
+  onClose: () => void;
 }
 
 const TRACK_WIDTH_PX = 160;
@@ -41,6 +43,7 @@ export default function MovementJointSliderHUD({
   onDrag,
   onDragEnd,
   onTogglePin,
+  onClose,
 }: MovementJointSliderHUDProps) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -59,6 +62,13 @@ export default function MovementJointSliderHUD({
     hardMin: number;
     hardMax: number;
   } | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Task #322: keep latest onClose in a ref so the click-outside
+  // listener never reattaches as the parent re-renders. The viewer
+  // re-renders on selection changes only, but the chip itself raf-ticks
+  // every frame — keeping deps stable avoids any chance of churn.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -83,6 +93,23 @@ export default function MovementJointSliderHUD({
       window.removeEventListener('mouseup', onUp);
     };
   }, [onDrag, onDragEnd]);
+
+  // Task #322: window-level click-outside to dismiss. Capture phase so we
+  // see the gesture before any nested handler can stopPropagation. We
+  // bail if the click landed inside the chip, or if a slider drag is
+  // mid-flight (releasing the mouse outside the chip should not close
+  // it). The viewer's own deselect bails if an arrow drag is active.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (draggingRef.current) return;
+      const root = containerRef.current;
+      if (!root) return;
+      if (e.target instanceof Node && root.contains(e.target)) return;
+      onCloseRef.current();
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
 
   const anchor = getAnchor();
   if (!anchor || dofs.length === 0) return null;
@@ -112,6 +139,7 @@ export default function MovementJointSliderHUD({
 
   return (
     <div
+      ref={containerRef}
       className="absolute z-30 pointer-events-auto select-none"
       style={{
         left: anchor.x + 32,
@@ -121,8 +149,21 @@ export default function MovementJointSliderHUD({
       data-testid="movement-slider-hud"
     >
       <div className="rounded-lg shadow-xl bg-slate-900/95 backdrop-blur border border-emerald-500/40 p-2 space-y-1.5 min-w-[260px]">
-        <div className="text-[10px] uppercase tracking-wide text-emerald-300/80 px-1 pb-0.5 border-b border-emerald-500/20">
-          {jointDisplayName(jointKey)} · drive
+        <div className="flex items-center justify-between gap-2 px-1 pb-0.5 border-b border-emerald-500/20">
+          <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">
+            {jointDisplayName(jointKey)} · drive
+          </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onMouseDown={e => e.stopPropagation()}
+            className="shrink-0 rounded-md p-0.5 text-slate-400 hover:bg-slate-700/70 hover:text-slate-100 transition-colors"
+            title="Close"
+            aria-label="Close joint slider"
+            data-testid="slider-close"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
         {dofs.map(dof => {
           const current = getCurrentValue(dof.configKey);

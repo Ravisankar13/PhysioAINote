@@ -2757,6 +2757,8 @@ export default function PureThreeGLBViewer({
     beginDrag: (configKey: string) => void;
     applyValue: (configKey: string, targetRaw: number) => void;
     endDrag: () => void;
+    /** Task #322: imperative dismiss for the slider HUD. */
+    deselect: () => void;
   } | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
@@ -6219,6 +6221,9 @@ export default function PureThreeGLBViewer({
     // mouse handlers without lifting THREE state out of this useEffect.
     sliderHudApiRef.current = {
       getCurrentValue,
+      // Wrap so the assignment doesn't enter the temporal dead zone of
+      // deselectJoint (declared further down in this useEffect closure).
+      deselect: () => deselectJoint(),
       beginDrag: (configKey: string) => {
         // Cancel any pending movement-attempt settle timer + in-flight
         // spring-back so the new slider drag takes precedence cleanly.
@@ -6443,6 +6448,30 @@ export default function PureThreeGLBViewer({
       const dy = by - ay;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
       return { x: dx / len, y: dy / len };
+    };
+
+    // Task #322: imperative deselect — mirrors the background-miss path
+    // in the canvas mousedown handler (see "Deselect" branch below). Used
+    // by the slider HUD's close button and click-outside listener so the
+    // chip, ROM pill, lock badge, glow, and arrows all unmount together.
+    // Bails out while any drag is mid-flight so a release outside the
+    // chip never closes it.
+    const deselectJoint = () => {
+      if (poseDragRef.current) return;
+      const hadJointSelection = !!selectedJointKey || !!selectedAnchorBoneName;
+      const hadBoneSelection = !!selectedBoneSegmentId;
+      if (!hadJointSelection && !hadBoneSelection) return;
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      disposeArrows();
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
+      selectedBoneSegmentId = null;
+      poseSelectedBoneRef.current = null;
+      poseHighlightMeshRef.current = null;
+      setPoseModeTooltip(null);
+      setMovementSelectedJoint(null);
+      if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
     };
 
     const selectJoint = (boneName: string) => {
@@ -10424,6 +10453,7 @@ export default function PureThreeGLBViewer({
                 return next;
               });
             }}
+            onClose={() => sliderHudApiRef.current?.deselect()}
           />
         );
       })()}

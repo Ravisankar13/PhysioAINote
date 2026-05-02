@@ -9800,7 +9800,7 @@ ${ddxList}`;
                     Updating pain map…
                   </div>
                 )}
-                {slingsOverlayPinned && slingAnalysis && (() => {
+                {skeletonMode === 'movement' && slingsOverlayPinned && slingAnalysis && (() => {
                   const poor = slingAnalysis.slings.filter(s => s.status !== 'normal');
                   if (poor.length === 0) return null;
                   const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; label: string }> = {

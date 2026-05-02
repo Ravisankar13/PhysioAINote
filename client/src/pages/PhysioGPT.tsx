@@ -5088,6 +5088,7 @@ ${ddxList}`;
         anatomicalLabel: site.label,
         description: `Expected provocation site for ${active.name}`,
         severity: typeof site.severity === "number" ? site.severity : 6,
+        source: 'transient' as const,
       }];
     });
 
@@ -9830,6 +9831,10 @@ ${ddxList}`;
                           const compensatingFrom = slingAnalysis?.crossSlingCompensations.find(
                             c => c.compensatedSling === s.slingId
                           );
+                          // For compensating slings, also surface what they're carrying load FOR.
+                          const compensatingFor = s.status === 'compensating'
+                            ? slingAnalysis?.crossSlingCompensations.find(c => c.compensatingSling === s.slingId)
+                            : undefined;
                           const rationale = s.clinicalConsequences[0];
                           return (
                             <div
@@ -9883,6 +9888,23 @@ ${ddxList}`;
                                     {compensatingFrom.compensatingSlingLabel}
                                   </button>
                                   <span className="text-slate-500"> · +{Math.round(compensatingFrom.additionalLoadPct)}% load</span>
+                                </div>
+                              )}
+
+                              {compensatingFor && (
+                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-comp-for-${s.slingId}`}>
+                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Compensating for:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSlingId(compensatingFor.compensatedSling);
+                                      setExpandedSlingDetailId(compensatingFor.compensatedSling);
+                                    }}
+                                    className="text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
+                                  >
+                                    {compensatingFor.compensatedSlingLabel}
+                                  </button>
+                                  <span className="text-slate-500"> · +{Math.round(compensatingFor.additionalLoadPct)}% load</span>
                                 </div>
                               )}
 

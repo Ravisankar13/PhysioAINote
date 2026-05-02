@@ -2873,12 +2873,8 @@ export default function PureThreeGLBViewer({
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
   const [movementSelectedJoint, setMovementSelectedJoint] = useState<{ key: string; x: number; y: number } | null>(null);
-  /** Live painful-arc state. Set/cleared every drag tick from the gated
-   *  `inPainfulArc` flag so the on-body halo appears AT the joint while
-   *  the clinician is in pain and disappears immediately when they leave
-   *  the arc (or change direction / loading mode out of the painful
-   *  combination). Carries the AI-supplied clinical label + direction +
-   *  loading-mode so the halo + slider HUD can show why the pain fired. */
+  /** Live painful-arc state — driven by the per-tick gated flag, cleared
+   *  the moment the clinician leaves the painful combination. */
   const [livePainfulArc, setLivePainfulArc] = useState<{
     angle: number;
     intensity: number;
@@ -2888,10 +2884,8 @@ export default function PureThreeGLBViewer({
     label?: string;
   } | null>(null);
   const lastPainfulArcStateRef = useRef<boolean>(false);
-  /** Most-recent dominant-agonist length state from the throttled
-   *  top-movers compute. Used by the per-tick painful-arc gate to match
-   *  the AI's `loadingMode` field. When null and a loadingMode is
-   *  required, the gate fails closed (no false-positive arc flares). */
+  /** Cached dominant-agonist length state from the throttled top-movers
+   *  compute, used by the painful-arc loading-mode gate. */
   const lastDominantLengthStateRef = useRef<'concentric' | 'eccentric' | 'isometric' | null>(null);
   const [movementMuscleActivation, setMovementMuscleActivation] = useState<MuscleActivationLevels | null>(null);
   // Task #323: live joint reaction force readout while a Movement Mode drag
@@ -6393,45 +6387,32 @@ export default function PureThreeGLBViewer({
         if (row.painfulArc) {
           const lo2 = Math.min(row.painfulArc.start, row.painfulArc.end);
           const hi2 = Math.max(row.painfulArc.start, row.painfulArc.end);
-          // Angle-in-range gate, then the AI's direction + loading-mode gates.
-          // Direction = which way the joint angle is moving (ascending toward
-          // activeRomMax, descending toward activeRomMin). LoadingMode = the
-          // dominant agonist's length state (concentric = shortening,
-          // eccentric = lengthening, isometric = stable). When AI omits a
-          // field or sets it to either/any, the gate is permissive.
-          if (newValue >= lo2 && newValue <= hi2) {
-            const dir = row.painfulArc.direction;
-            const lm = row.painfulArc.loadingMode;
-            // Carry the previous tick's match state when delta is too small
-            // to read (e.g. mouse paused mid-drag inside the arc) so the
-            // halo doesn't flicker on/off when motion stalls briefly.
-            const carry = lastPainfulArcStateRef.current;
-            let dirMatches: boolean;
-            if (dir === 'ascending') dirMatches = delta > 0.5 || (Math.abs(delta) <= 0.5 && carry);
-            else if (dir === 'descending') dirMatches = delta < -0.5 || (Math.abs(delta) <= 0.5 && carry);
-            else dirMatches = true;
-            // Loading-mode check FAILS CLOSED: when the AI requires a
-            // specific mode and we don't yet have a sample, we suppress
-            // the arc rather than flag it falsely. The throttled top-movers
-            // compute populates the ref within ~33 ms of drag start.
-            let lmMatches: boolean;
-            if (!lm || lm === 'any') {
-              lmMatches = true;
-            } else {
-              const dom = lastDominantLengthStateRef.current;
-              lmMatches = dom !== null && dom === lm;
-            }
-            if (dirMatches && lmMatches) inPainfulArc = true;
+          const dir = row.painfulArc.direction;
+          const lm = row.painfulArc.loadingMode;
+          // Direction + loading-mode gates fail closed when ambiguous.
+          const carry = lastPainfulArcStateRef.current;
+          let dirMatches: boolean;
+          if (dir === 'ascending') dirMatches = delta > 0.5 || (Math.abs(delta) <= 0.5 && carry);
+          else if (dir === 'descending') dirMatches = delta < -0.5 || (Math.abs(delta) <= 0.5 && carry);
+          else dirMatches = true;
+          let lmMatches: boolean;
+          if (!lm || lm === 'any') {
+            lmMatches = true;
+          } else {
+            const dom = lastDominantLengthStateRef.current;
+            lmMatches = dom !== null && dom === lm;
           }
-        }
-        // Painful-arc friction: when the gated state confirms the
-        // clinician is moving INTO pain, slow the drag with a 0.7
-        // multiplier so they feel a soft cue rather than a hard wall.
-        // Skipped if exceeded-limit friction already applied (it's
-        // tighter) and skipped on retreat from the arc.
-        if (inPainfulArc && !frictionApplied && Math.abs(delta) > 0.5) {
-          const cuedDelta = delta * 0.7;
-          newValue = Math.max(aMin, Math.min(aMax, Math.round(drag.startValue + cuedDelta)));
+          // Apply friction BEFORE committing the arc state so the halo /
+          // findings only fire for the final post-friction angle (avoids
+          // false flares the tick before the friction-clamped value
+          // actually crosses the arc boundary).
+          const wouldEnterArc = newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches;
+          if (wouldEnterArc && !frictionApplied && Math.abs(delta) > 0.5) {
+            newValue = Math.max(aMin, Math.min(aMax, Math.round(drag.startValue + delta * 0.7)));
+          }
+          if (newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches) {
+            inPainfulArc = true;
+          }
         }
       }
       drag.lastValue = newValue;
@@ -6557,8 +6538,6 @@ export default function PureThreeGLBViewer({
               if (top.length > 0) {
                 const [j, mv] = drag.configKey.split('.');
                 setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
-                // Cache the dominant agonist's length state for the per-tick
-                // painful-arc loading-mode gate.
                 lastDominantLengthStateRef.current = top[0].lengthState;
               } else {
                 setMovementTopMovers(null);
@@ -6590,16 +6569,11 @@ export default function PureThreeGLBViewer({
           }
         }
       }
-      // Mirror the gated inPainfulArc into live React state so the on-body
-      // halo + slider intensity meter render from CURRENT pain status, not
-      // from a transient toast event. Set on entry, refreshed on every
-      // in-arc tick (so the angle readout tracks live), cleared the moment
-      // the clinician leaves the painful combination.
+      // Mirror the gated inPainfulArc into live state for the on-body halo.
       if (inPainfulArc && row?.painfulArc) {
         const [j, mv] = drag.configKey.split('.');
         const arc = row.painfulArc;
         if (!lastPainfulArcStateRef.current) {
-          // Edge: first tick of entry — fire the findings-stream callback.
           onPainfulArcFlareRef.current?.({
             joint: j,
             movement: mv,
@@ -6618,7 +6592,6 @@ export default function PureThreeGLBViewer({
           label: arc.label,
         });
       } else if (lastPainfulArcStateRef.current) {
-        // Just left the painful combination — clear the halo immediately.
         setLivePainfulArc(null);
       }
       lastPainfulArcStateRef.current = inPainfulArc;
@@ -6662,11 +6635,8 @@ export default function PureThreeGLBViewer({
       if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
         const [joint, movement] = drag.configKey.split('.');
         const achievedAngle = drag.lastValue ?? drag.startValue;
-        // Findings stream uses ONLY the gated `lastPainfulArc` flag —
-        // the angle-in-range fallback was removed because it ignored the
-        // direction + loading-mode gates and falsely recorded pain for
-        // motions the AI explicitly tagged as non-painful (e.g. ascending
-        // shoulder abduction in a patient with descending-only impingement).
+        // Use ONLY the gated flag — the angle-only fallback would have
+        // ignored direction + loading-mode constraints.
         const inPainfulArc = !!drag.lastPainfulArc;
         pendingMovementAttemptRef.current = {
           joint,
@@ -6694,8 +6664,6 @@ export default function PureThreeGLBViewer({
       domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
       lastPainfulArcStateRef.current = false;
       lastDominantLengthStateRef.current = null;
-      // Drop the live halo when the clinician releases the slider so the
-      // body returns to a neutral visualization.
       setLivePainfulArc(null);
       setMovementMuscleActivation(null);
       // Task #323 — review-5 fix: also drop the engine-derived overlay so
@@ -11167,12 +11135,7 @@ export default function PureThreeGLBViewer({
           </div>
         );
       })()}
-      {/* On-body painful-arc halo + clinical label. Driven by live
-          `livePainfulArc` state which is set/cleared by the per-tick
-          direction + loading-mode gate, so the halo is visible exactly
-          while the clinician is in pain and disappears the moment they
-          leave the painful combination. Replaces the old top-of-screen
-          toast so the eye stays on the affected joint. */}
+      {/* On-body painful-arc halo + label, driven by live gated state. */}
       {skeletonMode === 'movement' && movementSelectedJoint && livePainfulArc && (() => {
         const anchor = selectedJointAnchorRef.current ?? { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
         const intensity = livePainfulArc.intensity;
@@ -11458,10 +11421,6 @@ export default function PureThreeGLBViewer({
           />
         );
       })()}
-      {/* Top-of-screen pain toast banner removed — pain is now
-          surfaced on-body as a pulsing halo + clinical label at the affected
-          joint anchor (rendered above with data-testid="painful-arc-halo").
-          Keeps the clinician's eye on the body, not on a corner banner. */}
       {/* Force value tooltip */}
       {hoverData && (
         <div 

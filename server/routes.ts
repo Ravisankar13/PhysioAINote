@@ -9970,12 +9970,8 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
-  // Refresh-from-context alias: dedicated endpoint that ALWAYS forces a
-  // regeneration using the latest pain markers + intake context. Mirrors
-  // POST /api/active-capacity/:caseId with refresh=true so the client can
-  // call a stable, intent-named URL whenever the patient's clinical
-  // picture changes (markers added/removed, intake answers updated). Both
-  // paths are accepted to keep older clients working.
+  // Dedicated re-inference endpoint: always regenerates with the latest
+  // pain markers + intake context.
   const refreshActiveCapacityHandler = async (req: Request, res: Response) => {
     try {
       const caseId = String(req.params.caseId || "").trim();

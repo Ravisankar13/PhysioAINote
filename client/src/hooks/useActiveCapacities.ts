@@ -36,6 +36,7 @@ export type ActiveCapacityProfile = {
   rows: ActiveCapacityRow[];
   generatedAt: string;
   rationaleSummary?: string;
+  aiContextSignature?: string;
 };
 
 type CaseResearchRow = {

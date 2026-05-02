@@ -6217,6 +6217,7 @@ export const activeCapacityProfileSchema = z.object({
   rows: z.array(activeCapacityRowSchema),
   generatedAt: z.string(),
   rationaleSummary: z.string().optional(),
+  aiContextSignature: z.string().optional(),
 });
 export const activeCapacityOverridePatchSchema = activeCapacityRowSchema
   .partial()

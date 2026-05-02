@@ -54,6 +54,12 @@ export type ActiveCapacityProfile = {
   rows: ActiveCapacityRow[];
   generatedAt: string;
   rationaleSummary?: string;
+  /** Stable hash of the painMarkers + intakeContext used to generate
+   *  this profile. Lets the client detect stale profiles when the
+   *  clinical picture changes outside Movement Mode and refresh on
+   *  next entry without firing duplicate refreshes for unchanged
+   *  context. Empty string when no context was supplied. */
+  aiContextSignature?: string;
 };
 
 export type ActiveCapacityOverridePatch = {
@@ -447,6 +453,7 @@ export async function generateActiveCapacities(input: {
       rationaleSummary: typeof parsed.rationaleSummary === 'string'
         ? (parsed.rationaleSummary as string).slice(0, 800)
         : undefined,
+      aiContextSignature: computeAiContextSignature(input.painMarkers, input.intakeContext),
     };
   } catch (err) {
     console.error('[activeCapacityService] AI generation failed, returning deterministic baseline:', err);
@@ -454,8 +461,24 @@ export async function generateActiveCapacities(input: {
       rows: baseline,
       generatedAt: new Date().toISOString(),
       rationaleSummary: 'Deterministic baseline (AI synthesis unavailable).',
+      aiContextSignature: computeAiContextSignature(input.painMarkers, input.intakeContext),
     };
   }
+}
+
+function computeAiContextSignature(
+  markers?: PainMarkerHint[],
+  intake?: IntakeContextHint,
+): string {
+  const m = (markers || []).map(x => [x.location, x.type, x.symptomType, x.severity, (x.description || '').slice(0, 40)]);
+  const i = intake || {};
+  const json = JSON.stringify({ m, i });
+  let h = 2166136261 >>> 0;
+  for (let k = 0; k < json.length; k++) {
+    h ^= json.charCodeAt(k);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
 }
 
 export function applyManualOverride(

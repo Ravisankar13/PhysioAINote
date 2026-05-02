@@ -238,10 +238,8 @@ export default function MovementJointSliderHUD({
                   }}
                 />
                 {dof.painfulArc && arcHi > arcLo && (() => {
-                  // Directional shading + chevron + loading-mode pill on the
-                  // painful-arc band. Diagonal stripes convey one-way motion;
-                  // chevron points to the leading edge the joint must cross
-                  // to ENTER pain in the AI's flagged direction.
+                  // Directional shading + chevron + loading-mode pill +
+                  // intensity meter for the painful-arc band.
                   const arcLeftPct = valueToPct(arcLo, dof.hardMin, dof.hardMax);
                   const arcRightPct = valueToPct(arcHi, dof.hardMin, dof.hardMax);
                   const arcWidthPct = Math.max(0, arcRightPct - arcLeftPct);
@@ -264,12 +262,8 @@ export default function MovementJointSliderHUD({
                     : lm === 'concentric' ? 'CON'
                       : lm === 'isometric' ? 'ISO'
                         : null;
-                  // Pain intensity meter: vertical bar to the right of the
-                  // track that fills as the live angle approaches the arc
-                  // midpoint. The fill height = arcIntensity × proximity (0-1)
-                  // so the clinician sees pain RISING as they move into the
-                  // most painful part of the arc, and falling as they back
-                  // out. Empty until inside the band.
+                  // Intensity meter fills as the live angle approaches the
+                  // arc midpoint (height = arcIntensity × proximity).
                   const arcMid = (arcLo + arcHi) / 2;
                   const arcHalf = Math.max(1, (arcHi - arcLo) / 2);
                   const inArc = current >= arcLo && current <= arcHi;

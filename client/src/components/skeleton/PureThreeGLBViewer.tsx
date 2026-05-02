@@ -10,7 +10,7 @@ import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } f
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
-import { type MuscleStatesMap, getMuscleColor, computeAllMuscleStates } from '@/lib/muscleBiomechanicsEngine';
+import { type MuscleStatesMap, type MuscleStatus, type IndividualMuscle, getMuscleColor, computeAllMuscleStates, computeFullMuscleAnalysis } from '@/lib/muscleBiomechanicsEngine';
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
@@ -2895,7 +2895,23 @@ export default function PureThreeGLBViewer({
   // pipeline — so EVERY Movement Mode DOF (shoulder, spine, neck, etc.)
   // can light up muscles, not just the hip/knee/ankle subset previously
   // hard-coded by the heuristic AGONIST table.
+  // Task #323 — review-7 fix: switched from group-averaged baseline
+  // (MuscleStatesMap) to per-muscle baseline (IndividualMuscle keyed by
+  // muscle id) so the live overlay can find the dominant-delta muscle
+  // per meshGroup and surface ITS state, instead of an average that
+  // cancels antagonists (e.g. biceps + triceps in `bicep_l`) and a
+  // dilution from off-joint muscles (e.g. wrist flex/ext also in
+  // `bicep_l`) — which is why elbow flexion didn't light up biceps.
   const movementBaselineMuscleStatesRef = useRef<MuscleStatesMap | null>(null);
+  const movementBaselineMusclesRef = useRef<Record<string, IndividualMuscle> | null>(null);
+  // Task #323 — review-7 fix: bone-positioned glow markers for muscle
+  // groups that have NO matching split mesh in the loaded GLB (e.g.
+  // bicep_l/bicep_r — the model has no biceps mesh, only torso/leg
+  // muscles, so the mesh-paint pipeline can't surface elbow→biceps
+  // activation). For each such group we drop a colored sphere at the
+  // averaged world position of its bones so the clinician still sees
+  // the muscle "light up" on the skeleton itself.
+  const movementMuscleGlowsRef = useRef<THREE.Mesh[]>([]);
   // Live overlay produced from baseline-vs-current activation diffs while
   // a Movement Mode drag is in progress. Cleared on drag-release / mode
   // exit. Drives the muscle visualization useEffect below.
@@ -6366,22 +6382,53 @@ export default function PureThreeGLBViewer({
           // This guarantees coverage for shoulder / elbow / wrist / spine
           // / neck / scapula / pelvis sliders that the heuristic table
           // didn't address.
-          const baselineMuscleStates = movementBaselineMuscleStatesRef.current;
-          if (baselineMuscleStates) {
+          // Task #323 — review-7 fix: compute the live overlay from
+          // PER-MUSCLE deltas, not group averages. The engine bundles
+          // antagonists (biceps + triceps) and even off-joint muscles
+          // (wrist flex/ext) into the same `bicep_l` meshGroup, so the
+          // group-average activation barely moved when biceps fired hard
+          // and the visualization useEffect's `hasIssue` gate (state !==
+          // 'neutral' || tension > 50 || activationPercent > 60) failed
+          // to paint anything. Now we find the dominant-delta muscle per
+          // meshGroup and synthesize a MuscleStatus that carries THAT
+          // muscle's state + activation, so biceps' shortened/73% reading
+          // surfaces on `bicep_l` instead of being averaged into oblivion.
+          const baselineMuscles = movementBaselineMusclesRef.current;
+          if (baselineMuscles) {
             try {
-              const liveMuscleStates = computeAllMuscleStates(modelConfigRef.current);
-              const overlay: MuscleStatesMap = {};
-              let changedCount = 0;
-              for (const id of Object.keys(liveMuscleStates)) {
-                const live = liveMuscleStates[id];
-                const base = baselineMuscleStates[id];
-                if (!live) continue;
-                const baseAct = base?.activationPercent ?? 0;
-                if (Math.abs(live.activationPercent - baseAct) >= 5) {
-                  overlay[id] = live;
-                  changedCount += 1;
+              const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+              const dominantByGroup: Record<string, { muscle: IndividualMuscle; delta: number }> = {};
+              for (const m of liveAnalysis.allMuscles) {
+                const base = baselineMuscles[m.id];
+                if (!base) continue;
+                const delta = Math.abs(m.activationPercent - base.activationPercent);
+                if (delta < 5) continue;
+                const existing = dominantByGroup[m.meshGroup];
+                if (!existing || delta > existing.delta) {
+                  dominantByGroup[m.meshGroup] = { muscle: m, delta };
                 }
               }
+              const overlay: MuscleStatesMap = {};
+              for (const [groupId, { muscle }] of Object.entries(dominantByGroup)) {
+                // Synthesize a group-keyed entry from the dominant muscle.
+                // tension is reconstructed from the same formula the engine
+                // uses for group states, but applied to the single dominant
+                // muscle so the value reflects what's actually firing.
+                const t = muscle.tightnessPercent;
+                const a = muscle.activationPercent;
+                const len = muscle.lengthPercent;
+                const tension = Math.max(5, Math.min(95, 50 + (t - 15) * 0.8 + (100 - len) * 0.5 + (a - 15) * 0.4));
+                overlay[groupId] = {
+                  id: groupId,
+                  label: muscle.label,
+                  state: muscle.state,
+                  tension,
+                  activation: a >= 70 ? 'high' : a >= 40 ? 'moderate' : a >= 15 ? 'low' : 'inactive',
+                  activationPercent: a,
+                  description: muscle.clinicalNote,
+                };
+              }
+              const changedCount = Object.keys(overlay).length;
               setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
             } catch {
               setMovementMuscleStatesOverlay(null);
@@ -7451,6 +7498,17 @@ export default function PureThreeGLBViewer({
       setMovementJointReactionForce(null);
       movementBaselineMapRef.current = new Map();
       movementBaselineMuscleStatesRef.current = null;
+      movementBaselineMusclesRef.current = null;
+      // Task #323 — review-7 fix: tear down bone-glow markers on mode exit.
+      if (sceneRef.current && movementMuscleGlowsRef.current.length > 0) {
+        const scene = sceneRef.current.scene;
+        for (const m of movementMuscleGlowsRef.current) {
+          scene.remove(m);
+          m.geometry.dispose();
+          if (m.material instanceof THREE.Material) m.material.dispose();
+        }
+        movementMuscleGlowsRef.current = [];
+      }
     } else {
       // Task #323 — review-3 fix + review-4 harmonization: snapshot every
       // DOF value when entering Movement Mode AND whenever the patient /
@@ -7473,10 +7531,19 @@ export default function PureThreeGLBViewer({
       // upper body / spine / scapula / neck / pelvis as well as legs.
       // Wrapped in try/catch because computeAllMuscleStates is defensive
       // but a malformed modelConfig shouldn't kill mode entry.
+      // Task #323 — review-7 fix: also capture the per-muscle baseline
+      // (IndividualMuscle indexed by muscle id) so the drag tick can
+      // compute per-muscle activation deltas and surface the dominant
+      // muscle per meshGroup, not the diluted group average.
       try {
-        movementBaselineMuscleStatesRef.current = computeAllMuscleStates(modelConfigRef.current);
+        const baselineAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+        movementBaselineMuscleStatesRef.current = baselineAnalysis.groupStates;
+        const byId: Record<string, IndividualMuscle> = {};
+        for (const m of baselineAnalysis.allMuscles) byId[m.id] = m;
+        movementBaselineMusclesRef.current = byId;
       } catch {
         movementBaselineMuscleStatesRef.current = null;
+        movementBaselineMusclesRef.current = null;
       }
     }
   }, [skeletonMode, modelConfig]);
@@ -9646,6 +9713,132 @@ export default function PureThreeGLBViewer({
       });
     });
   }, [muscleStates, movementMuscleStatesOverlay]);
+
+  // Task #323 — review-7 fix: bone-positioned glow markers for muscle
+  // groups whose meshGroup id has NO corresponding split mesh in the
+  // loaded GLB. The shipped 3D asset only has torso/leg muscle meshes;
+  // it does NOT have biceps, triceps, deltoid_l, scapula_l, etc. So even
+  // when the engine overlay correctly contains `bicep_l: { activation:
+  // 73, state: 'shortened' }` for an elbow flex, the mesh-paint effect
+  // above can't surface it (no mesh to tint). This effect places a
+  // colored glow sphere at the bone position(s) for those groups so the
+  // muscle still visibly "lights up" on the skeleton.
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current.scene;
+
+    // Tear down any prior glow markers before re-emitting.
+    if (movementMuscleGlowsRef.current.length > 0) {
+      for (const m of movementMuscleGlowsRef.current) {
+        scene.remove(m);
+        m.geometry.dispose();
+        if (m.material instanceof THREE.Material) m.material.dispose();
+      }
+      movementMuscleGlowsRef.current = [];
+    }
+
+    if (!movementMuscleStatesOverlay) return;
+
+    // Per-group bone(s) we want to glow. Pulled from the rig's bone
+    // names. Multiple bones → average position. Picked to anchor visually
+    // where the muscle BELLY sits, not just its insertion (e.g. biceps
+    // is between Shoulder_L and Elbow_L, not on the forearm).
+    const MUSCLE_GLOW_BONES: Record<string, string[]> = {
+      bicep_l: ['Shoulder_L', 'Elbow_L'],
+      bicep_r: ['Shoulder_R', 'Elbow_R'],
+      deltoid_l: ['Shoulder_L'],
+      deltoid_r: ['Shoulder_R'],
+      scapula_l: ['Scapula_L'],
+      scapula_r: ['Scapula_R'],
+      glute_l: ['Hip_L'],
+      glute_r: ['Hip_R'],
+      quad_l: ['HipPart1_L'],
+      quad_r: ['HipPart1_R'],
+      calf_l: ['Knee_L'],
+      calf_r: ['Knee_R'],
+      shin_l: ['Ankle_L'],
+      shin_r: ['Ankle_R'],
+      chest: ['Chest_M'],
+      spine: ['Spine1_M', 'Chest_M'],
+      neck: ['Neck_M'],
+      core: ['Root_M'],
+    };
+
+    for (const [groupId, status] of Object.entries(movementMuscleStatesOverlay)) {
+      // Skip groups that already paint via the mesh pipeline.
+      if (splitMuscleGroupsRef.current.has(groupId)) continue;
+      const boneNames = MUSCLE_GLOW_BONES[groupId];
+      if (!boneNames || boneNames.length === 0) continue;
+
+      const positions: THREE.Vector3[] = [];
+      for (const bn of boneNames) {
+        const bone = bonesRef.current[bn];
+        if (!bone) continue;
+        const wp = new THREE.Vector3();
+        bone.getWorldPosition(wp);
+        positions.push(wp);
+      }
+      if (positions.length === 0) continue;
+
+      const center = positions.reduce(
+        (acc, p) => acc.add(p),
+        new THREE.Vector3()
+      ).multiplyScalar(1 / positions.length);
+
+      const c = getMuscleColor(status);
+      const color = new THREE.Color(c.r, c.g, c.b);
+
+      // Scale the inner glow with activation so a 73% biceps fires
+      // visibly larger than a 25% wrist flexor twitch.
+      const intensity = Math.max(0.4, status.activationPercent / 100);
+      const innerR = 0.08 + intensity * 0.06;
+
+      const innerGeo = new THREE.SphereGeometry(innerR, 16, 12);
+      const innerMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const inner = new THREE.Mesh(innerGeo, innerMat);
+      inner.position.copy(center);
+      inner.renderOrder = 999;
+      inner.userData.isMovementMuscleGlow = true;
+      scene.add(inner);
+      movementMuscleGlowsRef.current.push(inner);
+
+      const outerGeo = new THREE.SphereGeometry(innerR * 1.7, 12, 8);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const outer = new THREE.Mesh(outerGeo, outerMat);
+      outer.position.copy(center);
+      outer.renderOrder = 998;
+      outer.userData.isMovementMuscleGlow = true;
+      scene.add(outer);
+      movementMuscleGlowsRef.current.push(outer);
+    }
+
+    return () => {
+      // Dispose markers when overlay changes/clears.
+      if (sceneRef.current && movementMuscleGlowsRef.current.length > 0) {
+        const sc = sceneRef.current.scene;
+        for (const m of movementMuscleGlowsRef.current) {
+          sc.remove(m);
+          m.geometry.dispose();
+          if (m.material instanceof THREE.Material) m.material.dispose();
+        }
+        movementMuscleGlowsRef.current = [];
+      }
+    };
+  }, [movementMuscleStatesOverlay]);
 
   useEffect(() => {
     for (const entry of biomechanicalHighlightRef.current) {

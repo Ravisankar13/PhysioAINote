@@ -10,7 +10,7 @@ import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } f
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
-import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEngine';
+import { type MuscleStatesMap, getMuscleColor, computeAllMuscleStates } from '@/lib/muscleBiomechanicsEngine';
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
@@ -2222,41 +2222,213 @@ function camelToSnake(s: string): string { return s.replace(/[A-Z]/g, c => '_' +
 function snakeToCamel(s: string): string { return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
 
 type ActivationKey = keyof MuscleActivationLevels;
+// Task #323 — review-3 fix: expanded mapping covers every Movement Mode
+// DOF that has a corresponding muscle in MuscleActivationLevels (currently
+// hip / knee / ankle — the only regions modeled by muscleVisualization).
+// Upper-body DOFs (shoulder/elbow/wrist/spine/neck/scapula) return null
+// from computeMovementMuscleActivation and the highlight state is then
+// explicitly cleared at the call site so no stale overlay persists.
 const MOVEMENT_MUSCLE_AGONISTS: Record<string, { agonists: ActivationKey[]; antagonists: ActivationKey[] }> = {
+  // Hip flexion (signed): + flexes, − extends
   'leftHip.flexion+':   { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
   'rightHip.flexion+':  { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
   'leftHip.flexion-':   { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
   'rightHip.flexion-':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  // Hip extension (separate unsigned DOF in DOF_SPECS)
+  'leftHip.extension+':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  'rightHip.extension+': { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  // Hip abduction (signed): + abducts, − adducts
   'leftHip.abduction+': { agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
   'rightHip.abduction+':{ agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
   'leftHip.abduction-': { agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
   'rightHip.abduction-':{ agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
+  // Hip rotation (signed) — IR uses TFL co-activation; ER is reciprocal
+  'leftHip.internalRotation+':  { agonists: ['tensorFasciaeLatae', 'adductorLongus'], antagonists: ['sartorius'] },
+  'rightHip.internalRotation+': { agonists: ['tensorFasciaeLatae', 'adductorLongus'], antagonists: ['sartorius'] },
+  'leftHip.internalRotation-':  { agonists: ['sartorius'], antagonists: ['tensorFasciaeLatae', 'adductorLongus'] },
+  'rightHip.internalRotation-': { agonists: ['sartorius'], antagonists: ['tensorFasciaeLatae', 'adductorLongus'] },
+  // Knee flexion (signed): + flexes, − extends (recurvatum direction)
   'leftKnee.flexion+':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
   'rightKnee.flexion+': { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
+  'leftKnee.flexion-':  { agonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  'rightKnee.flexion-': { agonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  // Ankle dorsiflexion (signed) — already separate from plantarflexion DOF
   'leftAnkle.dorsiflexion+':  { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
   'rightAnkle.dorsiflexion+': { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
   'leftAnkle.dorsiflexion-':  { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
   'rightAnkle.dorsiflexion-': { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  // Ankle plantarflexion (separate unsigned DOF)
+  'leftAnkle.plantarflexion+':  { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  'rightAnkle.plantarflexion+': { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  // Ankle inversion / eversion (each separate unsigned DOF)
+  'leftAnkle.inversion+':  { agonists: ['tibialisAnterior'], antagonists: ['peroneusLongus', 'peroneusBrevis'] },
+  'rightAnkle.inversion+': { agonists: ['tibialisAnterior'], antagonists: ['peroneusLongus', 'peroneusBrevis'] },
+  'leftAnkle.eversion+':   { agonists: ['peroneusLongus', 'peroneusBrevis'], antagonists: ['tibialisAnterior'] },
+  'rightAnkle.eversion+':  { agonists: ['peroneusLongus', 'peroneusBrevis'], antagonists: ['tibialisAnterior'] },
 };
 
+// Task #323: Anthropometric segment-mass fractions (Winter / de Leva 1996,
+// % of total body mass). Used by the live joint reaction force estimator
+// in Movement Mode. Single-leg loading model assumes ipsilateral segments
+// distal to the joint contribute (gravity + dynamic muscle multiplier).
+const SEGMENT_MASS_FRACTIONS = {
+  foot: 0.0145,    // each foot
+  shank: 0.0465,   // each lower leg
+  thigh: 0.10,     // each upper leg
+  pelvis: 0.142,   // pelvis + lower trunk (HAT minus arms/head/upper trunk)
+  hatUpper: 0.40,  // head + arms + upper trunk (carried by hip in stance)
+  hand: 0.006,     // each hand
+  forearm: 0.016,  // each forearm
+  upperArm: 0.028, // each upper arm
+  head: 0.081,     // head + neck (carried by spine/neck)
+  upperTrunk: 0.158, // upper trunk only (above T12)
+} as const;
+
+const GRAVITY_MS2 = 9.81;
+
+// Task #323 — review-2 fix: every Movement Mode DOF must surface a live
+// joint-reaction-force readout. We classify the configKey into a joint
+// category and apply per-joint distal-mass + BW-multiplier curves
+// derived from instrumented-implant + EMG literature (Bergmann hip,
+// Kutzner knee, Maganaris Achilles, Westerhoff shoulder). Numbers are
+// intentionally illustrative — Task #324 follow-up tracks calibration.
+type JointForceCategory =
+  | 'hip' | 'knee' | 'ankle'
+  | 'shoulder' | 'elbow' | 'wrist'
+  | 'spine' | 'neck' | 'pelvis' | 'scapula';
+
+const JOINT_FORCE_CONFIG: Record<JointForceCategory, {
+  /** Sum of distal-segment mass fractions crossing the joint. */
+  distalMassFraction: number;
+  /** Resting-pose BW multiple at zero drag progress. */
+  baselineBwMult: number;
+  /** Peak BW multiple at full drag progress (matches in-vivo literature ranges). */
+  peakBwMult: number;
+}> = {
+  hip:      { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank
+                                  + SEGMENT_MASS_FRACTIONS.thigh + SEGMENT_MASS_FRACTIONS.pelvis
+                                  + SEGMENT_MASS_FRACTIONS.hatUpper,
+              baselineBwMult: 0.5, peakBwMult: 4.0 }, // Bergmann 2010
+  knee:     { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank,
+              baselineBwMult: 0.3, peakBwMult: 2.5 }, // Kutzner 2010
+  ankle:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot,
+              baselineBwMult: 0.4, peakBwMult: 3.0 }, // Maganaris 2002
+  shoulder: { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.05, peakBwMult: 1.5 }, // Westerhoff 2009
+  elbow:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.02, peakBwMult: 0.8 },
+  wrist:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.01, peakBwMult: 0.4 },
+  spine:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperTrunk + SEGMENT_MASS_FRACTIONS.head
+                                  + 2 * (SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand),
+              baselineBwMult: 0.5, peakBwMult: 3.5 }, // Wilke 1999 lumbar
+  neck:     { distalMassFraction: SEGMENT_MASS_FRACTIONS.head,
+              baselineBwMult: 0.1, peakBwMult: 0.6 },
+  pelvis:   { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank
+                                  + SEGMENT_MASS_FRACTIONS.thigh + SEGMENT_MASS_FRACTIONS.pelvis
+                                  + SEGMENT_MASS_FRACTIONS.hatUpper,
+              baselineBwMult: 0.4, peakBwMult: 3.0 },
+  scapula:  { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.05, peakBwMult: 1.2 },
+};
+
+/** Infer a force-category from a configKey of the form `joint.dof`, where
+ * `joint` may be camelCase (`leftHip`, `rightShoulder`) or lowercase
+ * (`spine`, `neck`, `pelvis`). Review-3 fix: previous regex required a
+ * capital letter after the optional `left|right` prefix, which made
+ * `spine.*`, `neck.*`, `pelvis.*` slip through and produce no force chip. */
+function inferJointForceCategory(configKey: string): JointForceCategory | null {
+  const dot = configKey.indexOf('.');
+  if (dot < 1) return null;
+  let j = configKey.slice(0, dot).toLowerCase();
+  if (j.startsWith('left')) j = j.slice(4);
+  else if (j.startsWith('right')) j = j.slice(5);
+  if (j === 'hip') return 'hip';
+  if (j === 'knee') return 'knee';
+  if (j === 'ankle') return 'ankle';
+  if (j === 'shoulder') return 'shoulder';
+  if (j === 'elbow') return 'elbow';
+  if (j === 'wrist') return 'wrist';
+  if (j === 'neck') return 'neck';
+  if (j === 'pelvis') return 'pelvis';
+  if (j === 'scapula') return 'scapula';
+  if (j === 'spine' || j.startsWith('spine')) return 'spine';
+  return null;
+}
+
+/** Estimate the live joint reaction force (Newtons) at the principal joint
+ * for a Movement Mode drag. Returns null only if the configKey can't be
+ * classified at all (defensive — every DOF in DOF_SPECS maps to a joint).
+ *
+ * Model (intentionally simple — clinician-readable, not a full inverse
+ * dynamics solve; calibration tracked as Task #324 follow-up):
+ *   F_joint  =  m_distal · g  +  k_muscle(progress, painInhibition) · BW · g
+ *
+ * Where:
+ *   - m_distal is the sum of distal-segment masses crossing the joint.
+ *   - k_muscle is a per-joint baseline–peak multiplier ramped by drag
+ *     progress (Δ from neutral baseline / room to ROM limit) and
+ *     attenuated by pain-driven inhibition.
+ */
+function estimateMovementJointReactionForce(
+  configKey: string,
+  baselineValue: number,
+  currentValue: number,
+  activeRomMin: number,
+  activeRomMax: number,
+  bodyWeightKg: number,
+  painInhibitionFactor: number,
+): { joint: JointForceCategory; newtons: number; bwMultiple: number; progress: number } | null {
+  const joint = inferJointForceCategory(configKey);
+  if (!joint) return null;
+  const cfg = JOINT_FORCE_CONFIG[joint];
+  const bw = Math.max(20, bodyWeightKg);
+  const direction: '+' | '-' = currentValue >= baselineValue ? '+' : '-';
+  const targetLimit = direction === '+' ? activeRomMax : activeRomMin;
+  const denom = Math.max(1, Math.abs(targetLimit - baselineValue));
+  const progress = Math.min(1, Math.abs(currentValue - baselineValue) / denom);
+  const inhib = Math.max(0, Math.min(1, painInhibitionFactor));
+  const m_distal_kg = bw * cfg.distalMassFraction;
+  const gravityN = m_distal_kg * GRAVITY_MS2;
+  const k = (cfg.baselineBwMult + (cfg.peakBwMult - cfg.baselineBwMult) * progress) * (1 - 0.5 * inhib);
+  const muscleN = k * bw * GRAVITY_MS2;
+  const newtons = gravityN + muscleN;
+  const bwMultiple = newtons / (bw * GRAVITY_MS2);
+  return { joint, newtons, bwMultiple, progress };
+}
+
+/** Compute live agonist/antagonist activation deltas off the Movement-Mode
+ * neutral baseline (Task #323 — review-2 fix). The baseline is captured
+ * the moment the clinician enters Movement Mode (and refreshed on patient
+ * / archetype change), so activation reflects deviation from neutral
+ * rather than from wherever the user happened to grab the gizmo. */
 function computeMovementMuscleActivation(
   configKey: string,
-  startValue: number,
+  baselineValue: number,
   currentValue: number,
   activeRomMin: number,
   activeRomMax: number,
   painInhibitionFactor: number,
 ): MuscleActivationLevels | null {
-  const direction: '+' | '-' = currentValue >= startValue ? '+' : '-';
+  // Task #323 — review-3 fix: when the joint hasn't meaningfully moved off
+  // its Movement-Mode entry baseline (delta < ~0.5°), return null so neither
+  // agonist nor antagonist receives any highlight. Without this, the
+  // antagonist co-contraction floor (0.15) painted muscles even at progress
+  // = 0, contradicting the "unchanged stays un-highlighted" requirement.
+  const delta = Math.abs(currentValue - baselineValue);
+  if (delta < 0.5) return null;
+  const direction: '+' | '-' = currentValue >= baselineValue ? '+' : '-';
   const lookupKey = `${configKey}${direction}`;
   const map = MOVEMENT_MUSCLE_AGONISTS[lookupKey];
   if (!map) return null;
   const side: 'left' | 'right' = configKey.startsWith('left') ? 'left' : 'right';
   const targetLimit = direction === '+' ? activeRomMax : activeRomMin;
-  const denom = Math.max(1, Math.abs(targetLimit - startValue));
-  const progress = Math.min(1, Math.abs(currentValue - startValue) / denom);
+  const denom = Math.max(1, Math.abs(targetLimit - baselineValue));
+  const progress = Math.min(1, delta / denom);
   const agonistLevel = Math.max(0, progress * (1 - 0.6 * painInhibitionFactor));
-  const antagonistLevel = Math.min(0.6, 0.15 + 0.4 * progress + 0.3 * painInhibitionFactor);
+  // Antagonist co-contraction scales from 0 with progress (no floor at
+  // baseline) so muscles that haven't been recruited stay un-highlighted.
+  const antagonistLevel = Math.min(0.6, 0.55 * progress + 0.3 * painInhibitionFactor * progress);
   const out: MuscleActivationLevels = {};
   for (const m of map.agonists) {
     out[m] = { ...(out[m] ?? { left: 0, right: 0 }), [side]: agonistLevel } as { left: number; right: number };
@@ -2697,6 +2869,37 @@ export default function PureThreeGLBViewer({
   const [painToast, setPainToast] = useState<{ angle: number; intensity: number; movement: string; expiresAt: number } | null>(null);
   const lastPainfulArcStateRef = useRef<boolean>(false);
   const [movementMuscleActivation, setMovementMuscleActivation] = useState<MuscleActivationLevels | null>(null);
+  // Task #323: live joint reaction force readout while a Movement Mode drag
+  // is active. Cleared on drag-release / mode-leave so the chip disappears.
+  const [movementJointReactionForce, setMovementJointReactionForce] = useState<{
+    configKey: string;
+    joint: JointForceCategory;
+    newtons: number;
+    bwMultiple: number;
+  } | null>(null);
+  // Task #323: timestamp of the last muscle/force overlay state push so we
+  // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
+  // event rate. Re-using a ref avoids a re-render every cap check.
+  const lastMovementOverlayPushRef = useRef<number>(0);
+  const bodyWeightKgRef = useRef<number>(70);
+  // Task #323 — review-2 fix: snapshot of every DOF value taken when the
+  // clinician enters Movement Mode. Both the muscle-activation legend and
+  // the joint-reaction-force chip diff `currentValue` against this
+  // baseline (rather than the drag-start value) so readings reflect
+  // deviation from neutral, not from wherever the gizmo was grabbed.
+  const movementBaselineMapRef = useRef<Map<string, number>>(new Map());
+  // Task #323 — review-5 fix: full-body baseline activation map captured
+  // from `computeAllMuscleStates(modelConfig)` on Movement Mode entry.
+  // The drag pipeline recomputes the live map and diffs activationPercent
+  // per muscle, producing a delta MuscleStatesMap for the visualization
+  // pipeline — so EVERY Movement Mode DOF (shoulder, spine, neck, etc.)
+  // can light up muscles, not just the hip/knee/ankle subset previously
+  // hard-coded by the heuristic AGONIST table.
+  const movementBaselineMuscleStatesRef = useRef<MuscleStatesMap | null>(null);
+  // Live overlay produced from baseline-vs-current activation diffs while
+  // a Movement Mode drag is in progress. Cleared on drag-release / mode
+  // exit. Drives the muscle visualization useEffect below.
+  const [movementMuscleStatesOverlay, setMovementMuscleStatesOverlay] = useState<MuscleStatesMap | null>(null);
   const poseDragRef = useRef<{
     configKey: string;
     startX: number;
@@ -2735,6 +2938,10 @@ export default function PureThreeGLBViewer({
   lockedMovementConfigKeysRef.current = lockedMovementConfigKeys;
   const skeletonModeRef = useRef(skeletonMode);
   skeletonModeRef.current = skeletonMode;
+  // Keep the body weight ref in sync so the THREE useEffect closure (which
+  // owns the drag pipeline) can read the latest patient weight without
+  // re-mounting the entire pose-mode setup on weight changes (Task #323).
+  bodyWeightKgRef.current = bodyWeightKg ?? 70;
   const activeCapacitiesRef = useRef(activeCapacities);
   activeCapacitiesRef.current = activeCapacities;
   const onActiveMovementAttemptRef = useRef(onActiveMovementAttempt);
@@ -6122,15 +6329,84 @@ export default function PureThreeGLBViewer({
       if (exceededActiveLimit) drag.attemptedExceeded = true;
       if (inPainfulArc) drag.lastPainfulArc = true;
       if (skeletonModeRef.current === 'movement' && row) {
-        const activation = computeMovementMuscleActivation(
-          drag.configKey,
-          drag.startValue,
-          newValue,
-          row.activeRomMin,
-          row.activeRomMax,
-          row.painInhibitionFactor ?? 0,
-        );
-        if (activation) setMovementMuscleActivation(activation);
+        // Task #323: throttle muscle/force overlay state updates to ~30Hz so
+        // a fast drag doesn't push 200+ React state updates per second. The
+        // compute itself is cheap; the bottleneck is React re-rendering the
+        // overlay legend + force chip on every mouse-move tick.
+        const now = performance.now();
+        if (now - lastMovementOverlayPushRef.current >= 33) {
+          lastMovementOverlayPushRef.current = now;
+          // Task #323 — review-2 fix: diff against the Movement-Mode entry
+          // baseline (snapshot in the skeletonMode useEffect above), not the
+          // drag-start value. Falls back to drag.startValue for safety if the
+          // baseline map is empty (e.g., DOF was added after entry).
+          const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
+          const activation = computeMovementMuscleActivation(
+            drag.configKey,
+            baselineValue,
+            newValue,
+            row.activeRomMin,
+            row.activeRomMax,
+            row.painInhibitionFactor ?? 0,
+          );
+          // Task #323 — review-3 fix: explicitly clear when null (pose
+          // returned to baseline within threshold, or DOF has no muscle
+          // mapping) so the prior highlight doesn't persist visibly until
+          // drag-release.
+          setMovementMuscleActivation(activation ?? null);
+          // Task #323 — review-5 fix: drive the full-body muscle overlay
+          // from the existing biomechanics engine instead of a hand-coded
+          // agonist table. We recompute `computeAllMuscleStates` for the
+          // live modelConfig and compare every muscle's activationPercent
+          // against the baseline map captured on Movement Mode entry. Any
+          // muscle whose activation has shifted by >= 5% (in either
+          // direction) is included in the overlay map, so the
+          // visualization useEffect below paints those muscle meshes via
+          // the same `getMuscleColor` pipeline used by the muscle panel.
+          // This guarantees coverage for shoulder / elbow / wrist / spine
+          // / neck / scapula / pelvis sliders that the heuristic table
+          // didn't address.
+          const baselineMuscleStates = movementBaselineMuscleStatesRef.current;
+          if (baselineMuscleStates) {
+            try {
+              const liveMuscleStates = computeAllMuscleStates(modelConfigRef.current);
+              const overlay: MuscleStatesMap = {};
+              let changedCount = 0;
+              for (const id of Object.keys(liveMuscleStates)) {
+                const live = liveMuscleStates[id];
+                const base = baselineMuscleStates[id];
+                if (!live) continue;
+                const baseAct = base?.activationPercent ?? 0;
+                if (Math.abs(live.activationPercent - baseAct) >= 5) {
+                  overlay[id] = live;
+                  changedCount += 1;
+                }
+              }
+              setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
+            } catch {
+              setMovementMuscleStatesOverlay(null);
+            }
+          }
+          const force = estimateMovementJointReactionForce(
+            drag.configKey,
+            baselineValue,
+            newValue,
+            row.activeRomMin,
+            row.activeRomMax,
+            bodyWeightKgRef.current,
+            row.painInhibitionFactor ?? 0,
+          );
+          if (force) {
+            setMovementJointReactionForce({
+              configKey: drag.configKey,
+              joint: force.joint,
+              newtons: force.newtons,
+              bwMultiple: force.bwMultiple,
+            });
+          } else {
+            setMovementJointReactionForce(null);
+          }
+        }
       }
       if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
         const [j, mv] = drag.configKey.split('.');
@@ -6220,6 +6496,14 @@ export default function PureThreeGLBViewer({
       domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
       lastPainfulArcStateRef.current = false;
       setMovementMuscleActivation(null);
+      // Task #323 — review-5 fix: also drop the engine-derived overlay so
+      // the highlighted muscles return to their resting color when the
+      // clinician releases the slider.
+      setMovementMuscleStatesOverlay(null);
+      // Task #323: drop the live joint force readout the moment the drag
+      // ends so the chip vanishes alongside the muscle highlights.
+      setMovementJointReactionForce(null);
+      lastMovementOverlayPushRef.current = 0;
     };
 
     // Task #321: imperative API for the slider HUD. Mounted onto a ref so
@@ -6245,6 +6529,8 @@ export default function PureThreeGLBViewer({
         if (poseDragRef.current) {
           poseDragRef.current = null;
           setMovementMuscleActivation(null);
+          setMovementMuscleStatesOverlay(null);
+          setMovementJointReactionForce(null);
         }
         const startValue = getCurrentValue(configKey);
         const lim = DOF_LIMIT_INDEX.get(configKey);
@@ -6833,7 +7119,11 @@ export default function PureThreeGLBViewer({
                 : undefined,
           };
           lastPainfulArcStateRef.current = false;
-          if (skeletonModeRef.current !== 'movement') setMovementMuscleActivation(null);
+          if (skeletonModeRef.current !== 'movement') {
+            setMovementMuscleActivation(null);
+            setMovementMuscleStatesOverlay(null);
+            setMovementJointReactionForce(null);
+          }
           controls.enabled = false;
           domElement.style.cursor = 'grabbing';
           e.preventDefault();
@@ -7153,8 +7443,43 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (skeletonMode !== 'movement') {
       setLockedMovementConfigKeys(prev => (prev.size > 0 ? new Set() : prev));
+      // Task #323: also wipe the live overlays (muscle highlights + joint
+      // reaction force chip) on the way out — they're meaningless in
+      // Posture Mode, and the effect won't re-render them anyway.
+      setMovementMuscleActivation(null);
+      setMovementMuscleStatesOverlay(null);
+      setMovementJointReactionForce(null);
+      movementBaselineMapRef.current = new Map();
+      movementBaselineMuscleStatesRef.current = null;
+    } else {
+      // Task #323 — review-3 fix + review-4 harmonization: snapshot every
+      // DOF value when entering Movement Mode AND whenever the patient /
+      // archetype context changes (modelConfig identity flips). We skip
+      // the refresh while a drag is active so per-frame mutations during
+      // a drag don't collapse the baseline back to the current pose.
+      if (poseDragRef.current) return;
+      const snapshot = new Map<string, number>();
+      const cfg = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined> | undefined;
+      if (cfg) {
+        for (const spec of DOF_SPECS) {
+          const grp = cfg[spec.joint];
+          const v = grp?.[spec.property];
+          if (typeof v === 'number') snapshot.set(spec.id, v);
+        }
+      }
+      movementBaselineMapRef.current = snapshot;
+      // Task #323 — review-5 fix: capture the engine's full-body activation
+      // map so the live diff covers EVERY muscle the engine models —
+      // upper body / spine / scapula / neck / pelvis as well as legs.
+      // Wrapped in try/catch because computeAllMuscleStates is defensive
+      // but a malformed modelConfig shouldn't kill mode entry.
+      try {
+        movementBaselineMuscleStatesRef.current = computeAllMuscleStates(modelConfigRef.current);
+      } catch {
+        movementBaselineMuscleStatesRef.current = null;
+      }
     }
-  }, [skeletonMode]);
+  }, [skeletonMode, modelConfig]);
 
   // Prop-driven external bone-selection sync (Task #212). Runs whenever the
   // controlled selection prop changes; the inner pose-mode effect installs
@@ -9129,7 +9454,12 @@ export default function PureThreeGLBViewer({
     const effectiveActivation = (skeletonMode === 'movement' && movementMuscleActivation)
       ? movementMuscleActivation
       : (muscleActivation || {});
-    const showMuscles = muscleVisibility?.enabled || (skeletonMode === 'movement' && !!movementMuscleActivation);
+    // Task #323 — review-6 fix: split muscle groups must also be visible
+    // when only the engine-derived overlay is active (e.g. shoulder /
+    // spine / neck DOFs that the legacy MuscleActivationLevels heuristic
+    // doesn't cover). Without this OR, showMuscles flips false for
+    // upper-body sliders and the entire layer is hidden.
+    const showMuscles = muscleVisibility?.enabled || (skeletonMode === 'movement' && (!!movementMuscleActivation || !!movementMuscleStatesOverlay));
     if (showMuscles) {
       muscleVisualizationRef.current.setShowLabels(muscleVisibility?.showLabels || false);
       muscleVisualizationRef.current.updateMuscles(
@@ -9151,7 +9481,7 @@ export default function PureThreeGLBViewer({
     return () => {
       // Clear visualization when component updates
     };
-  }, [muscleVisibility, muscleActivation, status, skeletonMode, movementMuscleActivation]);
+  }, [muscleVisibility, muscleActivation, status, skeletonMode, movementMuscleActivation, movementMuscleStatesOverlay]);
 
   // Muscle layer (GLB model) effect
   useEffect(() => {
@@ -9268,43 +9598,54 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (splitMuscleGroupsRef.current.size === 0) return;
 
-    if (!muscleStates) {
+    // Task #323 — review-5 fix: prefer the engine-derived live overlay
+    // (baseline-vs-current activation diff) when a Movement Mode drag is
+    // in progress, so muscles around ANY engaged joint light up. Falls
+    // back to the muscle-panel `muscleStates` prop otherwise.
+    const effectiveStates = movementMuscleStatesOverlay ?? muscleStates;
+
+    if (!effectiveStates) {
       originalMaterialsRef.current.forEach((originalMat, mesh) => {
         mesh.material = originalMat;
       });
       return;
     }
 
+    // Task #323 — review-6 fix: explicitly RESET materials for any
+    // split-group mesh whose group id is absent from `effectiveStates`,
+    // so a muscle that was lit on the previous frame but has dropped
+    // below the activation-delta threshold this frame visibly fades
+    // back to its resting color instead of staying highlighted until
+    // drag-release. Previously the `if (!state) return` short-circuit
+    // skipped the reset, leaving stale colors.
     splitMuscleGroupsRef.current.forEach((group, groupId) => {
-      const state = muscleStates[groupId];
-      if (!state) return;
-
-      const hasIssue = state.state !== 'neutral' ||
-        state.tension > 50 || state.activationPercent > 60;
+      const state = effectiveStates[groupId];
+      const hasIssue = state
+        ? state.state !== 'neutral' || state.tension > 50 || state.activationPercent > 60
+        : false;
 
       group.meshes.forEach((mesh) => {
-        if (mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh) {
-          if (!originalMaterialsRef.current.has(mesh)) {
-            originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
-          }
-          if (!hasIssue) {
-            const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
-            if (orig) {
-              mesh.material = orig.clone();
-            }
-            return;
-          }
-          const color = getMuscleColor(state);
-          const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
-          const mat = orig ? orig.clone() as THREE.MeshStandardMaterial : (mesh.material as THREE.MeshStandardMaterial);
-          mat.color.setRGB(color.r, color.g, color.b);
-          if (mat.emissive) mat.emissive.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
-          mat.needsUpdate = true;
-          mesh.material = mat;
+        if (!(mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh)) return;
+        if (!originalMaterialsRef.current.has(mesh)) {
+          originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
         }
+        if (!state || !hasIssue) {
+          const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+          if (orig) {
+            mesh.material = orig.clone();
+          }
+          return;
+        }
+        const color = getMuscleColor(state);
+        const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+        const mat = orig ? orig.clone() as THREE.MeshStandardMaterial : (mesh.material as THREE.MeshStandardMaterial);
+        mat.color.setRGB(color.r, color.g, color.b);
+        if (mat.emissive) mat.emissive.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
+        mat.needsUpdate = true;
+        mesh.material = mat;
       });
     });
-  }, [muscleStates]);
+  }, [muscleStates, movementMuscleStatesOverlay]);
 
   useEffect(() => {
     for (const entry of biomechanicalHighlightRef.current) {
@@ -10422,6 +10763,61 @@ export default function PureThreeGLBViewer({
             className="rounded-full border-2 border-red-500 bg-red-500/25 animate-pulse"
             style={{ width: 44, height: 44, clipPath: 'polygon(50% 50%, 100% 0%, 100% 100%)' }}
           />
+        </div>
+      )}
+      {/* Task #323: Live joint reaction force chip — renders during a
+          Movement Mode drag near the moving joint anchor. Shows total
+          Newtons (primary) + body-weight multiple (secondary). Suppressed
+          outside Movement Mode and the moment the drag releases. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && movementJointReactionForce && (() => {
+        const anchor = selectedJointAnchorRef.current ?? { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        const f = movementJointReactionForce;
+        // Cool→warm gradient buckets keyed off BW multiple — keeps the
+        // colour scheme consistent with the rest of the force overlays.
+        const tint = f.bwMultiple >= 4
+          ? { bg: 'bg-red-600/90', border: 'border-red-300', label: 'text-red-100' }
+          : f.bwMultiple >= 3
+            ? { bg: 'bg-orange-500/90', border: 'border-orange-200', label: 'text-orange-100' }
+            : f.bwMultiple >= 2
+              ? { bg: 'bg-amber-500/90', border: 'border-amber-200', label: 'text-amber-100' }
+              : { bg: 'bg-emerald-600/90', border: 'border-emerald-200', label: 'text-emerald-100' };
+        return (
+          <div
+            className="absolute z-30 pointer-events-none"
+            style={{ left: anchor.x - 12, top: anchor.y - 38, transform: 'translate(-100%, -50%)' }}
+            data-testid="movement-joint-force-chip"
+            data-joint={f.joint}
+          >
+            <div className={`rounded-md shadow-xl backdrop-blur border ${tint.bg} ${tint.border} px-2 py-1 text-white leading-tight`}>
+              <div className={`text-[8px] uppercase tracking-wider ${tint.label}`}>{f.joint} reaction</div>
+              <div className="text-[13px] font-bold tabular-nums">{Math.round(f.newtons)} N</div>
+              <div className="text-[9px] tabular-nums opacity-90">{Math.round(f.bwMultiple * 100)}% BW</div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Task #323: muscle activation legend — gradient strip + cap labels
+          shown only while live activation is being computed (drag in
+          progress). Anchored bottom-left so it doesn't fight the slider
+          HUD or the goal-state pill. */}
+      {skeletonMode === 'movement' && (movementMuscleActivation || movementMuscleStatesOverlay) && (
+        <div
+          className="absolute bottom-3 left-3 z-20 pointer-events-none"
+          data-testid="movement-muscle-activation-legend"
+        >
+          <div className="rounded-md shadow-lg bg-slate-900/90 backdrop-blur border border-slate-700/60 px-2 py-1.5">
+            <div className="text-[9px] uppercase tracking-wider text-slate-300 mb-1">Muscle activation</div>
+            <div
+              className="h-1.5 w-32 rounded-full"
+              style={{ background: 'linear-gradient(90deg, #1e3a8a 0%, #38bdf8 30%, #facc15 60%, #f97316 80%, #ef4444 100%)' }}
+            />
+            <div className="flex justify-between mt-0.5 text-[8px] tabular-nums text-slate-400">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+            <div className="text-[8px] text-slate-500 mt-0.5">Δ from baseline · agonist + antagonist</div>
+          </div>
         </div>
       )}
       {/* Task #321: Movement Mode slider HUD — one slider per unique DOF

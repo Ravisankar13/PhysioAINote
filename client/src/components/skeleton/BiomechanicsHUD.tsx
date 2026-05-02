@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -27,6 +27,18 @@ interface BiomechanicsHUDProps {
   onOpenMuscleOverlay: () => void;
   onOpenChainExplorer: () => void;
   onOpenSlings: () => void;
+  /** Task #323: when true, the on-skeleton sling overlay is pinned and the
+   * Slings circle renders in a pressed/active visual state. Independent of
+   * which side-panel tab is active. */
+  slingsOverlayPinned?: boolean;
+  /** Task #323: primary-click handler on the Slings circle. Toggles the
+   * on-skeleton sling overlay. `onOpenSlings` is preserved as a secondary
+   * affordance (chevron button + double-click). */
+  onToggleSlingsOverlay?: () => void;
+  /** Task #323 — review-3 fix: when false, the Slings circle is omitted
+   * from the HUD entirely. PhysioGPT passes `false` outside Movement
+   * Mode so the toggle control isn't visible where it has no meaning. */
+  showSlings?: boolean;
   onOpenBiomechanics: () => void;
   onToggleTissueView: () => void;
   timeMetrics?: ForceTimeMetrics | null;
@@ -85,6 +97,9 @@ export default function BiomechanicsHUD({
   onOpenMuscleOverlay,
   onOpenChainExplorer,
   onOpenSlings,
+  slingsOverlayPinned = false,
+  onToggleSlingsOverlay,
+  showSlings = true,
   onOpenBiomechanics,
   onToggleTissueView,
   timeMetrics,
@@ -238,7 +253,14 @@ export default function BiomechanicsHUD({
     value: string;
     valueColor: string;
     onClick: () => void;
+    onDoubleClick?: () => void;
     tooltip?: string;
+    /** Task #323: render a pressed/active visual state for togglable circles. */
+    pressed?: boolean;
+    /** Task #323: a small secondary affordance rendered in the bottom-right
+     * of the circle (used for the Slings chevron that opens the side panel
+     * while the primary click toggles the on-skeleton overlay). */
+    secondary?: { tooltip: string; onClick: () => void; icon: typeof Activity; testId: string };
   }> = [
     {
       id: 'controls',
@@ -260,7 +282,20 @@ export default function BiomechanicsHUD({
       label: 'Slings',
       value: slingScore !== null ? `${Math.round(slingScore)}%` : '--',
       valueColor: slingScore !== null ? getScoreColor(slingScore) : '#6b7280',
-      onClick: onOpenSlings,
+      // Task #323: primary click toggles the on-skeleton sling overlay
+      // (when a toggle handler is provided), regardless of side-panel
+      // tab. Falls back to opening the panel when no toggle wired up.
+      onClick: onToggleSlingsOverlay ?? onOpenSlings,
+      // Task #323: double-click is the keyboard-free secondary affordance
+      // mirroring the chevron — opens the full Slings side panel.
+      onDoubleClick: onToggleSlingsOverlay ? onOpenSlings : undefined,
+      pressed: !!slingsOverlayPinned,
+      tooltip: onToggleSlingsOverlay
+        ? `${slingsOverlayPinned ? 'Hide' : 'Show'} on-skeleton sling overlay (chevron / double-click for panel)`
+        : 'Slings',
+      secondary: onToggleSlingsOverlay
+        ? { tooltip: 'Open Slings panel', onClick: onOpenSlings, icon: ChevronRight, testId: 'hud-slings-open-panel' }
+        : undefined,
     },
     {
       id: 'biomechanics',
@@ -409,20 +444,29 @@ export default function BiomechanicsHUD({
     <div
       className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 flex-wrap justify-center max-w-[500px]"
     >
-      {circles.map((c) => {
+      {circles.filter((c) => c.id !== 'slings' || showSlings).map((c) => {
         const Icon = c.icon;
         const isPulsing = pulsingIds.has(c.id);
         const dir = directions[c.id];
+        const SecondaryIcon = c.secondary?.icon;
+        // Task #323: pressed circles get a brighter ring + an inset glow so
+        // the toggle state reads at a glance even while a pulse is firing.
+        const ringClass = c.pressed
+          ? 'ring-2 ring-white/80'
+          : isPulsing ? 'ring-2 ring-white/70' : c.ringColor;
         return (
           <button
             key={c.id}
             onClick={c.onClick}
-            className={`relative w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${isPulsing ? 'ring-2 ring-white/70' : c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            onDoubleClick={c.onDoubleClick}
+            className={`relative w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${ringClass} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer ${c.pressed ? 'shadow-inner brightness-125' : ''}`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
             title={c.tooltip ?? c.label}
             data-testid={`hud-circle-${c.id}`}
             data-pulsing={isPulsing ? 'true' : 'false'}
             data-direction={dir ?? 'none'}
+            data-pressed={c.pressed ? 'true' : 'false'}
+            aria-pressed={c.pressed === undefined ? undefined : c.pressed}
           >
             <Icon className={`h-3 w-3 ${c.color}`} />
             <span
@@ -444,6 +488,27 @@ export default function BiomechanicsHUD({
                 aria-label={dir === 'up' ? 'increased' : 'decreased'}
               >
                 {dir === 'up' ? <ArrowUp className="h-2.5 w-2.5 text-white" /> : <ArrowDown className="h-2.5 w-2.5 text-white" />}
+              </span>
+            )}
+            {c.secondary && SecondaryIcon && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); c.secondary!.onClick(); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    c.secondary!.onClick();
+                  }
+                }}
+                className="absolute -bottom-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-slate-900/90 ring-1 ring-white/30 text-slate-200 hover:text-white hover:bg-slate-800 cursor-pointer"
+                title={c.secondary.tooltip}
+                data-testid={c.secondary.testId}
+                aria-label={c.secondary.tooltip}
+              >
+                <SecondaryIcon className="h-2.5 w-2.5" />
               </span>
             )}
           </button>

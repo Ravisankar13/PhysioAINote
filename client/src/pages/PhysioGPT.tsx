@@ -1019,6 +1019,12 @@ export default function PhysioGPT() {
   const [reasoningActiveTab, setReasoningActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
+  // Task #323: when the clinician toggles the Slings circle in the
+  // BiomechanicsHUD, the on-skeleton sling overlay is "pinned" — it
+  // renders independently of which side-panel tab is active. The chevron
+  // (or double-click) on the same circle still opens the side panel.
+  // Defaults OFF; auto-clears when leaving Movement Mode below.
+  const [slingsOverlayPinned, setSlingsOverlayPinned] = useState(false);
   const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
@@ -7737,10 +7743,23 @@ ${ddxList}`;
       .map(tissueIntelligenceToOverlayHighlight);
   }, [inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
 
-  const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
+  // Task #323 — review-3/4: the BiomechanicsHUD Slings pin is the single
+  // source of truth for whether the on-skeleton sling overlay is rendered.
+  // The side-panel `slingOverlayVisible` toggle now controls panel-only
+  // visualization (chips, charts) and no longer gates the on-body lines,
+  // matching the slingPathwayVisualization render gate downstream.
+  const slingOverlayActive = slingsOverlayPinned && !!slingAnalysis;
   useEffect(() => {
     if (!slingOverlayActive) setExpandedSlingDetailId(null);
   }, [slingOverlayActive]);
+  // Task #323: auto-clear the HUD-driven pin when leaving Movement Mode so
+  // the overlay doesn't linger into Posture Mode where its assumptions
+  // (live load transfer during dynamic effort) don't hold.
+  useEffect(() => {
+    if (skeletonMode !== 'movement' && slingsOverlayPinned) {
+      setSlingsOverlayPinned(false);
+    }
+  }, [skeletonMode, slingsOverlayPinned]);
 
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
@@ -9478,7 +9497,7 @@ ${ddxList}`;
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
               onModelLoadError={handleModelLoadError}
-              slingPathwayVisualization={rightPanelTab === 'slings' && slingOverlayVisible && slingAnalysis ? {
+              slingPathwayVisualization={slingsOverlayPinned && slingAnalysis ? {
                 enabled: true,
                 activeSlingId: selectedSlingId,
                 slings: slingAnalysis.slings.map(s => ({
@@ -13830,6 +13849,9 @@ ${ddxList}`;
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setShowUnifiedChainPanel(true); }}
               onOpenSlings={() => { setRightPanelTab('slings'); setChatPanelOpen(true); }}
+              slingsOverlayPinned={skeletonMode === 'movement' ? slingsOverlayPinned : false}
+              onToggleSlingsOverlay={skeletonMode === 'movement' ? () => { setSlingsOverlayPinned(prev => !prev); } : undefined}
+              showSlings={skeletonMode === 'movement'}
               onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); setChatPanelOpen(true); }}
               onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
               timeMetrics={forceTimeMetrics}

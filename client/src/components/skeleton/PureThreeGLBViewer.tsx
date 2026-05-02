@@ -2877,6 +2877,28 @@ export default function PureThreeGLBViewer({
     newtons: number;
     bwMultiple: number;
   } | null>(null);
+  // Task #329: live "Top movers" HUD readout while a Movement Mode drag is
+  // active. Lists the 3-5 muscles whose activation has shifted the most
+  // from the Movement-Mode entry baseline, each carrying its current
+  // activation %, signed delta, length state (concentric / eccentric /
+  // isometric), and a capacity-relative load pill that compares the
+  // muscle's activation against the patient's tested strength % for the
+  // dragged joint movement.
+  const [movementTopMovers, setMovementTopMovers] = useState<{
+    configKey: string;
+    joint: string;
+    movement: string;
+    movers: Array<{
+      id: string;
+      label: string;
+      activation: number;
+      delta: number;
+      lengthPct: number;
+      lengthState: 'concentric' | 'eccentric' | 'isometric';
+      capacityLoadPct: number;
+      capacityStatus: 'safe' | 'near' | 'over';
+    }>;
+  } | null>(null);
   // Task #323: timestamp of the last muscle/force overlay state push so we
   // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
   // event rate. Re-using a ref avoids a re-render every cap check.
@@ -2934,6 +2956,7 @@ export default function PureThreeGLBViewer({
       passiveRomMax: number;
       painfulArc?: { start: number; end: number; intensity: number } | null;
       painInhibitionFactor?: number;
+      activeStrengthPct?: number;
     } | null;
     lastValue?: number;
     attemptedExceeded?: boolean;
@@ -6430,8 +6453,46 @@ export default function PureThreeGLBViewer({
               }
               const changedCount = Object.keys(overlay).length;
               setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
+              // Task #329: derive a ranked "top movers" readout from the
+              // same dominantByGroup map. Each entry carries its current
+              // activation %, signed delta vs baseline, length state, and a
+              // capacity-relative load (activation as a fraction of the
+              // patient's tested strength % for the dragged movement).
+              const moverEntries = Object.values(dominantByGroup);
+              moverEntries.sort((a, b) => b.delta - a.delta);
+              const strengthPct = Math.max(1, row.activeStrengthPct ?? 100);
+              const top = moverEntries.slice(0, 5).map(({ muscle }) => {
+                const base = baselineMuscles[muscle.id]!;
+                const signedDelta = muscle.activationPercent - base.activationPercent;
+                const lenState: 'concentric' | 'eccentric' | 'isometric' =
+                  muscle.lengthPercent < 95 ? 'concentric'
+                  : muscle.lengthPercent > 105 ? 'eccentric'
+                  : 'isometric';
+                const capacityLoadPct = (muscle.activationPercent / strengthPct) * 100;
+                const capacityStatus: 'safe' | 'near' | 'over' =
+                  capacityLoadPct >= 95 ? 'over'
+                  : capacityLoadPct >= 70 ? 'near'
+                  : 'safe';
+                return {
+                  id: muscle.id,
+                  label: muscle.label,
+                  activation: muscle.activationPercent,
+                  delta: signedDelta,
+                  lengthPct: muscle.lengthPercent,
+                  lengthState: lenState,
+                  capacityLoadPct,
+                  capacityStatus,
+                };
+              });
+              if (top.length > 0) {
+                const [j, mv] = drag.configKey.split('.');
+                setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
+              } else {
+                setMovementTopMovers(null);
+              }
             } catch {
               setMovementMuscleStatesOverlay(null);
+              setMovementTopMovers(null);
             }
           }
           const force = estimateMovementJointReactionForce(
@@ -6550,6 +6611,9 @@ export default function PureThreeGLBViewer({
       // Task #323: drop the live joint force readout the moment the drag
       // ends so the chip vanishes alongside the muscle highlights.
       setMovementJointReactionForce(null);
+      // Task #329: drop the Top Movers readout in lockstep with the JRF
+      // chip — both are drag-only readouts.
+      setMovementTopMovers(null);
       lastMovementOverlayPushRef.current = 0;
     };
 
@@ -6578,6 +6642,7 @@ export default function PureThreeGLBViewer({
           setMovementMuscleActivation(null);
           setMovementMuscleStatesOverlay(null);
           setMovementJointReactionForce(null);
+          setMovementTopMovers(null);
         }
         const startValue = getCurrentValue(configKey);
         const lim = DOF_LIMIT_INDEX.get(configKey);
@@ -6587,6 +6652,7 @@ export default function PureThreeGLBViewer({
           passiveRomMax: number;
           painfulArc: { start: number; end: number; intensity: number } | null;
           painInhibitionFactor: number;
+          activeStrengthPct: number;
         } | null = null;
         if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
           const lookupKey = configKey.replace('.', ':');
@@ -6600,6 +6666,7 @@ export default function PureThreeGLBViewer({
                 ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
                 : null,
               painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+              activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
             };
           }
         }
@@ -7116,7 +7183,7 @@ export default function PureThreeGLBViewer({
           const screenDir = computeScreenDir(anchor, a.dirWorld);
           const startValue = getCurrentValue(a.def.configKey);
           const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
-          let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number } | null = null;
+          let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number; activeStrengthPct: number } | null = null;
           if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
             const lookupKey = a.def.configKey.replace('.', ':');
             const r = activeCapacitiesRef.current[lookupKey];
@@ -7129,6 +7196,7 @@ export default function PureThreeGLBViewer({
                   ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
                   : null,
                 painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+                activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
               };
             }
           }
@@ -7170,6 +7238,7 @@ export default function PureThreeGLBViewer({
             setMovementMuscleActivation(null);
             setMovementMuscleStatesOverlay(null);
             setMovementJointReactionForce(null);
+            setMovementTopMovers(null);
           }
           controls.enabled = false;
           domElement.style.cursor = 'grabbing';
@@ -7229,7 +7298,7 @@ export default function PureThreeGLBViewer({
             const screenDir = computeScreenDir(anchor, primaryArrow.dirWorld);
             const startValue = getCurrentValue(primaryArrow.def.configKey);
             const lim = DOF_LIMIT_INDEX.get(primaryArrow.def.configKey);
-            let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number } | null = null;
+            let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number; activeStrengthPct: number } | null = null;
             if (activeCapacitiesRef.current) {
               const lookupKey = primaryArrow.def.configKey.replace('.', ':');
               const r = activeCapacitiesRef.current[lookupKey];
@@ -7242,6 +7311,7 @@ export default function PureThreeGLBViewer({
                     ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
                     : null,
                   painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+                  activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
                 };
               }
             }
@@ -7496,6 +7566,7 @@ export default function PureThreeGLBViewer({
       setMovementMuscleActivation(null);
       setMovementMuscleStatesOverlay(null);
       setMovementJointReactionForce(null);
+      setMovementTopMovers(null);
       movementBaselineMapRef.current = new Map();
       movementBaselineMuscleStatesRef.current = null;
       movementBaselineMusclesRef.current = null;
@@ -10989,6 +11060,97 @@ export default function PureThreeGLBViewer({
           </div>
         );
       })()}
+      {/* Task #329: Top Movers HUD — lists the 3-5 muscles with the
+          biggest activation shift from the Movement-Mode baseline, with
+          activation %, signed delta, length state, and a capacity-relative
+          load pill (activation vs. patient's tested strength %). Anchored
+          bottom-right so it sits opposite the muscle activation legend
+          (bottom-left) and never collides with the slider HUD anchored to
+          the joint itself. Only renders during a drag. */}
+      {skeletonMode === 'movement' && movementTopMovers && movementTopMovers.movers.length > 0 && (
+        <div
+          className="absolute bottom-3 right-3 z-30 pointer-events-none"
+          data-testid="movement-top-movers-hud"
+          data-config-key={movementTopMovers.configKey}
+        >
+          <div className="rounded-lg shadow-2xl backdrop-blur bg-slate-900/92 border border-slate-700/60 px-3 py-2 w-72">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-slate-300">Top movers</div>
+              <div className="text-[9px] text-slate-400 tabular-nums">
+                {movementTopMovers.joint} · {movementTopMovers.movement}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {movementTopMovers.movers.map(m => {
+                const pillCls = m.capacityStatus === 'over'
+                  ? 'bg-red-500/30 text-red-100 border-red-400/50'
+                  : m.capacityStatus === 'near'
+                    ? 'bg-amber-500/30 text-amber-100 border-amber-400/50'
+                    : 'bg-emerald-500/25 text-emerald-100 border-emerald-400/40';
+                const barCls = m.capacityStatus === 'over'
+                  ? 'h-full bg-red-500'
+                  : m.capacityStatus === 'near'
+                    ? 'h-full bg-amber-400'
+                    : 'h-full bg-emerald-400';
+                const lenIcon = m.lengthState === 'concentric' ? '↓' : m.lengthState === 'eccentric' ? '↑' : '·';
+                const lenCls = m.lengthState === 'concentric'
+                  ? 'text-sky-300'
+                  : m.lengthState === 'eccentric'
+                    ? 'text-violet-300'
+                    : 'text-slate-400';
+                const deltaSign = m.delta >= 0 ? '+' : '';
+                const deltaCls = m.delta >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                return (
+                  <div key={m.id} className="text-[10px] text-slate-100" data-testid={`top-mover-${m.id}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span
+                          className={`text-[11px] leading-none ${lenCls}`}
+                          title={m.lengthState}
+                          data-testid={`top-mover-${m.id}-length-state`}
+                        >
+                          {lenIcon}
+                        </span>
+                        <span className="truncate" title={m.label}>{m.label}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className="tabular-nums text-slate-200"
+                          data-testid={`top-mover-${m.id}-activation`}
+                        >
+                          {Math.round(m.activation)}%
+                        </span>
+                        <span
+                          className={`tabular-nums text-[9px] ${deltaCls}`}
+                          data-testid={`top-mover-${m.id}-delta`}
+                        >
+                          {deltaSign}{Math.round(m.delta)}
+                        </span>
+                        <span
+                          className={`text-[9px] tabular-nums rounded border px-1 py-0.5 ${pillCls}`}
+                          title={`${Math.round(m.capacityLoadPct)}% of patient's tested strength`}
+                          data-testid={`top-mover-${m.id}-capacity`}
+                        >
+                          {Math.round(m.capacityLoadPct)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-0.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={barCls}
+                        style={{ width: `${Math.min(100, Math.max(2, m.capacityLoadPct))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-700/40 text-[8px] text-slate-400 leading-tight">
+              Activation · Δ vs baseline · % of patient capacity
+            </div>
+          </div>
+        </div>
+      )}
       {/* Task #323: muscle activation legend — gradient strip + cap labels
           shown only while live activation is being computed (drag in
           progress). Anchored bottom-left so it doesn't fight the slider

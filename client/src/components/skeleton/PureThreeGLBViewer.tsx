@@ -6409,8 +6409,12 @@ export default function PureThreeGLBViewer({
             // onModelConfigChangeRef hasn't fired yet for this tick.
             const baselineMuscles = movementBaselineMusclesRef.current;
             const [joint, movement] = drag.configKey.split('.');
-            let dom: 'concentric' | 'eccentric' | 'isometric' | null = null;
-            if (baselineMuscles && joint && movement) {
+            if (!baselineMuscles || !joint || !movement) {
+              // Safe degrade: with no baseline we cannot infer length state,
+              // so fall back to direction-only gating rather than silently
+              // suppressing every loading-specific arc.
+              lmMatches = true;
+            } else {
               const base = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined>;
               const candidate: ModelConfig = {
                 ...(modelConfigRef.current as ModelConfig),
@@ -6425,12 +6429,12 @@ export default function PureThreeGLBViewer({
                 const d = Math.abs(m.activationPercent - baseMuscle.activationPercent);
                 if (d > bestDelta) { bestDelta = d; bestLen = m.lengthPercent; }
               }
-              if (bestDelta > 0) {
-                dom = bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric';
-                lastDominantLengthStateRef.current = dom;
-              }
+              const dom: 'concentric' | 'eccentric' | 'isometric' | null = bestDelta > 0
+                ? (bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric')
+                : null;
+              if (dom) lastDominantLengthStateRef.current = dom;
+              lmMatches = dom !== null && dom === lm;
             }
-            lmMatches = dom !== null && dom === lm;
           }
           if (newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches) {
             inPainfulArc = true;

@@ -100,7 +100,7 @@ type Overlay = {
     activeRomMaxFactor?: number;
     activeStrengthPct?: number;
     painInhibitionFactor?: number;
-    painfulArc?: { start: number; end: number; intensity: number };
+    painfulArc?: PainfulArc;
     rationale?: string;
   }>>;
 };
@@ -108,35 +108,35 @@ type Overlay = {
 const LITERATURE_OVERLAYS: Record<string, Overlay> = {
   adhesive_capsulitis_left: { joints: {
     leftShoulder: {
-      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7 }, rationale: 'Capsular contracture limits AROM with painful end-range.' },
-      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8 }, rationale: 'Marked AROM loss in capsular pattern.' },
+      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7, direction: 'ascending', loadingMode: 'any', label: 'Capsular end-range stretch' }, rationale: 'Capsular contracture limits AROM with painful end-range.' },
+      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8, direction: 'ascending', loadingMode: 'any', label: 'Capsular pattern' }, rationale: 'Marked AROM loss in capsular pattern.' },
       externalRotation: { activeRomMaxFactor: 0.4, activeStrengthPct: 55, painInhibitionFactor: 0.5, rationale: 'External rotation loss is hallmark.' },
     },
   } },
   adhesive_capsulitis_right: { joints: {
     rightShoulder: {
-      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7 } },
-      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8 } },
+      flexion: { activeRomMaxFactor: 0.55, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 7, direction: 'ascending', loadingMode: 'any', label: 'Capsular end-range stretch' } },
+      abduction: { activeRomMaxFactor: 0.45, activeStrengthPct: 60, painInhibitionFactor: 0.5, painfulArc: { start: 80, end: 120, intensity: 8, direction: 'ascending', loadingMode: 'any', label: 'Capsular pattern' } },
       externalRotation: { activeRomMaxFactor: 0.4, activeStrengthPct: 55, painInhibitionFactor: 0.5 },
     },
   } },
   rotator_cuff_tendinopathy_left: { joints: {
     leftShoulder: {
-      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6 }, rationale: 'Classic painful arc 60–120° from subacromial impingement.' },
+      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6, direction: 'either', loadingMode: 'any', label: 'Subacromial impingement zone' }, rationale: 'Classic painful arc 60–120° from subacromial impingement.' },
       flexion: { activeRomMaxFactor: 0.9, activeStrengthPct: 75, painInhibitionFactor: 0.25 },
     },
   } },
   rotator_cuff_tendinopathy_right: { joints: {
     rightShoulder: {
-      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6 } },
+      abduction: { activeRomMaxFactor: 0.85, activeStrengthPct: 70, painInhibitionFactor: 0.3, painfulArc: { start: 60, end: 120, intensity: 6, direction: 'either', loadingMode: 'any', label: 'Subacromial impingement zone' } },
       flexion: { activeRomMaxFactor: 0.9, activeStrengthPct: 75, painInhibitionFactor: 0.25 },
     },
   } },
   meniscus_tear_left: { joints: {
-    leftKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6 } } },
+    leftKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6, direction: 'ascending', loadingMode: 'any', label: 'Deep flexion catch' } } },
   } },
   meniscus_tear_right: { joints: {
-    rightKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6 } } },
+    rightKnee: { flexion: { activeRomMaxFactor: 0.75, activeStrengthPct: 70, painInhibitionFactor: 0.4, painfulArc: { start: 90, end: 130, intensity: 6, direction: 'ascending', loadingMode: 'any', label: 'Deep flexion catch' } } },
   } },
   achilles_tendinopathy_left: { joints: {
     leftAnkle: { dorsiflexion: { activeRomMaxFactor: 0.7, activeStrengthPct: 70, painInhibitionFactor: 0.3, rationale: 'Painful loaded dorsiflexion from achilles tendinopathy.' } },
@@ -159,7 +159,7 @@ const LITERATURE_OVERLAYS: Record<string, Overlay> = {
   } },
   lumbar_disc_herniation: { joints: {
     lumbar_spine: {
-      flexion: { activeRomMaxFactor: 0.45, activeStrengthPct: 55, painInhibitionFactor: 0.6, painfulArc: { start: 30, end: 60, intensity: 7 }, rationale: 'Disc-related flexion intolerance.' },
+      flexion: { activeRomMaxFactor: 0.45, activeStrengthPct: 55, painInhibitionFactor: 0.6, painfulArc: { start: 30, end: 60, intensity: 7, direction: 'ascending', loadingMode: 'any', label: 'Disc flexion intolerance' }, rationale: 'Disc-related flexion intolerance.' },
     },
   } },
 };

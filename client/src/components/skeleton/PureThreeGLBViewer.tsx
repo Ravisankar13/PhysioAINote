@@ -4803,6 +4803,7 @@ export default function PureThreeGLBViewer({
     }
 
     const slingMidpoints = new Map<string, THREE.Vector3>();
+    const slingBonePositions = new Map<string, THREE.Vector3[]>();
     for (const sl of slingPathwayVisualization.slings) {
       const slPositions: THREE.Vector3[] = [];
       for (const bn of sl.bonePathway) {
@@ -4816,105 +4817,123 @@ export default function PureThreeGLBViewer({
       if (slPositions.length > 0) {
         const mid = slPositions[Math.floor(slPositions.length / 2)].clone();
         slingMidpoints.set(sl.id, mid);
+        slingBonePositions.set(sl.id, slPositions);
       }
     }
 
     const activeSlingId = slingPathwayVisualization.activeSlingId;
     const crossComps = slingPathwayVisualization.crossSlingCompensations ?? [];
+    const slingById = new Map(slingPathwayVisualization.slings.map(sl => [sl.id, sl]));
 
     if (crossComps.length > 0) {
       for (const comp of crossComps) {
         const fromId = comp.compensatedSling;
         const toId = comp.compensatingSling;
+        const fromSling = slingById.get(fromId);
+        const toSling = slingById.get(toId);
+        const fromPositions = slingBonePositions.get(fromId);
+        const toPositions = slingBonePositions.get(toId);
+        if (!fromSling || !toSling || !fromPositions || !toPositions) continue;
 
-        const fromMid = slingMidpoints.get(fromId);
-        const toMid = slingMidpoints.get(toId);
-        if (!fromMid || !toMid) continue;
-        if (fromMid.distanceTo(toMid) < 0.01) continue;
+        // Anchor the arrow at the failing sling's weak-link (or overloaded)
+        // bone, terminate at the compensating sling's load-bearing bone.
+        const fromIdx = (fromSling.weakLinkBoneIndices?.[0]
+          ?? fromSling.overloadedBoneIndices?.[0]
+          ?? Math.floor(fromPositions.length / 2));
+        const toIdx = (toSling.compensatingBoneIndices?.[0]
+          ?? Math.floor(toPositions.length / 2));
+        const fromPt = fromPositions[Math.min(fromIdx, fromPositions.length - 1)];
+        const toPt = toPositions[Math.min(toIdx, toPositions.length - 1)];
+        if (!fromPt || !toPt) continue;
+        if (fromPt.distanceTo(toPt) < 0.01) continue;
 
-        const bridgeInvolvesActive = activeSlingId === null || activeSlingId === fromId || activeSlingId === toId;
-        const bridgeOpacityMul = bridgeInvolvesActive ? 1.0 : 0.15;
+        const involvesActive = activeSlingId === null || activeSlingId === fromId || activeSlingId === toId;
+        const opacityMul = involvesActive ? 1.0 : 0.18;
+        const REROUTE_ORANGE = 0xff8800;
 
-        const bridgeSeverityColor = comp.severity === 'severe' ? 0xff3333
-          : comp.severity === 'moderate' ? 0xffaa00 : 0x4488ff;
+        const dir = toPt.clone().sub(fromPt);
+        const dirLen = dir.length();
+        if (dirLen < 0.001) continue;
+        dir.normalize();
+        const bend = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 0, 1));
+        if (bend.length() > 0.001) bend.normalize().multiplyScalar(0.08);
+        const ctrl = fromPt.clone().lerp(toPt, 0.5).add(bend);
+        ctrl.z += 0.05;
 
-        const bridgeMidPt = fromMid.clone().lerp(toMid, 0.5);
-        const bridgeDir = toMid.clone().sub(fromMid);
-        const bridgeDirLen = bridgeDir.length();
-        if (bridgeDirLen < 0.001) continue;
-        bridgeDir.normalize();
-        const bridgePerp = new THREE.Vector3().crossVectors(bridgeDir, new THREE.Vector3(0, 0, 1));
-        const perpLen = bridgePerp.length();
-        if (perpLen > 0.001) {
-          bridgePerp.normalize();
-          bridgeMidPt.add(bridgePerp.multiplyScalar(0.06));
-        }
-        bridgeMidPt.z += 0.05;
-
-        const bridgeCurve = new THREE.QuadraticBezierCurve3(fromMid, bridgeMidPt, toMid);
-        const dashSegments = 12;
+        const curve = new THREE.QuadraticBezierCurve3(fromPt, ctrl, toPt);
+        const dashSegments = 14;
         for (let d = 0; d < dashSegments; d++) {
-          const dt0 = (d * 2) / (dashSegments * 2);
-          const dt1 = (d * 2 + 1) / (dashSegments * 2);
-          const dp0 = bridgeCurve.getPoint(dt0);
-          const dp1 = bridgeCurve.getPoint(dt1);
-          const bdGeom = new THREE.BufferGeometry().setFromPoints([dp0, dp1]);
-          const bdMat = new THREE.LineBasicMaterial({
-            color: bridgeSeverityColor,
-            opacity: 0.7 * bridgeOpacityMul,
+          const t0 = (d * 2) / (dashSegments * 2);
+          const t1 = (d * 2 + 1) / (dashSegments * 2);
+          const dGeom = new THREE.BufferGeometry().setFromPoints([curve.getPoint(t0), curve.getPoint(t1)]);
+          const dMat = new THREE.LineBasicMaterial({
+            color: REROUTE_ORANGE,
+            opacity: 0.85 * opacityMul,
             transparent: true,
             depthTest: false,
           });
-          const bdLine = new THREE.Line(bdGeom, bdMat);
-          bdLine.renderOrder = 996;
-          group.add(bdLine);
+          const dLine = new THREE.Line(dGeom, dMat);
+          dLine.renderOrder = 996;
+          group.add(dLine);
         }
 
-        const bridgeLabelCanvas = document.createElement('canvas');
-        bridgeLabelCanvas.width = 320;
-        bridgeLabelCanvas.height = 96;
-        const blCtx = bridgeLabelCanvas.getContext('2d');
-        if (blCtx) {
-          blCtx.fillStyle = 'rgba(10, 10, 28, 0.92)';
-          blCtx.beginPath();
-          blCtx.roundRect(2, 2, 316, 92, 10);
-          blCtx.fill();
-          const borderHex = comp.severity === 'severe' ? '#ff3333'
-            : comp.severity === 'moderate' ? '#ffaa00' : '#4488ff';
-          blCtx.strokeStyle = borderHex;
-          blCtx.lineWidth = 2;
-          blCtx.beginPath();
-          blCtx.roundRect(2, 2, 316, 92, 10);
-          blCtx.stroke();
-          blCtx.font = 'bold 16px sans-serif';
-          blCtx.fillStyle = '#cccccc';
-          blCtx.textAlign = 'center';
-          blCtx.textBaseline = 'top';
-          const compLabel = `${comp.compensatingSlingLabel}`;
-          blCtx.fillText(compLabel, 160, 8);
-          blCtx.font = '14px sans-serif';
-          blCtx.fillStyle = '#9ca3af';
-          blCtx.fillText(`compensating for ${comp.compensatedSlingLabel}`, 160, 30);
-          blCtx.font = 'bold 18px sans-serif';
-          blCtx.fillStyle = borderHex;
-          blCtx.fillText(`+${comp.additionalLoadPct}% load`, 160, 52);
-          blCtx.font = '13px sans-serif';
-          blCtx.fillStyle = borderHex;
-          blCtx.fillText(comp.severity.toUpperCase(), 160, 76);
+        // Arrowhead cone at the compensating sling end.
+        const tipBack = curve.getPoint(0.92);
+        const headDir = toPt.clone().sub(tipBack).normalize();
+        const headGeom = new THREE.ConeGeometry(0.018, 0.05, 12);
+        const headMat = new THREE.MeshBasicMaterial({
+          color: REROUTE_ORANGE,
+          transparent: true,
+          opacity: 0.9 * opacityMul,
+          depthTest: false,
+        });
+        const head = new THREE.Mesh(headGeom, headMat);
+        head.position.copy(toPt);
+        head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), headDir);
+        head.renderOrder = 997;
+        group.add(head);
+
+        // Label sprite at the curve apex.
+        const labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 320;
+        labelCanvas.height = 96;
+        const lCtx = labelCanvas.getContext('2d');
+        if (lCtx) {
+          lCtx.fillStyle = 'rgba(10, 10, 28, 0.92)';
+          lCtx.beginPath();
+          lCtx.roundRect(2, 2, 316, 92, 10);
+          lCtx.fill();
+          lCtx.strokeStyle = '#ff8800';
+          lCtx.lineWidth = 2;
+          lCtx.beginPath();
+          lCtx.roundRect(2, 2, 316, 92, 10);
+          lCtx.stroke();
+          lCtx.font = 'bold 16px sans-serif';
+          lCtx.fillStyle = '#ffd9b3';
+          lCtx.textAlign = 'center';
+          lCtx.textBaseline = 'top';
+          lCtx.fillText(comp.compensatingSlingLabel, 160, 8);
+          lCtx.font = '14px sans-serif';
+          lCtx.fillStyle = '#9ca3af';
+          lCtx.fillText(`compensating for ${comp.compensatedSlingLabel}`, 160, 30);
+          lCtx.font = 'bold 18px sans-serif';
+          lCtx.fillStyle = '#ff8800';
+          lCtx.fillText(`+${comp.additionalLoadPct}% load`, 160, 52);
+          lCtx.font = '13px sans-serif';
+          lCtx.fillText(comp.severity.toUpperCase(), 160, 76);
         }
-        const bridgeTexture = new THREE.CanvasTexture(bridgeLabelCanvas);
-        bridgeTexture.needsUpdate = true;
-        const bridgeSpriteMat = new THREE.SpriteMaterial({
-          map: bridgeTexture,
+        const lTex = new THREE.CanvasTexture(labelCanvas);
+        lTex.needsUpdate = true;
+        const lSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: lTex,
           transparent: true,
           depthTest: false,
-          opacity: 0.9 * bridgeOpacityMul,
-        });
-        const bridgeSprite = new THREE.Sprite(bridgeSpriteMat);
-        bridgeSprite.position.copy(bridgeMidPt);
-        bridgeSprite.scale.set(0.16, 0.048, 1);
-        bridgeSprite.renderOrder = 999;
-        group.add(bridgeSprite);
+          opacity: 0.9 * opacityMul,
+        }));
+        lSprite.position.copy(ctrl);
+        lSprite.scale.set(0.16, 0.048, 1);
+        lSprite.renderOrder = 999;
+        group.add(lSprite);
       }
     }
 

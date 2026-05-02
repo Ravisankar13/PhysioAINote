@@ -4967,28 +4967,20 @@ ${ddxList}`;
     });
   }, []);
 
-  /**
-   * Trigger contract (per task spec): only confirmed or refine-committed
-   * hypotheses cause provocation composition. Chat-selected hypotheses are
-   * intentionally NOT a trigger — clinicians may open chats on speculative
-   * differentials and we don't want to spend AI credits on those.
-   * Priority:
-   *   1. Most recent refine-commit (clinician just promoted/replaced).
-   *   2. Top-confidence hypothesis with status === "confirmed" — no
-   *      additional confidence gate; "confirmed" is itself the clinician's
-   *      sign-off, so we honour it regardless of numeric confidence.
-   */
+  // Provocation composition fires for any written hypothesis. Refine-commit
+  // wins; otherwise pick the top hypothesis preferring confirmed over predicted.
   const provocationHypothesis = useMemo<{ id: string; condition: string; supportingEvidence?: string[]; rulingOutFactors?: string[] } | null>(() => {
     if (lastRefinedCommit) return lastRefinedCommit;
     const hyps = clinicalReasoningData?.hypotheses ?? [];
-    const confirmed = hyps
-      .filter(h => h.status === "confirmed")
-      .sort((a, b) => b.confidence - a.confidence);
-    if (confirmed.length > 0) {
-      const h = confirmed[0];
-      return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
-    }
-    return null;
+    if (hyps.length === 0) return null;
+    const ranked = [...hyps].sort((a, b) => {
+      const sa = a.status === "confirmed" ? 0 : 1;
+      const sb = b.status === "confirmed" ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return b.confidence - a.confidence;
+    });
+    const h = ranked[0];
+    return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
   }, [lastRefinedCommit, clinicalReasoningData?.hypotheses]);
   const provocationQueryEnabled = !!provocationHypothesis && !!provocationHypothesis.id && !!provocationHypothesis.condition;
   const {
@@ -5115,9 +5107,8 @@ ${ddxList}`;
     };
   }, []);
 
-  // Tombstones: seed IDs the clinician explicitly removed. Stored in a ref so
-  // adding to it doesn't itself retrigger the seed effect; the effect re-reads
-  // the set on its next run (driven by prediction/tissue changes).
+  // Seed IDs the clinician explicitly removed; held in a ref so mutation
+  // doesn't retrigger the seed effect.
   const dismissedSeedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -5160,10 +5151,7 @@ ${ddxList}`;
       const key = `tissue-${ct.tissue_type}-${tissueId}`;
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
-      // Defensive severity normalization: pain markers use a 0–10 scale, but
-      // some tissue intelligence sources emit severity on a 0–1 scale. Detect
-      // a 0–1 input by magnitude and rescale so AI seeds never read as a
-      // single-digit "1/10" pain when they're actually meant as full severity.
+      // Normalize 0–1 severity sources to the 0–10 marker scale.
       const rawSev = typeof ct.severity === "number" ? ct.severity : 0.5;
       const normalisedSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
       seeds.push({
@@ -5177,9 +5165,6 @@ ${ddxList}`;
 
     setPainMarkers(prev => {
       const dismissed = dismissedSeedIdsRef.current;
-      // Scope tombstones to the current prediction: drop any tombstone whose
-      // seed ID is no longer produced by the active prediction so a future
-      // prediction that yields a brand-new ID is never silently suppressed.
       const liveIds = new Set(seeds.map(s => s.id));
       for (const id of Array.from(dismissed)) {
         if (!liveIds.has(id)) dismissed.delete(id);
@@ -5187,8 +5172,6 @@ ${ddxList}`;
       const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
       const seedById = new Map(filteredSeeds.map(s => [s.id, s]));
       let mutated = false;
-      // Drop pred-seed markers no longer in the seed set (and still owned by prediction);
-      // refresh the bone/label/severity/description of those that remain.
       const updated: PainMarker[] = [];
       for (const m of prev) {
         if (m.id.startsWith('pred-seed-') && m.source === 'prediction') {
@@ -7951,10 +7934,8 @@ ${ddxList}`;
     }
   }, [skeletonMode, slingsOverlayPinned]);
 
-  // Auto-pin the slings overlay in Movement Mode when a prediction is active.
-  // Tracks whether we've auto-pinned for the current Movement Mode entry so a
-  // manual unpin by the clinician is not undone, while still allowing a late-
-  // arriving slingAnalysis to trigger the pin after we've already entered.
+  // Auto-pin the slings overlay in Movement Mode when a prediction is active;
+  // the ref preserves a clinician's manual unpin within a single Movement Mode entry.
   const movementAutoPinnedRef = useRef(false);
   useEffect(() => {
     if (skeletonMode !== 'movement') {
@@ -9834,10 +9815,6 @@ ${ddxList}`;
                           const style = STATUS_STYLE[s.status] ?? STATUS_STYLE.compensating;
                           const isSelected = selectedSlingId === s.slingId;
                           const pathway = getSlingBonePathway(s.slingId);
-                          // Tighten supporting markers to bones at indices flagged
-                          // by the driver analysis (weakLinks.boneSegmentIndices).
-                          // If the analysis has no weak links, fall back to the
-                          // full sling pathway so the panel still surfaces context.
                           const weakIdxSet = new Set<number>();
                           for (const wl of s.weakLinks) {
                             for (const idx of wl.boneSegmentIndices ?? []) weakIdxSet.add(idx);
@@ -9848,10 +9825,8 @@ ${ddxList}`;
                               : pathway
                           );
                           const supportingMarkers = painMarkers.filter(m => m.nearestBone && targetBones.has(m.nearestBone));
-                          // s.compensations only contains entries where THIS sling
-                          // is the compensator. To show "which sling is taking load
-                          // FOR this failing sling", look up crossSlingCompensations
-                          // where compensatedSling === s.slingId.
+                          // s.compensations attaches to the compensator; for the failing
+                          // sling we need the inverse direction.
                           const compensatingFrom = slingAnalysis?.crossSlingCompensations.find(
                             c => c.compensatedSling === s.slingId
                           );
@@ -9922,8 +9897,6 @@ ${ddxList}`;
                                         onClick={() => {
                                           setClinicalBubbleMarker(m);
                                           setEditingMarkerId(m.id);
-                                          // Drive the camera to the marker's region using the
-                                          // existing zoom path so the click visibly focuses.
                                           if (m.nearestBone) {
                                             for (const [region, bones] of Object.entries(REGION_BONE_MAPPING)) {
                                               if ((bones as string[]).includes(m.nearestBone)) {

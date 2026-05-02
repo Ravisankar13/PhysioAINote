@@ -263,7 +263,7 @@ Universal pain-arc inference (this is the core capability — do not restrict to
 - Examples (illustrative — apply the same reasoning to ANY diagnosis you encounter):
   * Subacromial impingement: shoulder abduction 60-120°, direction="descending" (lowering pinches the bursa), loadingMode="eccentric".
   * Patellofemoral pain (PFPS): knee flexion 60°+, direction="ascending" (going DOWN into squat — angle increasing), loadingMode="eccentric"; OR knee extension descending direction on stair-up.
-  * Baastrup's syndrome (kissing spines): lumbar extension 10°+, direction="ascending", loadingMode="concentric/isometric".
+  * Baastrup's syndrome (kissing spines): lumbar extension 10°+, direction="ascending", loadingMode="concentric" (use "isometric" if pain holds at end-range without further motion).
   * Frozen shoulder (adhesive capsulitis): end-range abduction/external-rotation, direction="ascending", loadingMode="any" (capsular block in both phases).
   * Achilles tendinopathy: calf raise descent, direction="descending" plantarflexion, loadingMode="eccentric".
   * Hip labral tear: deep flexion + IR, direction="ascending", loadingMode="any".
@@ -312,9 +312,9 @@ function applyPatches(baseline: ActiveCapacityRow[], patches: unknown): ActiveCa
           intensity: Math.max(1, Math.min(10, Math.round(intensity))),
         };
         const dir = pa.direction;
-        if (dir === 'ascending' || dir === 'descending' || dir === 'either') arc.direction = dir;
+        arc.direction = (dir === 'ascending' || dir === 'descending' || dir === 'either') ? dir : 'either';
         const lm = pa.loadingMode;
-        if (lm === 'concentric' || lm === 'eccentric' || lm === 'isometric' || lm === 'any') arc.loadingMode = lm;
+        arc.loadingMode = (lm === 'concentric' || lm === 'eccentric' || lm === 'isometric' || lm === 'any') ? lm : 'any';
         if (typeof pa.label === 'string') {
           const trimmed = pa.label.trim();
           if (trimmed) arc.label = trimmed.slice(0, 80);

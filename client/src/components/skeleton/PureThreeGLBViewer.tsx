@@ -2987,6 +2987,10 @@ export default function PureThreeGLBViewer({
     lastValue?: number;
     attemptedExceeded?: boolean;
     lastPainfulArc?: boolean;
+    /** True once we've eagerly sampled the dominant agonist's length
+     *  state for the painful-arc loading-mode gate (so we don't repeat
+     *  the compute every tick when no top-movers are firing). */
+    domStateSampled?: boolean;
     compensationsTriggered?: string[];
     /** Snapshot of pre-drag values for the primary configKey + each
      * compensation-chain target — used by Movement Mode hold-to-test
@@ -6395,6 +6399,28 @@ export default function PureThreeGLBViewer({
           if (dir === 'ascending') dirMatches = delta > 0.5 || (Math.abs(delta) <= 0.5 && carry);
           else if (dir === 'descending') dirMatches = delta < -0.5 || (Math.abs(delta) <= 0.5 && carry);
           else dirMatches = true;
+          // Eager dom-state compute: throttled top-movers only updates every
+          // ~33 ms, so the first tick after drag start would otherwise miss
+          // loading-specific arcs. Compute once per drag when needed.
+          if (lm && lm !== 'any' && lastDominantLengthStateRef.current === null && !drag.domStateSampled) {
+            drag.domStateSampled = true;
+            const baselineMuscles = movementBaselineMusclesRef.current;
+            if (baselineMuscles) {
+              try {
+                const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+                let bestDelta = 0;
+                let bestLen = 100;
+                for (const m of liveAnalysis.allMuscles) {
+                  const base = baselineMuscles[m.id];
+                  if (!base) continue;
+                  const d = Math.abs(m.activationPercent - base.activationPercent);
+                  if (d > bestDelta) { bestDelta = d; bestLen = m.lengthPercent; }
+                }
+                lastDominantLengthStateRef.current =
+                  bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric';
+              } catch { /* keep null — gate will fail closed */ }
+            }
+          }
           let lmMatches: boolean;
           if (!lm || lm === 'any') {
             lmMatches = true;

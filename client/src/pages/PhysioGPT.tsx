@@ -9365,7 +9365,21 @@ ${ddxList}`;
               </div>
             )}
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
-            {(() => { const __viewer = (
+            {(() => {
+              // Movement Mode is interactive by default — derive an effective
+              // "pose interaction enabled" flag that is true when the user
+              // explicitly turned Pose on OR is in Movement Mode without any
+              // mutually-exclusive tool active. This single derived value
+              // lights up every existing pose-mode gate inside the viewer.
+              const movementImplicitPose =
+                skeletonMode === 'movement' &&
+                !painMarkerMode &&
+                !romMode &&
+                !zoomToolMode &&
+                !cameraMode &&
+                !cameraPoseActive;
+              const effectiveEnablePoseMode = poseMode || movementImplicitPose;
+              const __viewer = (
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={finalModelConfig as any}
@@ -9406,7 +9420,7 @@ ${ddxList}`;
               enableRomMode={romMode}
               onRomJointSelect={handleRomJointSelect}
               selectedRomJointId={selectedRomJoint?.id || null}
-              enablePoseMode={poseMode}
+              enablePoseMode={effectiveEnablePoseMode}
               onModelConfigChange={updateModelConfig}
               skeletonMode={skeletonMode}
               activeCapacities={viewerActiveCapacities}
@@ -12291,26 +12305,37 @@ ${ddxList}`;
                 <Ruler className="h-3 w-3 mr-1" />
                 {romMode ? 'Measuring...' : 'Measure ROM'}
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !poseMode;
-                  setPoseMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setRomMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    setSelectedRomJoint(null);
-                    toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
-                  }
-                }}
-              >
-                <Hand className="h-3 w-3 mr-1" />
-                {poseMode ? 'Posing...' : 'Pose'}
-              </Button>
+              {skeletonMode === 'movement' ? (
+                <div
+                  className="h-7 px-2 flex items-center text-[10px] rounded-md bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 select-none"
+                  data-testid="auto-pose-indicator"
+                  title="Movement Mode is interactive by default — joints respond to click & drag automatically."
+                >
+                  <Hand className="h-3 w-3 mr-1" />
+                  Auto-pose: ON
+                </div>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                  onClick={() => {
+                    const newMode = !poseMode;
+                    setPoseMode(newMode);
+                    if (newMode) {
+                      setPainMarkerMode(false);
+                      setRomMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
+                      toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
+                    }
+                  }}
+                >
+                  <Hand className="h-3 w-3 mr-1" />
+                  {poseMode ? 'Posing...' : 'Pose'}
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -12503,12 +12528,25 @@ ${ddxList}`;
                     if (next === 'movement') {
                       if (showRecoverySim) setShowRecoverySim(false);
                       if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                      // Movement Mode is interactive by default — clear the
+                      // mutually-exclusive tools that would otherwise gate the
+                      // implicit pose interaction (mirrors the Pose button).
+                      // Also clear the explicit poseMode flag so movement-mode
+                      // conflict gating is the sole owner of interaction state
+                      // (no hidden coupling where leftover poseMode keeps pose
+                      // interaction on after a conflicting tool activates).
+                      setPoseMode(false);
+                      setPainMarkerMode(false);
+                      setRomMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
                     }
                     return next;
                   });
                 }}
                 data-testid="toggle-skeleton-mode"
-                title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Switch to Active Movement Mode'}
+                title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Active Movement Mode — click and drag any joint'}
               >
                 <Activity className="h-3 w-3 mr-1" />
                 {skeletonMode === 'movement' ? 'Movement Mode' : 'Posture Mode'}

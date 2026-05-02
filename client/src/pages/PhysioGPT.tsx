@@ -5160,11 +5160,17 @@ ${ddxList}`;
       const key = `tissue-${ct.tissue_type}-${tissueId}`;
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
+      // Defensive severity normalization: pain markers use a 0–10 scale, but
+      // some tissue intelligence sources emit severity on a 0–1 scale. Detect
+      // a 0–1 input by magnitude and rescale so AI seeds never read as a
+      // single-digit "1/10" pain when they're actually meant as full severity.
+      const rawSev = typeof ct.severity === "number" ? ct.severity : 0.5;
+      const normalisedSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
       seeds.push({
         id: `pred-seed-${key}`,
         bone: nearestBone,
         label: entry?.label ?? tissueId,
-        severity: typeof ct.severity === "number" ? ct.severity : 5,
+        severity: Math.max(0, Math.min(10, normalisedSev)),
         description: `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`,
       });
     }

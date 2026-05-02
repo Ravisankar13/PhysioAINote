@@ -6971,6 +6971,11 @@ export default function PureThreeGLBViewer({
     applyExternalBoneSelectionRef.current = applyExternalBoneSelection;
 
     const poseGlowAnimFrame = { current: 0 };
+    // Task #321: throttle the joint-occlusion raycast to ~10 Hz so the
+    // per-frame slider-HUD anchor update stays cheap. We cache the last
+    // visibility result and reuse it between checks.
+    let occlusionFrameCounter = 0;
+    let lastJointOccluded = false;
     const animateGlows = () => {
       poseGlowAnimFrame.current = requestAnimationFrame(animateGlows);
       const wp = new THREE.Vector3();
@@ -6990,7 +6995,32 @@ export default function PureThreeGLBViewer({
             const rect = domElement.getBoundingClientRect();
             const sx = (screen.x * 0.5 + 0.5) * rect.width;
             const sy = (-screen.y * 0.5 + 0.5) * rect.height;
-            selectedJointAnchorRef.current = { x: sx, y: sy };
+            // Hide the chip when the joint is behind the camera or
+            // outside the canvas — projected NDC.z > 1 means behind.
+            const offscreen = screen.z > 1
+              || sx < -40 || sy < -40
+              || sx > rect.width + 40 || sy > rect.height + 40;
+            // Throttled occlusion check: cast camera→joint and see if a
+            // body mesh sits clearly in front of the joint. Skipped during
+            // an active drag (clinician needs the HUD to stay put even
+            // when geometry temporarily occludes the bone mid-motion).
+            occlusionFrameCounter = (occlusionFrameCounter + 1) % 6;
+            if (occlusionFrameCounter === 0 && !poseDragRef.current) {
+              const ndc = new THREE.Vector2(screen.x, screen.y);
+              raycasterRef.current.setFromCamera(ndc, camera);
+              const camPos = new THREE.Vector3();
+              camera.getWorldPosition(camPos);
+              const jointDist = camPos.distanceTo(wp);
+              const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
+              // Allow a generous epsilon — many bones live just inside
+              // the surface, so a hit ≤ jointDist is fine; only flag as
+              // occluded when a surface is meaningfully in front.
+              const occluder = hits.find(h => h.distance < jointDist - 0.04);
+              lastJointOccluded = !!occluder;
+            }
+            selectedJointAnchorRef.current = (offscreen || lastJointOccluded)
+              ? null
+              : { x: sx, y: sy };
           } else {
             selectedJointAnchorRef.current = null;
           }

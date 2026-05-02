@@ -9827,8 +9827,21 @@ ${ddxList}`;
                         {poor.map(s => {
                           const style = STATUS_STYLE[s.status] ?? STATUS_STYLE.compensating;
                           const isSelected = selectedSlingId === s.slingId;
-                          const slingBones = new Set(getSlingBonePathway(s.slingId));
-                          const supportingMarkers = painMarkers.filter(m => m.nearestBone && slingBones.has(m.nearestBone));
+                          const pathway = getSlingBonePathway(s.slingId);
+                          // Tighten supporting markers to bones at indices flagged
+                          // by the driver analysis (weakLinks.boneSegmentIndices).
+                          // If the analysis has no weak links, fall back to the
+                          // full sling pathway so the panel still surfaces context.
+                          const weakIdxSet = new Set<number>();
+                          for (const wl of s.weakLinks) {
+                            for (const idx of wl.boneSegmentIndices ?? []) weakIdxSet.add(idx);
+                          }
+                          const targetBones = new Set<string>(
+                            weakIdxSet.size > 0
+                              ? Array.from(weakIdxSet).map(i => pathway[i]).filter(Boolean)
+                              : pathway
+                          );
+                          const supportingMarkers = painMarkers.filter(m => m.nearestBone && targetBones.has(m.nearestBone));
                           const compensatingFrom = s.compensations[0];
                           const rationale = s.clinicalConsequences[0];
                           return (

@@ -4374,7 +4374,7 @@ export default function PureThreeGLBViewer({
         return heatColor;
       };
 
-      // Task #332: status-driven sling style. The sling's overall status takes
+      // Status-driven sling style. The sling's overall status takes
       // precedence over the per-segment activation gradient when a clinician is
       // looking for "is this sling functional?" answers. Mapping:
       //  - normal       → solid emerald  (#10b981)
@@ -4537,7 +4537,7 @@ export default function PureThreeGLBViewer({
           const arrowPts = arrowCurve.getPoints(24);
           const arrowGeom = new THREE.BufferGeometry().setFromPoints(arrowPts);
           const arrowOpacity = isDimmed ? 0.12 : isActive ? 0.9 : 0.55;
-          // Task #332: reroute arrows render dashed to differentiate "force is
+          // Reroute arrows render dashed to differentiate "force is
           // being detoured" from a normal flow line.
           const arrowMat = new THREE.LineDashedMaterial({
             color: 0xff8800,

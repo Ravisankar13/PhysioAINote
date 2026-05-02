@@ -13791,8 +13791,8 @@ ${ddxList}`;
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setShowUnifiedChainPanel(true); }}
-              onOpenSlings={() => { setRightPanelTab('slings'); }}
-              onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); }}
+              onOpenSlings={() => { setRightPanelTab('slings'); setChatPanelOpen(true); }}
+              onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); setChatPanelOpen(true); }}
               onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
               timeMetrics={forceTimeMetrics}
               onOpenForceTime={() => setShowForceTimePanel(true)}

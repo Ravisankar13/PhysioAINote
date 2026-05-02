@@ -96,8 +96,8 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
   }
 
   return (
-    <Card className={`bg-emerald-950/40 border-emerald-700/50 text-emerald-50 ${className}`}>
-      <div className="flex items-center justify-between p-3 border-b border-emerald-700/40">
+    <Card className={`bg-emerald-950/40 border-emerald-700/50 text-emerald-50 flex flex-col max-h-[min(70vh,640px)] overflow-hidden ${className}`}>
+      <div className="flex items-center justify-between p-3 border-b border-emerald-700/40 shrink-0">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-emerald-200">Active Capacities</div>
           {profile?.rationaleSummary ? (
@@ -138,7 +138,7 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
           )}
         </div>
       </div>
-      <ScrollArea className="max-h-[320px]">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 space-y-2">
           {REGION_ORDER.concat(Object.keys(groupedRows).filter(k => !REGION_ORDER.includes(k))).map(region => {
             const rows = groupedRows[region];

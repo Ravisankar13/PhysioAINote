@@ -2760,6 +2760,12 @@ export default function PureThreeGLBViewer({
     /** Task #322: imperative dismiss for the slider HUD. */
     deselect: () => void;
   } | null>(null);
+  // Task #322: stable handle to the THREE renderer's canvas element so
+  // the slider HUD's click-outside listener can recognize clicks that
+  // landed on the 3D canvas (and defer to the canvas's own mousedown
+  // handler, which already does the right thing — pick a new joint,
+  // start an arrow drag, or background-deselect).
+  const canvasElRef = useRef<HTMLCanvasElement | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
   const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
@@ -7091,6 +7097,7 @@ export default function PureThreeGLBViewer({
       // Task #321: tear down the slider HUD API so unmounted-viewer
       // chips can never call into stale closures.
       sliderHudApiRef.current = null;
+      canvasElRef.current = null;
       selectedJointAnchorRef.current = null;
       if (movementSettleTimerRef.current !== null) {
         window.clearTimeout(movementSettleTimerRef.current);
@@ -7189,6 +7196,7 @@ export default function PureThreeGLBViewer({
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.info.autoReset = false;
         container.appendChild(renderer.domElement);
+        canvasElRef.current = renderer.domElement;
 
         renderer.domElement.addEventListener('webglcontextlost', (e) => {
           e.preventDefault();
@@ -10454,6 +10462,7 @@ export default function PureThreeGLBViewer({
               });
             }}
             onClose={() => sliderHudApiRef.current?.deselect()}
+            getCanvasEl={() => canvasElRef.current}
           />
         );
       })()}

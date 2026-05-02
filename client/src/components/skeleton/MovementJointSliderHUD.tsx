@@ -25,6 +25,14 @@ export interface MovementJointSliderHUDProps {
   onTogglePin: (configKey: string) => void;
   /** Task #322: dismiss the chip (close button + click-outside). */
   onClose: () => void;
+  /**
+   * Task #322: returns the THREE renderer's canvas element (or null if
+   * not yet mounted). The click-outside listener defers to the canvas's
+   * own mousedown handler for any click that lands on it, so clicking
+   * an arrow gizmo or another bone doesn't dismiss the chip out from
+   * under the drag/selection that's about to start.
+   */
+  getCanvasEl: () => HTMLElement | null;
 }
 
 const TRACK_WIDTH_PX = 160;
@@ -44,6 +52,7 @@ export default function MovementJointSliderHUD({
   onDragEnd,
   onTogglePin,
   onClose,
+  getCanvasEl,
 }: MovementJointSliderHUDProps) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -63,12 +72,14 @@ export default function MovementJointSliderHUD({
     hardMax: number;
   } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // Task #322: keep latest onClose in a ref so the click-outside
-  // listener never reattaches as the parent re-renders. The viewer
-  // re-renders on selection changes only, but the chip itself raf-ticks
-  // every frame — keeping deps stable avoids any chance of churn.
+  // Task #322: keep latest onClose / getCanvasEl in refs so the
+  // click-outside listener never reattaches as the parent re-renders.
+  // The viewer re-renders on selection changes only, but the chip
+  // itself raf-ticks every frame — keeping deps stable avoids churn.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const getCanvasElRef = useRef(getCanvasEl);
+  getCanvasElRef.current = getCanvasEl;
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -94,17 +105,26 @@ export default function MovementJointSliderHUD({
     };
   }, [onDrag, onDragEnd]);
 
-  // Task #322: window-level click-outside to dismiss. Capture phase so we
-  // see the gesture before any nested handler can stopPropagation. We
-  // bail if the click landed inside the chip, or if a slider drag is
-  // mid-flight (releasing the mouse outside the chip should not close
-  // it). The viewer's own deselect bails if an arrow drag is active.
+  // Task #322: window-level click-outside to dismiss. Capture phase so
+  // we see the gesture before any nested handler can stopPropagation.
+  // We bail in three cases:
+  //  1. A slider drag is mid-flight (releasing the mouse outside the
+  //     chip should not close it; the viewer's deselect also guards
+  //     poseDragRef for the arrow case).
+  //  2. The click landed inside the chip itself.
+  //  3. The click landed on the THREE canvas — the canvas's own
+  //     mousedown handler already does the right thing (pick a new
+  //     joint, start an arrow drag, or background-deselect). Dismissing
+  //     here would race with arrow-drag start and break it.
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
       if (draggingRef.current) return;
       const root = containerRef.current;
       if (!root) return;
-      if (e.target instanceof Node && root.contains(e.target)) return;
+      if (!(e.target instanceof Node)) return;
+      if (root.contains(e.target)) return;
+      const canvasEl = getCanvasElRef.current();
+      if (canvasEl && canvasEl.contains(e.target)) return;
       onCloseRef.current();
     };
     window.addEventListener('pointerdown', onPointerDown, true);

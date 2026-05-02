@@ -4619,15 +4619,18 @@ export default function PureThreeGLBViewer({
         let dotColor = statusColor;
         let dotSize = isActive ? 0.012 : 0.008;
 
-        if (isActive && isOverloaded) {
+        // Weak/overloaded/compensating bone markers stay visibly distinct even
+        // when the sling is not the actively selected one, so a clinician can
+        // spot the failing link at a glance across all dysfunctional slings.
+        if (isOverloaded) {
           dotColor = 0xff3300;
-          dotSize = 0.018;
-        } else if (isActive && isWeak) {
+          dotSize = isActive ? 0.018 : 0.014;
+        } else if (isWeak) {
           dotColor = 0xff4444;
-          dotSize = 0.006;
-        } else if (isActive && isComp) {
+          dotSize = isActive ? 0.012 : 0.010;
+        } else if (isComp) {
           dotColor = 0xffcc00;
-          dotSize = 0.015;
+          dotSize = isActive ? 0.015 : 0.012;
         }
 
         const dotGeom = new THREE.SphereGeometry(dotSize, 8, 8);

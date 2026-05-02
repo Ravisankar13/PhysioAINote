@@ -19,6 +19,7 @@ import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 import { DOF_SPECS } from '@/components/skeleton/JointAngleEditor';
 import { COMPENSATION_CHAINS } from '@/lib/jointConstraints';
+import MovementJointSliderHUD, { type SliderDof } from '@/components/skeleton/MovementJointSliderHUD';
 
 interface JointConfig {
   flexion?: number;
@@ -2742,6 +2743,21 @@ export default function PureThreeGLBViewer({
   onPainfulArcFlareRef.current = onPainfulArcFlare;
   const movementSettleTimerRef = useRef<number | null>(null);
   const pendingMovementAttemptRef = useRef<Parameters<NonNullable<typeof onActiveMovementAttempt>>[0] | null>(null);
+  // Task #321: per-frame screen-projected anchor for the currently-selected
+  // Movement Mode joint, so the slider HUD chip follows the camera without
+  // forcing the whole viewer to re-render on every frame. Updated inside
+  // animateGlows; nulled when no joint is selected or mode != 'movement'.
+  const selectedJointAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  // Task #321: imperative API exposed by the THREE setup so the slider HUD
+  // can drive the same poseDragRef pipeline as the 3D arrow drag (constraint,
+  // friction, painful arc, exceeded-limit, compensation chain, spring-back,
+  // movement-attempt settle).
+  const sliderHudApiRef = useRef<{
+    getCurrentValue: (configKey: string) => number;
+    beginDrag: (configKey: string) => void;
+    applyValue: (configKey: string, targetRaw: number) => void;
+    endDrag: () => void;
+  } | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
   const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
@@ -6035,17 +6051,244 @@ export default function PureThreeGLBViewer({
      * can revert all of them on release. */
     const captureSpringBack = (primaryConfigKey: string): Record<string, number> => {
       const snap: Record<string, number> = {};
-      snap[primaryConfigKey] = getCurrentValue(primaryConfigKey);
+      // Task #321: filter pinned DOFs out of the snapshot so the
+      // spring-back tween never reverts a key the clinician pinned via
+      // slider or double-click. The outer arrow-drag guard already skips
+      // capture when the primary itself is pinned; this protects chain
+      // targets (and the slider drag, which calls capture for whichever
+      // DOF the clinician released).
+      if (!lockedMovementConfigKeysRef.current.has(primaryConfigKey)) {
+        snap[primaryConfigKey] = getCurrentValue(primaryConfigKey);
+      }
       const [j, mv] = primaryConfigKey.split('.');
       const chainKey = `${camelToSnake(j)}:${camelToSnake(mv)}`;
       const chain = COMPENSATION_CHAIN_BY_KEY.get(chainKey);
       if (chain) {
         for (const c of chain) {
           const k = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+          if (lockedMovementConfigKeysRef.current.has(k)) continue;
           if (!(k in snap)) snap[k] = getCurrentValue(k);
         }
       }
       return snap;
+    };
+
+    // Task #321: shared value-update pipeline. Both the 3D arrow drag
+    // (onMouseMove) and the slider HUD call this with the unclamped raw
+    // target value the user is attempting to set, so they share the same
+    // constraint, friction-near-active-limit, painful-arc, exceeded-limit,
+    // compensation-chain, and muscle-activation behaviour. Returns the
+    // clamped final value, or null if no drag is active.
+    const applyDragTarget = (targetRaw: number): number | null => {
+      const drag = poseDragRef.current;
+      if (!drag) return null;
+      const lim = DOF_LIMIT_INDEX.get(drag.configKey);
+      const lo = lim ? lim.min : drag.min;
+      const hi = lim ? lim.max : drag.max;
+      let newValue = Math.max(lo, Math.min(hi, Math.round(targetRaw)));
+      let inPainfulArc = false;
+      let exceededActiveLimit = false;
+      let frictionApplied = false;
+      const row = drag.activeRow;
+      if (skeletonModeRef.current === 'movement' && row) {
+        const aMin = row.activeRomMin;
+        const aMax = row.activeRomMax;
+        const delta = targetRaw - drag.startValue;
+        const approachingHigh = delta > 0;
+        const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
+        if (distanceToLimit <= 15 && distanceToLimit > 0) {
+          const friction = Math.max(0.3, distanceToLimit / 15);
+          const frictionedDelta = delta * friction;
+          newValue = Math.round(drag.startValue + frictionedDelta);
+          frictionApplied = true;
+        }
+        if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
+        newValue = Math.max(aMin, Math.min(aMax, newValue));
+        if (row.painfulArc) {
+          const lo2 = Math.min(row.painfulArc.start, row.painfulArc.end);
+          const hi2 = Math.max(row.painfulArc.start, row.painfulArc.end);
+          if (newValue >= lo2 && newValue <= hi2) inPainfulArc = true;
+        }
+      }
+      drag.lastValue = newValue;
+      if (exceededActiveLimit) drag.attemptedExceeded = true;
+      if (inPainfulArc) drag.lastPainfulArc = true;
+      if (skeletonModeRef.current === 'movement' && row) {
+        const activation = computeMovementMuscleActivation(
+          drag.configKey,
+          drag.startValue,
+          newValue,
+          row.activeRomMin,
+          row.activeRomMax,
+          row.painInhibitionFactor ?? 0,
+        );
+        if (activation) setMovementMuscleActivation(activation);
+      }
+      if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
+        const [j, mv] = drag.configKey.split('.');
+        setPainToast({
+          angle: newValue,
+          intensity: row.painfulArc.intensity,
+          movement: mv,
+          expiresAt: Date.now() + 1800,
+        });
+        onPainfulArcFlareRef.current?.({
+          joint: j,
+          movement: mv,
+          angle: newValue,
+          intensity: row.painfulArc.intensity,
+          arcStart: row.painfulArc.start,
+          arcEnd: row.painfulArc.end,
+        });
+      }
+      lastPainfulArcStateRef.current = inPainfulArc;
+      onModelConfigChangeRef.current?.(drag.configKey, newValue);
+
+      if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
+        const [j, m] = drag.configKey.split('.');
+        const chain = COMPENSATION_CHAIN_BY_KEY.get(`${camelToSnake(j)}:${camelToSnake(m)}`);
+        if (chain) {
+          const residual = targetRaw > row.activeRomMax
+            ? targetRaw - row.activeRomMax
+            : targetRaw < row.activeRomMin
+              ? row.activeRomMin - targetRaw
+              : 0;
+          const dragSign = targetRaw >= row.activeRomMax ? 1 : -1;
+          const triggered: string[] = [];
+          for (const c of chain) {
+            const targetKey = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+            const currentVal = (modelConfigRef.current as Record<string, number>)[targetKey] || 0;
+            const compDelta = Math.round(residual * c.ratio) * dragSign;
+            const lim2 = DOF_LIMIT_INDEX.get(targetKey);
+            const next = Math.max(lim2?.min ?? -180, Math.min(lim2?.max ?? 180, currentVal + compDelta));
+            if (next !== currentVal) {
+              onModelConfigChangeRef.current?.(targetKey, next);
+              triggered.push(`${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`);
+            }
+          }
+          drag.compensationsTriggered = triggered;
+        }
+      }
+      return newValue;
+    };
+
+    // Task #321: shared release path. Both onMouseUp and the slider HUD
+    // drag-end call this so the movement-attempt settle timer fires with
+    // the achieved angle and the spring-back tween (which already filters
+    // pinned DOFs through captureSpringBack) plays for un-pinned keys.
+    const releaseDrag = () => {
+      if (!poseDragRef.current) return;
+      const drag = poseDragRef.current;
+      if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
+        const [joint, movement] = drag.configKey.split('.');
+        const achievedAngle = drag.lastValue ?? drag.startValue;
+        const arc = drag.activeRow.painfulArc;
+        const inPainfulArc = !!drag.lastPainfulArc || !!(arc
+          && achievedAngle >= Math.min(arc.start, arc.end)
+          && achievedAngle <= Math.max(arc.start, arc.end));
+        pendingMovementAttemptRef.current = {
+          joint,
+          movement,
+          achievedAngle,
+          activeRomMax: drag.activeRow.activeRomMax,
+          passiveRomMax: drag.activeRow.passiveRomMax,
+          inPainfulArc,
+          exceededActiveLimit: !!drag.attemptedExceeded,
+          compensationsTriggered: drag.compensationsTriggered ?? [],
+        };
+        if (movementSettleTimerRef.current !== null) window.clearTimeout(movementSettleTimerRef.current);
+        movementSettleTimerRef.current = window.setTimeout(() => {
+          const payload = pendingMovementAttemptRef.current;
+          pendingMovementAttemptRef.current = null;
+          movementSettleTimerRef.current = null;
+          if (payload) onActiveMovementAttemptRef.current?.(payload);
+        }, 800);
+      }
+      if (drag.springBackValues) {
+        startSpringBack(drag.springBackValues);
+      }
+      poseDragRef.current = null;
+      controls.enabled = true;
+      domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
+      lastPainfulArcStateRef.current = false;
+      setMovementMuscleActivation(null);
+    };
+
+    // Task #321: imperative API for the slider HUD. Mounted onto a ref so
+    // the JSX-rendered chip can call into the same drag pipeline as the
+    // mouse handlers without lifting THREE state out of this useEffect.
+    sliderHudApiRef.current = {
+      getCurrentValue,
+      beginDrag: (configKey: string) => {
+        // Cancel any pending movement-attempt settle timer + in-flight
+        // spring-back so the new slider drag takes precedence cleanly.
+        if (movementSettleTimerRef.current !== null) {
+          window.clearTimeout(movementSettleTimerRef.current);
+          movementSettleTimerRef.current = null;
+          pendingMovementAttemptRef.current = null;
+        }
+        cancelSpringBack();
+        // If a previous drag is somehow still active (e.g. arrow drag
+        // never released), drop it without recording — the slider takes
+        // precedence on its own mouseDown.
+        if (poseDragRef.current) {
+          poseDragRef.current = null;
+          setMovementMuscleActivation(null);
+        }
+        const startValue = getCurrentValue(configKey);
+        const lim = DOF_LIMIT_INDEX.get(configKey);
+        let activeRow: {
+          activeRomMin: number;
+          activeRomMax: number;
+          passiveRomMax: number;
+          painfulArc: { start: number; end: number; intensity: number } | null;
+          painInhibitionFactor: number;
+        } | null = null;
+        if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
+          const lookupKey = configKey.replace('.', ':');
+          const r = activeCapacitiesRef.current[lookupKey];
+          if (r) {
+            activeRow = {
+              activeRomMin: r.activeRomMin ?? 0,
+              activeRomMax: r.activeRomMax,
+              passiveRomMax: r.passiveRomMax,
+              painfulArc: r.painfulArc
+                ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
+                : null,
+              painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+            };
+          }
+        }
+        poseDragRef.current = {
+          configKey,
+          startX: 0,
+          startY: 0,
+          startValue,
+          screenDirX: 0,
+          screenDirY: 0,
+          scale: 1,
+          sensitivity: 1,
+          label: lim?.label ?? configKey,
+          min: lim ? lim.min : -180,
+          max: lim ? lim.max : 180,
+          activeRow,
+          lastValue: startValue,
+          attemptedExceeded: false,
+          lastPainfulArc: false,
+          compensationsTriggered: [],
+          springBackValues:
+            skeletonModeRef.current === 'movement' && !lockedMovementConfigKeysRef.current.has(configKey)
+              ? captureSpringBack(configKey)
+              : undefined,
+        };
+        lastPainfulArcStateRef.current = false;
+        controls.enabled = false;
+      },
+      applyValue: (configKey: string, targetRaw: number) => {
+        if (!poseDragRef.current || poseDragRef.current.configKey !== configKey) return;
+        applyDragTarget(targetRaw);
+      },
+      endDrag: () => releaseDrag(),
     };
 
     // Arrow gizmo helpers --------------------------------------------------
@@ -6369,98 +6612,15 @@ export default function PureThreeGLBViewer({
         const dy = e.clientY - poseDragRef.current.startY;
         const along = dx * poseDragRef.current.screenDirX + dy * poseDragRef.current.screenDirY;
         const delta = along * poseDragRef.current.sensitivity * poseDragRef.current.scale;
-        // Re-read canonical limits each frame so any registry update
-        // immediately applies — no chance of arrow ranges drifting.
-        const lim = DOF_LIMIT_INDEX.get(poseDragRef.current.configKey);
-        const lo = lim ? lim.min : poseDragRef.current.min;
-        const hi = lim ? lim.max : poseDragRef.current.max;
-        let newValue = poseDragRef.current.startValue + delta;
-        newValue = Math.max(lo, Math.min(hi, Math.round(newValue)));
-
-        let inPainfulArc = false;
-        let exceededActiveLimit = false;
-        let frictionApplied = false;
+        // Task #321: hand the unclamped raw target to the shared pipeline
+        // so arrow drag and slider drag follow the exact same constraint /
+        // friction / painful-arc / exceeded-limit / compensation behaviour.
+        const targetRaw = poseDragRef.current.startValue + delta;
+        const newValue = applyDragTarget(targetRaw);
+        if (newValue == null) return;
         const row = poseDragRef.current.activeRow;
-        if (skeletonModeRef.current === 'movement' && row) {
-          const aMin = row.activeRomMin;
-          const aMax = row.activeRomMax;
-          const targetRaw = poseDragRef.current.startValue + delta;
-          const approachingHigh = targetRaw > poseDragRef.current.startValue;
-          const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
-          if (distanceToLimit <= 15 && distanceToLimit > 0) {
-            const friction = Math.max(0.3, distanceToLimit / 15);
-            const frictionedDelta = delta * friction;
-            newValue = Math.round(poseDragRef.current.startValue + frictionedDelta);
-            frictionApplied = true;
-          }
-          if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
-          newValue = Math.max(aMin, Math.min(aMax, newValue));
-          if (row.painfulArc) {
-            const lo = Math.min(row.painfulArc.start, row.painfulArc.end);
-            const hi = Math.max(row.painfulArc.start, row.painfulArc.end);
-            if (newValue >= lo && newValue <= hi) inPainfulArc = true;
-          }
-        }
-        poseDragRef.current.lastValue = newValue;
-        if (exceededActiveLimit) poseDragRef.current.attemptedExceeded = true;
-        if (inPainfulArc) poseDragRef.current.lastPainfulArc = true;
-        if (skeletonModeRef.current === 'movement' && row) {
-          const activation = computeMovementMuscleActivation(
-            poseDragRef.current.configKey,
-            poseDragRef.current.startValue,
-            newValue,
-            row.activeRomMin,
-            row.activeRomMax,
-            row.painInhibitionFactor ?? 0,
-          );
-          if (activation) setMovementMuscleActivation(activation);
-        }
-        if (inPainfulArc && !lastPainfulArcStateRef.current && row?.painfulArc) {
-          const [j, mv] = poseDragRef.current.configKey.split('.');
-          setPainToast({
-            angle: newValue,
-            intensity: row.painfulArc.intensity,
-            movement: mv,
-            expiresAt: Date.now() + 1800,
-          });
-          onPainfulArcFlareRef.current?.({
-            joint: j,
-            movement: mv,
-            angle: newValue,
-            intensity: row.painfulArc.intensity,
-            arcStart: row.painfulArc.start,
-            arcEnd: row.painfulArc.end,
-          });
-        }
-        lastPainfulArcStateRef.current = inPainfulArc;
-        onModelConfigChangeRef.current?.(poseDragRef.current.configKey, newValue);
-
-        if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
-          const [j, m] = poseDragRef.current.configKey.split('.');
-          const chain = COMPENSATION_CHAIN_BY_KEY.get(`${camelToSnake(j)}:${camelToSnake(m)}`);
-          if (chain) {
-            const targetRaw = poseDragRef.current.startValue + delta;
-            const residual = targetRaw > row.activeRomMax
-              ? targetRaw - row.activeRomMax
-              : targetRaw < row.activeRomMin
-                ? row.activeRomMin - targetRaw
-                : 0;
-            const dragSign = targetRaw >= row.activeRomMax ? 1 : -1;
-            const triggered: string[] = [];
-            for (const c of chain) {
-              const targetKey = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
-              const currentVal = (modelConfigRef.current as Record<string, number>)[targetKey] || 0;
-              const compDelta = Math.round(residual * c.ratio) * dragSign;
-              const lim = DOF_LIMIT_INDEX.get(targetKey);
-              const next = Math.max(lim?.min ?? -180, Math.min(lim?.max ?? 180, currentVal + compDelta));
-              if (next !== currentVal) {
-                onModelConfigChangeRef.current?.(targetKey, next);
-                triggered.push(`${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`);
-              }
-            }
-            poseDragRef.current.compensationsTriggered = triggered;
-          }
-        }
+        const exceededActiveLimit = !!poseDragRef.current.attemptedExceeded;
+        const inPainfulArc = !!poseDragRef.current.lastPainfulArc;
 
         const rect = domElement.getBoundingClientRect();
         // In movement mode add a small annotation to the tooltip so
@@ -6737,46 +6897,9 @@ export default function PureThreeGLBViewer({
     };
 
     const onMouseUp = (_e: MouseEvent) => {
-      if (poseDragRef.current) {
-        const drag = poseDragRef.current;
-        if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
-          const [joint, movement] = drag.configKey.split('.');
-          const achievedAngle = drag.lastValue ?? drag.startValue;
-          const arc = drag.activeRow.painfulArc;
-          const inPainfulArc = !!drag.lastPainfulArc || !!(arc
-            && achievedAngle >= Math.min(arc.start, arc.end)
-            && achievedAngle <= Math.max(arc.start, arc.end));
-          pendingMovementAttemptRef.current = {
-            joint,
-            movement,
-            achievedAngle,
-            activeRomMax: drag.activeRow.activeRomMax,
-            passiveRomMax: drag.activeRow.passiveRomMax,
-            inPainfulArc,
-            exceededActiveLimit: !!drag.attemptedExceeded,
-            compensationsTriggered: drag.compensationsTriggered ?? [],
-          };
-          if (movementSettleTimerRef.current !== null) window.clearTimeout(movementSettleTimerRef.current);
-          movementSettleTimerRef.current = window.setTimeout(() => {
-            const payload = pendingMovementAttemptRef.current;
-            pendingMovementAttemptRef.current = null;
-            movementSettleTimerRef.current = null;
-            if (payload) onActiveMovementAttemptRef.current?.(payload);
-          }, 800);
-        }
-        // Movement Mode hold-to-test: tween primary DOF + chain targets back
-        // to their pre-drag values. The 800 ms settle timer above still
-        // fires onActiveMovementAttempt with the achieved angle so clinical
-        // analytics see the movement, even though the visual relaxes.
-        if (drag.springBackValues) {
-          startSpringBack(drag.springBackValues);
-        }
-        poseDragRef.current = null;
-        controls.enabled = true;
-        domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
-        lastPainfulArcStateRef.current = false;
-        setMovementMuscleActivation(null);
-      }
+      // Task #321: delegate to the shared releaseDrag so arrow drag and
+      // slider drag run the exact same settle + spring-back path.
+      if (poseDragRef.current) releaseDrag();
     };
 
     const onDblClick = (e: MouseEvent) => {
@@ -6857,6 +6980,20 @@ export default function PureThreeGLBViewer({
           bone.getWorldPosition(wp);
           selectedGlow.position.copy(wp);
           if (arrowsGroup) arrowsGroup.position.copy(wp);
+          // Task #321: re-project the selected joint to screen space so
+          // the slider HUD chip follows the camera (and the underlying
+          // skeleton) on every frame. We write to a ref so this does not
+          // force a viewer-wide re-render — the slider HUD reads it via
+          // a getter and re-renders itself on its own raf tick.
+          if (skeletonModeRef.current === 'movement') {
+            const screen = wp.clone().project(camera);
+            const rect = domElement.getBoundingClientRect();
+            const sx = (screen.x * 0.5 + 0.5) * rect.width;
+            const sy = (-screen.y * 0.5 + 0.5) * rect.height;
+            selectedJointAnchorRef.current = { x: sx, y: sy };
+          } else {
+            selectedJointAnchorRef.current = null;
+          }
         }
       } else if (selectedGlow && selectedBoneSegmentId) {
         // Track the bone-segment midpoint as the underlying skeleton moves.
@@ -6892,6 +7029,10 @@ export default function PureThreeGLBViewer({
     return () => {
       cancelAnimationFrame(poseGlowAnimFrame.current);
       applyExternalBoneSelectionRef.current = null;
+      // Task #321: tear down the slider HUD API so unmounted-viewer
+      // chips can never call into stale closures.
+      sliderHudApiRef.current = null;
+      selectedJointAnchorRef.current = null;
       if (movementSettleTimerRef.current !== null) {
         window.clearTimeout(movementSettleTimerRef.current);
         movementSettleTimerRef.current = null;
@@ -10200,6 +10341,62 @@ export default function PureThreeGLBViewer({
           />
         </div>
       )}
+      {/* Task #321: Movement Mode slider HUD — one slider per unique DOF
+          on the selected joint, drives the same constraint /
+          compensation / painful-arc / exceeded-limit pipeline as the 3D
+          arrow drag. Pin toggle reuses lockedMovementConfigKeys so a
+          pinned slider DOF skips spring-back. The 3D arrow gizmo stays
+          rendered as the fallback. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && (() => {
+        const seen = new Set<string>();
+        const dofs: SliderDof[] = (JOINT_MOVEMENT_DEFS[movementSelectedJoint.key] ?? [])
+          .filter(def => DOF_LIMIT_INDEX.has(def.configKey))
+          .filter(def => {
+            if (seen.has(def.configKey)) return false;
+            seen.add(def.configKey);
+            return true;
+          })
+          .map(def => {
+            const lim = DOF_LIMIT_INDEX.get(def.configKey)!;
+            const lookup = def.configKey.replace('.', ':');
+            const row = activeCapacities?.[lookup];
+            return {
+              configKey: def.configKey,
+              label: def.label,
+              hardMin: lim.min,
+              hardMax: lim.max,
+              activeRomMin: row?.activeRomMin ?? null,
+              activeRomMax: row?.activeRomMax ?? null,
+              passiveRomMin: row?.passiveRomMin ?? null,
+              passiveRomMax: row?.passiveRomMax ?? null,
+              painfulArc: row?.painfulArc
+                ? { start: row.painfulArc.start, end: row.painfulArc.end, intensity: row.painfulArc.intensity }
+                : null,
+              pinned: lockedMovementConfigKeys.has(def.configKey),
+            };
+          });
+        if (dofs.length === 0) return null;
+        const fallbackAnchor = { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        return (
+          <MovementJointSliderHUD
+            jointKey={movementSelectedJoint.key}
+            getAnchor={() => selectedJointAnchorRef.current ?? fallbackAnchor}
+            dofs={dofs}
+            getCurrentValue={(k) => sliderHudApiRef.current?.getCurrentValue(k) ?? 0}
+            onDragStart={(k) => sliderHudApiRef.current?.beginDrag(k)}
+            onDrag={(k, v) => sliderHudApiRef.current?.applyValue(k, v)}
+            onDragEnd={() => sliderHudApiRef.current?.endDrag()}
+            onTogglePin={(k) => {
+              setLockedMovementConfigKeys(prev => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              });
+            }}
+          />
+        );
+      })()}
       {painToast && Date.now() < painToast.expiresAt && (
         <div
           className="absolute pointer-events-none z-30 top-3 left-1/2 -translate-x-1/2 animate-in fade-in slide-in-from-top-2 duration-200"

@@ -10005,6 +10005,14 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const intakeContext = (intakeRaw && typeof intakeRaw === 'object' && !Array.isArray(intakeRaw))
         ? (intakeRaw as Record<string, string | number | boolean | undefined>)
         : undefined;
+      // Server-side cache short-circuit: if the incoming context signature
+      // matches the persisted profile, skip the AI call entirely.
+      const { computeAiContextSignature } = await import("../shared/aiContextSignature");
+      const incomingSig = computeAiContextSignature(painMarkers, intakeContext);
+      const existingProfile = (existing?.activeCapacities ?? null) as { aiContextSignature?: string } | null;
+      if (existingProfile && existingProfile.aiContextSignature === incomingSig) {
+        return res.json({ ...existing, cached: true, refreshed: false });
+      }
       const { generateActiveCapacities } = await import("./services/activeCapacityService");
       const profile = await generateActiveCapacities({
         condition,

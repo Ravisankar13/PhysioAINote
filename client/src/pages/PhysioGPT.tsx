@@ -149,6 +149,7 @@ import {
 } from "@/components/skeleton/VoiceActivityDock";
 import type { CaseResearchPanelHandle } from "@/components/skeleton/CaseResearchPanel";
 import type { CaseResearchContext } from "@shared/schema";
+import { computeAiContextSignature } from "@shared/aiContextSignature";
 import {
   PatientContextPanel,
   EMPTY_PATIENT_CONTEXT_STATE,
@@ -7380,30 +7381,36 @@ ${ddxList}`;
 
   // Stable hash of the AI context — must match the server's
   // `computeAiContextSignature` so we can compare against the
-  // `aiContextSignature` persisted on the profile.
-  const currentAiContextSig = useMemo(() => {
-    const m = activeCapacityAiContext.markers.map(x => [x.location, x.type, x.symptomType, x.severity, (x.description || '').slice(0, 40)]);
-    const json = JSON.stringify({ m, i: activeCapacityAiContext.intake });
-    let h = 2166136261 >>> 0;
-    for (let k = 0; k < json.length; k++) {
-      h ^= json.charCodeAt(k);
-      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-    }
-    return h.toString(16).padStart(8, '0');
-  }, [activeCapacityAiContext]);
+  // `aiContextSignature` persisted on the profile. Hashes EVERY field
+  // the server forwards to the AI (full description, subjectiveHistory,
+  // painMechanism, nerveRoot, severity, plus the full intake), so any
+  // edit that changes the model's input forces a re-derive.
+  const currentAiContextSig = useMemo(
+    () => computeAiContextSignature(activeCapacityAiContext.markers, activeCapacityAiContext.intake),
+    [activeCapacityAiContext],
+  );
 
   // Auto-generate the capacity profile the first time the clinician
   // enters Movement Mode for a case with no active-capacity rows yet.
+  // Uses a ref so the 250 ms-deferred call always reads the LATEST
+  // marker/intake context — without it the closure would capture
+  // whatever context was current when the effect first scheduled,
+  // missing edits made during the debounce window.
+  const activeCapacityAiContextRef = useRef(activeCapacityAiContext);
+  useEffect(() => {
+    activeCapacityAiContextRef.current = activeCapacityAiContext;
+  }, [activeCapacityAiContext]);
   useEffect(() => {
     if (skeletonMode !== 'movement') return;
     if (!activeCaseId) return;
     if (activeCapacityProfile) return;
     if (generatingActiveCapacity) return;
     const t = window.setTimeout(() => {
+      const ctx = activeCapacityAiContextRef.current;
       generateActiveCapacity.mutate({
         refresh: false,
-        painMarkers: activeCapacityAiContext.markers,
-        intakeContext: activeCapacityAiContext.intake,
+        painMarkers: ctx.markers,
+        intakeContext: ctx.intake,
       });
     }, 250);
     return () => window.clearTimeout(t);
@@ -7422,9 +7429,10 @@ ${ddxList}`;
     const persistedSig = activeCapacityProfile.aiContextSignature ?? '';
     if (persistedSig === currentAiContextSig) return;
     const t = window.setTimeout(() => {
+      const ctx = activeCapacityAiContextRef.current;
       refreshActiveCapacity.mutate({
-        painMarkers: activeCapacityAiContext.markers,
-        intakeContext: activeCapacityAiContext.intake,
+        painMarkers: ctx.markers,
+        intakeContext: ctx.intake,
       });
     }, 1500);
     return () => window.clearTimeout(t);

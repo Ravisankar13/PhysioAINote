@@ -15,6 +15,7 @@
  * is never blank.
  */
 import { openai } from '../openai';
+import { computeAiContextSignature } from '../../shared/aiContextSignature';
 
 export type PainfulArc = {
   start: number;
@@ -464,21 +465,6 @@ export async function generateActiveCapacities(input: {
       aiContextSignature: computeAiContextSignature(input.painMarkers, input.intakeContext),
     };
   }
-}
-
-function computeAiContextSignature(
-  markers?: PainMarkerHint[],
-  intake?: IntakeContextHint,
-): string {
-  const m = (markers || []).map(x => [x.location, x.type, x.symptomType, x.severity, (x.description || '').slice(0, 40)]);
-  const i = intake || {};
-  const json = JSON.stringify({ m, i });
-  let h = 2166136261 >>> 0;
-  for (let k = 0; k < json.length; k++) {
-    h ^= json.charCodeAt(k);
-    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
 }
 
 export function applyManualOverride(

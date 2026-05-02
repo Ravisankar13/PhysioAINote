@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
+import { AlertCircle, Loader2, RotateCcw, ExternalLink, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 import { initializeLegIK, applySquatIK, applyLegIK, LEG_IK_CONFIG, LegIKState } from '@/lib/legIKSolver';
@@ -2719,7 +2719,19 @@ export default function PureThreeGLBViewer({
     attemptedExceeded?: boolean;
     lastPainfulArc?: boolean;
     compensationsTriggered?: string[];
+    /** Snapshot of pre-drag values for the primary configKey + each
+     * compensation-chain target — used by Movement Mode hold-to-test
+     * spring-back on mouseUp (Task #319). `undefined` means no
+     * spring-back (e.g. Posture Mode, or this joint is double-click
+     * locked in Movement Mode). */
+    springBackValues?: Record<string, number>;
   } | null>(null);
+  // Movement Mode hold-to-test (Task #319): joints whose primary configKey
+  // is in this set are exempt from spring-back when the user releases the
+  // mouse — the value persists like Posture Mode. Toggle via double-click.
+  const [lockedMovementConfigKeys, setLockedMovementConfigKeys] = useState<Set<string>>(() => new Set());
+  const lockedMovementConfigKeysRef = useRef(lockedMovementConfigKeys);
+  lockedMovementConfigKeysRef.current = lockedMovementConfigKeys;
   const skeletonModeRef = useRef(skeletonMode);
   skeletonModeRef.current = skeletonMode;
   const activeCapacitiesRef = useRef(activeCapacities);
@@ -5983,6 +5995,59 @@ export default function PureThreeGLBViewer({
       return groupObj?.[prop] ?? 0;
     };
 
+    // ---------------------------------------------------------------------
+    // Movement Mode hold-to-test spring-back (Task #319)
+    // ---------------------------------------------------------------------
+    // When a Movement Mode drag releases, we tween the dragged DOF (and any
+    // compensation-chain targets it pulled along) back to their pre-drag
+    // values over ~300 ms. Locked joints (double-click) skip the tween.
+    let springBackAnimFrame = 0;
+    const cancelSpringBack = () => {
+      if (springBackAnimFrame) {
+        cancelAnimationFrame(springBackAnimFrame);
+        springBackAnimFrame = 0;
+      }
+    };
+    const startSpringBack = (targets: Record<string, number>) => {
+      cancelSpringBack();
+      const fromValues: Record<string, number> = {};
+      for (const k of Object.keys(targets)) fromValues[k] = getCurrentValue(k);
+      const t0 = performance.now();
+      const duration = 300;
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration);
+        // ease-out cubic for a natural-feeling settle.
+        const eased = 1 - Math.pow(1 - t, 3);
+        for (const k of Object.keys(targets)) {
+          const v = Math.round(fromValues[k] + (targets[k] - fromValues[k]) * eased);
+          onModelConfigChangeRef.current?.(k, v);
+        }
+        if (t < 1) {
+          springBackAnimFrame = requestAnimationFrame(tick);
+        } else {
+          springBackAnimFrame = 0;
+        }
+      };
+      springBackAnimFrame = requestAnimationFrame(tick);
+    };
+    /** Snapshot the current values of `primaryConfigKey` plus every
+     * compensation-chain target it might drive, so the spring-back tween
+     * can revert all of them on release. */
+    const captureSpringBack = (primaryConfigKey: string): Record<string, number> => {
+      const snap: Record<string, number> = {};
+      snap[primaryConfigKey] = getCurrentValue(primaryConfigKey);
+      const [j, mv] = primaryConfigKey.split('.');
+      const chainKey = `${camelToSnake(j)}:${camelToSnake(mv)}`;
+      const chain = COMPENSATION_CHAIN_BY_KEY.get(chainKey);
+      if (chain) {
+        for (const c of chain) {
+          const k = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+          if (!(k in snap)) snap[k] = getCurrentValue(k);
+        }
+      }
+      return snap;
+    };
+
     // Arrow gizmo helpers --------------------------------------------------
     const ARROW_LENGTH = 0.18;
     const ARROW_BASE_OFFSET = 0.06;
@@ -6544,6 +6609,9 @@ export default function PureThreeGLBViewer({
             movementSettleTimerRef.current = null;
             pendingMovementAttemptRef.current = null;
           }
+          // Cancel any in-flight spring-back so a new drag on the same
+          // joint takes precedence cleanly.
+          cancelSpringBack();
           poseDragRef.current = {
             configKey: a.def.configKey,
             startX: e.clientX,
@@ -6561,6 +6629,13 @@ export default function PureThreeGLBViewer({
             attemptedExceeded: false,
             lastPainfulArc: false,
             compensationsTriggered: [],
+            // Movement Mode hold-to-test: snapshot pre-drag values for the
+            // dragged DOF + its compensation-chain targets so mouseUp can
+            // spring back. Locked joints opt out (value persists).
+            springBackValues:
+              skeletonModeRef.current === 'movement' && !lockedMovementConfigKeysRef.current.has(a.def.configKey)
+                ? captureSpringBack(a.def.configKey)
+                : undefined,
           };
           lastPainfulArcStateRef.current = false;
           if (skeletonModeRef.current !== 'movement') setMovementMuscleActivation(null);
@@ -6584,10 +6659,76 @@ export default function PureThreeGLBViewer({
         return;
       }
 
-      // Otherwise: select a joint (no immediate drag)
+      // Otherwise: select a joint. In Movement Mode the same mouse-down
+      // also begins an immediate hold-to-test drag of the bone's primary
+      // degree of freedom, removing the click-to-select-then-click-arrow
+      // ceremony (Task #319). In Posture Mode this remains a plain
+      // selection — the clinician must subsequently click an arrow.
       const boneName = findBoneFromRaycast(ndc);
       if (boneName && POSE_BONE_MAP[boneName]) {
         selectJoint(boneName);
+        if (skeletonModeRef.current === 'movement') {
+          const primaryConfigKey = POSE_BONE_MAP[boneName].configKey;
+          // selectJoint just rebuilt arrowPickMeshes via buildArrowsForJoint.
+          // Pick the arrow matching the bone's primary configKey, preferring
+          // the +ve direction (scale != -1) so a flexion bone drags flexion,
+          // not extension.
+          const candidates = arrowPickMeshes.filter(a => a.def.configKey === primaryConfigKey);
+          const primaryArrow = candidates.find(a => (a.def.scale ?? 1) >= 0) ?? candidates[0];
+          if (primaryArrow) {
+            const anchor = new THREE.Vector3();
+            bones[boneName]?.getWorldPosition(anchor);
+            const screenDir = computeScreenDir(anchor, primaryArrow.dirWorld);
+            const startValue = getCurrentValue(primaryArrow.def.configKey);
+            const lim = DOF_LIMIT_INDEX.get(primaryArrow.def.configKey);
+            let activeRow: { activeRomMin: number; activeRomMax: number; passiveRomMax: number; painfulArc: { start: number; end: number; intensity: number } | null; painInhibitionFactor: number } | null = null;
+            if (activeCapacitiesRef.current) {
+              const lookupKey = primaryArrow.def.configKey.replace('.', ':');
+              const r = activeCapacitiesRef.current[lookupKey];
+              if (r) {
+                activeRow = {
+                  activeRomMin: r.activeRomMin ?? 0,
+                  activeRomMax: r.activeRomMax,
+                  passiveRomMax: r.passiveRomMax,
+                  painfulArc: r.painfulArc
+                    ? { start: r.painfulArc.start, end: r.painfulArc.end, intensity: r.painfulArc.intensity ?? 5 }
+                    : null,
+                  painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+                };
+              }
+            }
+            if (movementSettleTimerRef.current !== null) {
+              window.clearTimeout(movementSettleTimerRef.current);
+              movementSettleTimerRef.current = null;
+              pendingMovementAttemptRef.current = null;
+            }
+            cancelSpringBack();
+            poseDragRef.current = {
+              configKey: primaryArrow.def.configKey,
+              startX: e.clientX,
+              startY: e.clientY,
+              startValue,
+              screenDirX: screenDir.x,
+              screenDirY: screenDir.y,
+              scale: primaryArrow.def.scale ?? 1,
+              sensitivity: primaryArrow.def.sensitivity,
+              label: primaryArrow.def.label,
+              min: lim ? lim.min : -180,
+              max: lim ? lim.max : 180,
+              activeRow,
+              lastValue: startValue,
+              attemptedExceeded: false,
+              lastPainfulArc: false,
+              compensationsTriggered: [],
+              springBackValues: lockedMovementConfigKeysRef.current.has(primaryArrow.def.configKey)
+                ? undefined
+                : captureSpringBack(primaryArrow.def.configKey),
+            };
+            lastPainfulArcStateRef.current = false;
+            controls.enabled = false;
+            domElement.style.cursor = 'grabbing';
+          }
+        }
         // clear hover glow now that this bone is selected
         if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
         e.preventDefault();
@@ -6623,6 +6764,13 @@ export default function PureThreeGLBViewer({
             if (payload) onActiveMovementAttemptRef.current?.(payload);
           }, 800);
         }
+        // Movement Mode hold-to-test: tween primary DOF + chain targets back
+        // to their pre-drag values. The 800 ms settle timer above still
+        // fires onActiveMovementAttempt with the achieved angle so clinical
+        // analytics see the movement, even though the visual relaxes.
+        if (drag.springBackValues) {
+          startSpringBack(drag.springBackValues);
+        }
         poseDragRef.current = null;
         controls.enabled = true;
         domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
@@ -6634,6 +6782,26 @@ export default function PureThreeGLBViewer({
     const onDblClick = (e: MouseEvent) => {
       if (!enablePoseModeRef.current) return;
       const ndc = getMouseNDC(e);
+      // Movement Mode (Task #319): double-click on any draggable bone
+      // toggles a per-joint lock. Locked joints skip the spring-back tween
+      // on mouseUp, so the clinician can pin a position without holding
+      // the mouse. Takes priority over arrow-reset because in Movement
+      // Mode a "reset to 0" is meaningless — release already restores.
+      if (skeletonModeRef.current === 'movement') {
+        const boneName = findBoneFromRaycast(ndc);
+        if (boneName && POSE_BONE_MAP[boneName]) {
+          const primaryConfigKey = POSE_BONE_MAP[boneName].configKey;
+          setLockedMovementConfigKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(primaryConfigKey)) next.delete(primaryConfigKey);
+            else next.add(primaryConfigKey);
+            return next;
+          });
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
       // Reset the DOF associated with a hovered arrow, if any
       if (selectedJointKey || selectedBoneSegmentId) {
         const arrowIdx = findArrowFromRaycast(ndc);
@@ -6735,6 +6903,7 @@ export default function PureThreeGLBViewer({
       domElement.removeEventListener('dblclick', onDblClick);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      cancelSpringBack();
       removeGlow(hoverGlow);
       removeGlow(selectedGlow);
       disposeArrows();
@@ -6754,6 +6923,15 @@ export default function PureThreeGLBViewer({
       setPoseModeTooltip(null);
     };
   }, [enablePoseMode, status]);
+
+  // Movement Mode hold-to-test (Task #319): clear all per-joint locks
+  // whenever the clinician leaves Movement Mode, so locks don't survive
+  // into Posture Mode where they have no meaning.
+  useEffect(() => {
+    if (skeletonMode !== 'movement') {
+      setLockedMovementConfigKeys(prev => (prev.size > 0 ? new Set() : prev));
+    }
+  }, [skeletonMode]);
 
   // Prop-driven external bone-selection sync (Task #212). Runs whenever the
   // controlled selection prop changes; the inner pose-mode effect installs
@@ -9901,13 +10079,31 @@ export default function PureThreeGLBViewer({
           })}
         </>
       )}
-      {/* Pose mode hint: how to select bones vs joints (Task #212) */}
+      {/* Pose mode hint: how to select bones vs joints (Task #212).
+          Movement Mode (Task #319) shows hold-to-test instructions instead. */}
       {enablePoseMode && (
         <div
           className="absolute top-2 left-2 z-10 pointer-events-none px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur text-[10px] text-emerald-100 border border-emerald-500/30 shadow"
           data-testid="pose-mode-hint"
         >
-          <div><span className="text-emerald-300">Click</span> joint dot · <span className="text-blue-300">Shift+Click</span> bone shaft</div>
+          {skeletonMode === 'movement' ? (
+            <div><span className="text-emerald-300">Hold</span> any joint to move · release to relax · <span className="text-amber-300">double-click</span> to lock</div>
+          ) : (
+            <div><span className="text-emerald-300">Click</span> joint dot · <span className="text-blue-300">Shift+Click</span> bone shaft</div>
+          )}
+        </div>
+      )}
+      {/* Movement Mode lock summary (Task #319): a small pill listing how
+          many joints are pinned, so the clinician can see locks at a glance
+          even when those joints aren't currently selected. */}
+      {enablePoseMode && skeletonMode === 'movement' && lockedMovementConfigKeys.size > 0 && (
+        <div
+          className="absolute top-2 left-2 z-10 pointer-events-none px-2 py-1 rounded-md bg-amber-500/15 backdrop-blur text-[10px] text-amber-100 border border-amber-500/40 shadow flex items-center gap-1"
+          style={{ marginTop: 26 }}
+          data-testid="movement-locks-pill"
+        >
+          <Lock className="h-2.5 w-2.5" />
+          <span>{lockedMovementConfigKeys.size} joint{lockedMovementConfigKeys.size === 1 ? '' : 's'} locked · double-click to unlock</span>
         </div>
       )}
       {/* Pose mode tooltip */}
@@ -9927,6 +10123,11 @@ export default function PureThreeGLBViewer({
           .filter(([k]) => k.startsWith(`${movementSelectedJoint.key}:`))
           .slice(0, 3);
         if (rows.length === 0) return null;
+        // Task #319: surface a Locked badge inside this HUD when any
+        // configKey under the currently-selected joint is pinned.
+        const selectedJointLocked = Array.from(lockedMovementConfigKeys).some(
+          k => k.startsWith(`${movementSelectedJoint.key}.`)
+        );
         return (
           <div
             className="absolute pointer-events-none z-20"
@@ -9946,6 +10147,15 @@ export default function PureThreeGLBViewer({
                   </div>
                 );
               })}
+              {selectedJointLocked && (
+                <div
+                  className="flex items-center gap-1 mt-1 pt-1 border-t border-amber-500/40 text-amber-200"
+                  data-testid="movement-rom-pill-lock"
+                >
+                  <Lock className="h-2.5 w-2.5" />
+                  <span>Locked · double-click joint to unlock</span>
+                </div>
+              )}
             </div>
           </div>
         );

@@ -12258,6 +12258,15 @@ ${ddxList}`;
                           >{m.anatomicalLabel}</span>
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className="text-[9px] text-gray-400 uppercase">{tc.label}</span>
+                            {m.source === 'prediction' && (
+                              <span
+                                className="text-[8px] px-1 rounded bg-cyan-900/50 text-cyan-300 border border-cyan-500/40"
+                                title="Auto-placed from clinical prediction"
+                                data-testid={`marker-source-ai-${m.id}`}
+                              >
+                                AI
+                              </span>
+                            )}
                             {m.painMechanism && (
                               <span className={`text-[8px] px-1 rounded ${m.painMechanism === 'neuropathic' ? 'bg-blue-900/40 text-blue-300' : m.painMechanism === 'myofascial' ? 'bg-orange-900/40 text-orange-300' : m.painMechanism === 'central_sensitization' ? 'bg-pink-900/40 text-pink-300' : 'bg-red-900/40 text-red-300'}`}>
                                 {m.painMechanism === 'central_sensitization' ? 'central' : m.painMechanism}

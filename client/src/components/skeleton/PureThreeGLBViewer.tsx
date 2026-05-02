@@ -2987,16 +2987,10 @@ export default function PureThreeGLBViewer({
     lastValue?: number;
     attemptedExceeded?: boolean;
     lastPainfulArc?: boolean;
-    /** True once we've eagerly sampled the dominant agonist's length
-     *  state for the painful-arc loading-mode gate (so we don't repeat
-     *  the compute every tick when no top-movers are firing). */
-    domStateSampled?: boolean;
     compensationsTriggered?: string[];
-    /** Snapshot of pre-drag values for the primary configKey + each
-     * compensation-chain target — used by Movement Mode hold-to-test
-     * spring-back on mouseUp (Task #319). `undefined` means no
-     * spring-back (e.g. Posture Mode, or this joint is double-click
-     * locked in Movement Mode). */
+    /** Pre-drag values for primary configKey + compensation targets —
+     *  used for Movement-Mode spring-back on mouseUp. `undefined` means
+     *  no spring-back (Posture Mode, or double-click-locked joint). */
     springBackValues?: Record<string, number>;
   } | null>(null);
   // Movement Mode hold-to-test (Task #319): joints whose primary configKey
@@ -6378,17 +6372,12 @@ export default function PureThreeGLBViewer({
         const aMin = row.activeRomMin;
         const aMax = row.activeRomMax;
         const delta = targetRaw - drag.startValue;
-        // Per-frame motion delta — used for direction-aware painful-arc
-        // gating so reversing direction mid-drag (e.g. raising the arm
-        // then lowering through the same arc) flips the gate from
-        // ascending to descending without releasing first.
         const frameDelta = targetRaw - (drag.lastValue ?? drag.startValue);
         const approachingHigh = delta > 0;
         const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
         if (distanceToLimit <= 15 && distanceToLimit > 0) {
           const friction = Math.max(0.3, distanceToLimit / 15);
-          const frictionedDelta = delta * friction;
-          newValue = Math.round(drag.startValue + frictionedDelta);
+          newValue = Math.round(drag.startValue + delta * friction);
           frictionApplied = true;
         }
         if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
@@ -6398,48 +6387,50 @@ export default function PureThreeGLBViewer({
           const hi2 = Math.max(row.painfulArc.start, row.painfulArc.end);
           const dir = row.painfulArc.direction;
           const lm = row.painfulArc.loadingMode;
-          // Direction + loading-mode gates fail closed when ambiguous.
           const carry = lastPainfulArcStateRef.current;
           let dirMatches: boolean;
           if (dir === 'ascending') dirMatches = frameDelta > 0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
           else if (dir === 'descending') dirMatches = frameDelta < -0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
           else dirMatches = true;
-          // Eager dom-state compute: throttled top-movers only updates every
-          // ~33 ms, so the first tick after drag start would otherwise miss
-          // loading-specific arcs. Compute once per drag when needed.
-          if (lm && lm !== 'any' && lastDominantLengthStateRef.current === null && !drag.domStateSampled) {
-            drag.domStateSampled = true;
-            const baselineMuscles = movementBaselineMusclesRef.current;
-            if (baselineMuscles) {
-              try {
-                const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
-                let bestDelta = 0;
-                let bestLen = 100;
-                for (const m of liveAnalysis.allMuscles) {
-                  const base = baselineMuscles[m.id];
-                  if (!base) continue;
-                  const d = Math.abs(m.activationPercent - base.activationPercent);
-                  if (d > bestDelta) { bestDelta = d; bestLen = m.lengthPercent; }
-                }
-                lastDominantLengthStateRef.current =
-                  bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric';
-              } catch { /* keep null — gate will fail closed */ }
-            }
+          // Friction must be applied BEFORE we evaluate length state so the
+          // candidate config we sample reflects the value we'll actually
+          // commit this tick.
+          const wouldEnterArc = newValue >= lo2 && newValue <= hi2 && dirMatches;
+          if (wouldEnterArc && !frictionApplied && Math.abs(delta) > 0.5) {
+            newValue = Math.max(aMin, Math.min(aMax, Math.round(drag.startValue + delta * 0.7)));
           }
           let lmMatches: boolean;
           if (!lm || lm === 'any') {
             lmMatches = true;
           } else {
-            const dom = lastDominantLengthStateRef.current;
+            // Derive dominant length state from a CANDIDATE config that
+            // already has the post-friction newValue patched in. Sampling
+            // modelConfigRef directly would give us pre-drag state because
+            // onModelConfigChangeRef hasn't fired yet for this tick.
+            const baselineMuscles = movementBaselineMusclesRef.current;
+            const [joint, movement] = drag.configKey.split('.');
+            let dom: 'concentric' | 'eccentric' | 'isometric' | null = null;
+            if (baselineMuscles && joint && movement) {
+              const base = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined>;
+              const candidate: ModelConfig = {
+                ...(modelConfigRef.current as ModelConfig),
+                [joint]: { ...(base[joint] ?? {}), [movement]: newValue },
+              };
+              const liveAnalysis = computeFullMuscleAnalysis(candidate);
+              let bestDelta = 0;
+              let bestLen = 100;
+              for (const m of liveAnalysis.allMuscles) {
+                const baseMuscle = baselineMuscles[m.id];
+                if (!baseMuscle) continue;
+                const d = Math.abs(m.activationPercent - baseMuscle.activationPercent);
+                if (d > bestDelta) { bestDelta = d; bestLen = m.lengthPercent; }
+              }
+              if (bestDelta > 0) {
+                dom = bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric';
+                lastDominantLengthStateRef.current = dom;
+              }
+            }
             lmMatches = dom !== null && dom === lm;
-          }
-          // Apply friction BEFORE committing the arc state so the halo /
-          // findings only fire for the final post-friction angle (avoids
-          // false flares the tick before the friction-clamped value
-          // actually crosses the arc boundary).
-          const wouldEnterArc = newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches;
-          if (wouldEnterArc && !frictionApplied && Math.abs(delta) > 0.5) {
-            newValue = Math.max(aMin, Math.min(aMax, Math.round(drag.startValue + delta * 0.7)));
           }
           if (newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches) {
             inPainfulArc = true;
@@ -6475,107 +6466,73 @@ export default function PureThreeGLBViewer({
           // mapping) so the prior highlight doesn't persist visibly until
           // drag-release.
           setMovementMuscleActivation(activation ?? null);
-          // Task #323 — review-5 fix: drive the full-body muscle overlay
-          // from the existing biomechanics engine instead of a hand-coded
-          // agonist table. We recompute `computeAllMuscleStates` for the
-          // live modelConfig and compare every muscle's activationPercent
-          // against the baseline map captured on Movement Mode entry. Any
-          // muscle whose activation has shifted by >= 5% (in either
-          // direction) is included in the overlay map, so the
-          // visualization useEffect below paints those muscle meshes via
-          // the same `getMuscleColor` pipeline used by the muscle panel.
-          // This guarantees coverage for shoulder / elbow / wrist / spine
-          // / neck / scapula / pelvis sliders that the heuristic table
-          // didn't address.
-          // Task #323 — review-7 fix: compute the live overlay from
-          // PER-MUSCLE deltas, not group averages. The engine bundles
-          // antagonists (biceps + triceps) and even off-joint muscles
-          // (wrist flex/ext) into the same `bicep_l` meshGroup, so the
-          // group-average activation barely moved when biceps fired hard
-          // and the visualization useEffect's `hasIssue` gate (state !==
-          // 'neutral' || tension > 50 || activationPercent > 60) failed
-          // to paint anything. Now we find the dominant-delta muscle per
-          // meshGroup and synthesize a MuscleStatus that carries THAT
-          // muscle's state + activation, so biceps' shortened/73% reading
-          // surfaces on `bicep_l` instead of being averaged into oblivion.
+          // Per-muscle delta vs baseline drives the full-body overlay.
+          // Group averages are misleading because the engine bundles
+          // antagonists into the same meshGroup, so we surface the
+          // dominant-delta muscle's state on each group.
           const baselineMuscles = movementBaselineMusclesRef.current;
           if (baselineMuscles) {
-            try {
-              const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
-              const dominantByGroup: Record<string, { muscle: IndividualMuscle; delta: number }> = {};
-              for (const m of liveAnalysis.allMuscles) {
-                const base = baselineMuscles[m.id];
-                if (!base) continue;
-                const delta = Math.abs(m.activationPercent - base.activationPercent);
-                if (delta < 5) continue;
-                const existing = dominantByGroup[m.meshGroup];
-                if (!existing || delta > existing.delta) {
-                  dominantByGroup[m.meshGroup] = { muscle: m, delta };
-                }
+            const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+            const dominantByGroup: Record<string, { muscle: IndividualMuscle; delta: number }> = {};
+            for (const m of liveAnalysis.allMuscles) {
+              const base = baselineMuscles[m.id];
+              if (!base) continue;
+              const delta = Math.abs(m.activationPercent - base.activationPercent);
+              if (delta < 5) continue;
+              const existing = dominantByGroup[m.meshGroup];
+              if (!existing || delta > existing.delta) {
+                dominantByGroup[m.meshGroup] = { muscle: m, delta };
               }
-              const overlay: MuscleStatesMap = {};
-              for (const [groupId, { muscle }] of Object.entries(dominantByGroup)) {
-                // Synthesize a group-keyed entry from the dominant muscle.
-                // tension is reconstructed from the same formula the engine
-                // uses for group states, but applied to the single dominant
-                // muscle so the value reflects what's actually firing.
-                const t = muscle.tightnessPercent;
-                const a = muscle.activationPercent;
-                const len = muscle.lengthPercent;
-                const tension = Math.max(5, Math.min(95, 50 + (t - 15) * 0.8 + (100 - len) * 0.5 + (a - 15) * 0.4));
-                overlay[groupId] = {
-                  id: groupId,
-                  label: muscle.label,
-                  state: muscle.state,
-                  tension,
-                  activation: a >= 70 ? 'high' : a >= 40 ? 'moderate' : a >= 15 ? 'low' : 'inactive',
-                  activationPercent: a,
-                  description: muscle.clinicalNote,
-                };
-              }
-              const changedCount = Object.keys(overlay).length;
-              setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
-              // Task #329: derive a ranked "top movers" readout from the
-              // same dominantByGroup map. Each entry carries its current
-              // activation %, signed delta vs baseline, length state, and a
-              // capacity-relative load (activation as a fraction of the
-              // patient's tested strength % for the dragged movement).
-              const moverEntries = Object.values(dominantByGroup);
-              moverEntries.sort((a, b) => b.delta - a.delta);
-              const strengthPct = Math.max(1, row.activeStrengthPct ?? 100);
-              const top = moverEntries.slice(0, 5).map(({ muscle }) => {
-                const base = baselineMuscles[muscle.id]!;
-                const signedDelta = muscle.activationPercent - base.activationPercent;
-                const lenState: 'concentric' | 'eccentric' | 'isometric' =
-                  muscle.lengthPercent < 95 ? 'concentric'
-                  : muscle.lengthPercent > 105 ? 'eccentric'
-                  : 'isometric';
-                const capacityLoadPct = (muscle.activationPercent / strengthPct) * 100;
-                const capacityStatus: 'safe' | 'near' | 'over' =
-                  capacityLoadPct >= 95 ? 'over'
-                  : capacityLoadPct >= 70 ? 'near'
-                  : 'safe';
-                return {
-                  id: muscle.id,
-                  label: muscle.label,
-                  activation: muscle.activationPercent,
-                  delta: signedDelta,
-                  lengthPct: muscle.lengthPercent,
-                  lengthState: lenState,
-                  capacityLoadPct,
-                  capacityStatus,
-                };
-              });
-              if (top.length > 0) {
-                const [j, mv] = drag.configKey.split('.');
-                setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
-                lastDominantLengthStateRef.current = top[0].lengthState;
-              } else {
-                setMovementTopMovers(null);
-                lastDominantLengthStateRef.current = null;
-              }
-            } catch {
-              setMovementMuscleStatesOverlay(null);
+            }
+            const overlay: MuscleStatesMap = {};
+            for (const [groupId, { muscle }] of Object.entries(dominantByGroup)) {
+              const t = muscle.tightnessPercent;
+              const a = muscle.activationPercent;
+              const len = muscle.lengthPercent;
+              const tension = Math.max(5, Math.min(95, 50 + (t - 15) * 0.8 + (100 - len) * 0.5 + (a - 15) * 0.4));
+              overlay[groupId] = {
+                id: groupId,
+                label: muscle.label,
+                state: muscle.state,
+                tension,
+                activation: a >= 70 ? 'high' : a >= 40 ? 'moderate' : a >= 15 ? 'low' : 'inactive',
+                activationPercent: a,
+                description: muscle.clinicalNote,
+              };
+            }
+            const changedCount = Object.keys(overlay).length;
+            setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
+            const moverEntries = Object.values(dominantByGroup);
+            moverEntries.sort((a, b) => b.delta - a.delta);
+            const strengthPct = Math.max(1, row.activeStrengthPct ?? 100);
+            const top = moverEntries.slice(0, 5).map(({ muscle }) => {
+              const base = baselineMuscles[muscle.id]!;
+              const signedDelta = muscle.activationPercent - base.activationPercent;
+              const lenState: 'concentric' | 'eccentric' | 'isometric' =
+                muscle.lengthPercent < 95 ? 'concentric'
+                : muscle.lengthPercent > 105 ? 'eccentric'
+                : 'isometric';
+              const capacityLoadPct = (muscle.activationPercent / strengthPct) * 100;
+              const capacityStatus: 'safe' | 'near' | 'over' =
+                capacityLoadPct >= 95 ? 'over'
+                : capacityLoadPct >= 70 ? 'near'
+                : 'safe';
+              return {
+                id: muscle.id,
+                label: muscle.label,
+                activation: muscle.activationPercent,
+                delta: signedDelta,
+                lengthPct: muscle.lengthPercent,
+                lengthState: lenState,
+                capacityLoadPct,
+                capacityStatus,
+              };
+            });
+            if (top.length > 0) {
+              const [j, mv] = drag.configKey.split('.');
+              setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
+              lastDominantLengthStateRef.current = top[0].lengthState;
+            } else {
               setMovementTopMovers(null);
             }
           }

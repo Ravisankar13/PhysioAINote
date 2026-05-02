@@ -5111,6 +5111,9 @@ ${ddxList}`;
   // Seed IDs the clinician explicitly removed; held in a ref so mutation
   // doesn't retrigger the seed effect.
   const dismissedSeedIdsRef = useRef<Set<string>>(new Set());
+  // True whenever the active prediction yields at least one seed, regardless
+  // of whether the clinician has since edited those markers into clinician-owned ones.
+  const predictionHasSeededRef = useRef<boolean>(false);
 
   useEffect(() => {
     type Seed = { id: string; bone: string; label: string; severity: number; description: string };
@@ -5171,6 +5174,10 @@ ${ddxList}`;
         if (!liveIds.has(id)) dismissed.delete(id);
       }
       const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
+      // Record whether the active prediction has produced any seed at all so
+      // Movement Mode auto-pin keeps working even after the clinician has
+      // edited every seeded marker (which flips them to source: 'clinician').
+      predictionHasSeededRef.current = filteredSeeds.length > 0;
       const seedById = new Map(filteredSeeds.map(s => [s.id, s]));
       let mutated = false;
       const updated: PainMarker[] = [];
@@ -7944,7 +7951,7 @@ ${ddxList}`;
       return;
     }
     if (movementAutoPinnedRef.current || slingsOverlayPinned) return;
-    const hasPredSeed = painMarkers.some(m => m.source === 'prediction');
+    const hasPredSeed = painMarkers.some(m => m.source === 'prediction') || predictionHasSeededRef.current;
     if (hasPredSeed && slingAnalysis) {
       movementAutoPinnedRef.current = true;
       setSlingsOverlayPinned(true);

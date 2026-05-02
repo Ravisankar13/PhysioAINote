@@ -6378,6 +6378,11 @@ export default function PureThreeGLBViewer({
         const aMin = row.activeRomMin;
         const aMax = row.activeRomMax;
         const delta = targetRaw - drag.startValue;
+        // Per-frame motion delta — used for direction-aware painful-arc
+        // gating so reversing direction mid-drag (e.g. raising the arm
+        // then lowering through the same arc) flips the gate from
+        // ascending to descending without releasing first.
+        const frameDelta = targetRaw - (drag.lastValue ?? drag.startValue);
         const approachingHigh = delta > 0;
         const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
         if (distanceToLimit <= 15 && distanceToLimit > 0) {
@@ -6396,8 +6401,8 @@ export default function PureThreeGLBViewer({
           // Direction + loading-mode gates fail closed when ambiguous.
           const carry = lastPainfulArcStateRef.current;
           let dirMatches: boolean;
-          if (dir === 'ascending') dirMatches = delta > 0.5 || (Math.abs(delta) <= 0.5 && carry);
-          else if (dir === 'descending') dirMatches = delta < -0.5 || (Math.abs(delta) <= 0.5 && carry);
+          if (dir === 'ascending') dirMatches = frameDelta > 0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
+          else if (dir === 'descending') dirMatches = frameDelta < -0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
           else dirMatches = true;
           // Eager dom-state compute: throttled top-movers only updates every
           // ~33 ms, so the first tick after drag start would otherwise miss

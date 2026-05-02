@@ -10160,6 +10160,34 @@ export default function PureThreeGLBViewer({
           </div>
         );
       })()}
+      {/* Task #319: selected-joint lock badge that does NOT depend on
+          activeCapacities rows — guarantees the clinician always sees a
+          near-joint Locked indicator when a joint is pinned, even if its
+          ROM rows aren't loaded. Suppressed when the ROM-pill above is
+          already rendering (which has its own lock row) to avoid
+          stacking duplicate badges on the same joint. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && (() => {
+        const selectedJointLocked = Array.from(lockedMovementConfigKeys).some(
+          k => k.startsWith(`${movementSelectedJoint.key}.`)
+        );
+        if (!selectedJointLocked) return null;
+        const romPillVisible = !!activeCapacities && Object.keys(activeCapacities).some(
+          k => k.startsWith(`${movementSelectedJoint.key}:`)
+        );
+        if (romPillVisible) return null;
+        return (
+          <div
+            className="absolute pointer-events-none z-20"
+            style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y - 18, transform: 'translate(-50%, -100%)' }}
+            data-testid="movement-joint-lock-badge"
+          >
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md shadow-lg bg-amber-500/15 backdrop-blur border border-amber-500/40 text-amber-200 text-[11px] leading-tight">
+              <Lock className="h-2.5 w-2.5" />
+              <span>Locked · double-click joint to unlock</span>
+            </div>
+          </div>
+        );
+      })()}
       {skeletonMode === 'movement' && movementSelectedJoint && painToast && Date.now() < painToast.expiresAt && (
         <div
           className="absolute pointer-events-none z-20 animate-in fade-in zoom-in-95 duration-150"

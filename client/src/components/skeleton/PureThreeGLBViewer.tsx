@@ -705,6 +705,11 @@ export interface PainMarker {
   painMechanism?: PainMechanismType;
   nerveRoot?: string;
   severity?: number;
+  /** Origin of the marker. 'clinician' = clinician-placed (default), 'prediction' =
+   *  AI-seeded from the active diagnosis prediction (renders with a dashed ring +
+   *  AI badge and is auto-managed by the seed effect), 'transient' = short-lived
+   *  flash markers tied to an active provocation movement. */
+  source?: 'clinician' | 'prediction' | 'transient';
 }
 
 export interface RomMovement {
@@ -4369,6 +4374,26 @@ export default function PureThreeGLBViewer({
         return heatColor;
       };
 
+      // Task #332: status-driven sling style. The sling's overall status takes
+      // precedence over the per-segment activation gradient when a clinician is
+      // looking for "is this sling functional?" answers. Mapping:
+      //  - normal       → solid emerald  (#10b981)
+      //  - compensating → solid amber    (#f59e0b)
+      //  - underperforming → dashed orange (#f97316)
+      //  - overloaded   → thick (tube) red (#ef4444)
+      // Weak-link segments still render dashed regardless of overall status.
+      const STATUS_HEX = {
+        normal: 0x10b981,
+        compensating: 0xf59e0b,
+        underperforming: 0xf97316,
+        overloaded: 0xef4444,
+      } as const;
+      const slingStatusColor = STATUS_HEX[sling.status as keyof typeof STATUS_HEX] ?? colorHex;
+      const slingStatusThree = new THREE.Color(slingStatusColor);
+      const isUnderperforming = sling.status === 'underperforming';
+      const isOverloaded = sling.status === 'overloaded';
+      const isCompensating = sling.status === 'compensating';
+
       for (let seg = 0; seg < positions.length - 1; seg++) {
         const segStart = positions[seg];
         const segEnd = positions[seg + 1];
@@ -4379,9 +4404,21 @@ export default function PureThreeGLBViewer({
         const seg0Data = getSegmentActivation(seg);
         const seg1Data = getSegmentActivation(seg + 1);
 
-        if (isWeakSeg && !isDimmed) {
-          const dashCount = 6;
-          const weakOpacity = isActive ? 0.7 : 0.4;
+        // Per-segment color: blend activation heat with the sling's overall
+        // status color so the status reads at a glance while the activation
+        // gradient still hints at where the weakness sits.
+        const segColorFor = (interpAct: number, interpFound: boolean): THREE.Color => {
+          if (sling.status === 'normal') {
+            return activationToColor(interpAct, interpFound).lerp(slingStatusThree, 0.35);
+          }
+          return slingStatusThree.clone().lerp(activationToColor(interpAct, interpFound), 0.25);
+        };
+
+        const renderAsDashed = isWeakSeg || isUnderperforming;
+
+        if (renderAsDashed && !isDimmed) {
+          const dashCount = isUnderperforming ? 8 : 6;
+          const weakOpacity = isActive ? 0.85 : 0.55;
           for (let d = 0; d < dashCount; d++) {
             const t0 = (d * 2) / (dashCount * 2);
             const t1 = (d * 2 + 1) / (dashCount * 2);
@@ -4391,7 +4428,7 @@ export default function PureThreeGLBViewer({
             const interpAct = seg0Data.activation + (seg1Data.activation - seg0Data.activation) * segT;
             const interpFound = segT < 0.5 ? seg0Data.found : seg1Data.found;
             const dashMat = new THREE.LineBasicMaterial({
-              color: activationToColor(interpAct, interpFound),
+              color: segColorFor(interpAct, interpFound),
               opacity: weakOpacity,
               transparent: true,
               depthTest: false,
@@ -4400,6 +4437,23 @@ export default function PureThreeGLBViewer({
             dashLine.renderOrder = 997;
             group.add(dashLine);
           }
+        } else if (isOverloaded && !isDimmed) {
+          // Render overloaded segments as a thick tube so the visual weight
+          // matches the clinical urgency. Three.js LineBasicMaterial.linewidth
+          // is capped at 1 on most GL implementations, so we use TubeGeometry.
+          const tubePath = new THREE.CatmullRomCurve3([segStart, segEnd], false, 'catmullrom', 0.5);
+          const tubeRadius = isActive ? 0.012 : 0.009;
+          const tubeGeom = new THREE.TubeGeometry(tubePath, 12, tubeRadius, 8, false);
+          const tubeMat = new THREE.MeshBasicMaterial({
+            color: slingStatusColor,
+            opacity: isActive ? 0.85 : 0.6,
+            transparent: true,
+            depthTest: false,
+            side: THREE.DoubleSide,
+          });
+          const tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
+          tubeMesh.renderOrder = 997;
+          group.add(tubeMesh);
         } else {
           const subSegCount = 6;
           for (let ss = 0; ss < subSegCount; ss++) {
@@ -4412,8 +4466,8 @@ export default function PureThreeGLBViewer({
             const interpAct = seg0Data.activation + (seg1Data.activation - seg0Data.activation) * segT;
             const interpFound = segT < 0.5 ? seg0Data.found : seg1Data.found;
             const ssMat = new THREE.LineBasicMaterial({
-              color: activationToColor(interpAct, interpFound),
-              opacity: isDimmed ? 0.15 : isActive ? 0.9 : 0.5,
+              color: segColorFor(interpAct, interpFound),
+              opacity: isDimmed ? 0.15 : isActive ? 0.9 : (isCompensating ? 0.7 : 0.5),
               transparent: true,
               depthTest: false,
             });
@@ -4479,16 +4533,21 @@ export default function PureThreeGLBViewer({
           midPt.z += 0.03;
 
           const arrowCurve = new THREE.QuadraticBezierCurve3(fromPos, midPt, toPos);
-          const arrowPts = arrowCurve.getPoints(16);
+          const arrowPts = arrowCurve.getPoints(24);
           const arrowGeom = new THREE.BufferGeometry().setFromPoints(arrowPts);
-          const arrowOpacity = isDimmed ? 0.12 : isActive ? 0.85 : 0.5;
-          const arrowMat = new THREE.LineBasicMaterial({
+          const arrowOpacity = isDimmed ? 0.12 : isActive ? 0.9 : 0.55;
+          // Task #332: reroute arrows render dashed to differentiate "force is
+          // being detoured" from a normal flow line.
+          const arrowMat = new THREE.LineDashedMaterial({
             color: 0xff8800,
+            dashSize: 0.022,
+            gapSize: 0.014,
             opacity: arrowOpacity,
             transparent: true,
             depthTest: false,
           });
           const arrowLine = new THREE.Line(arrowGeom, arrowMat);
+          arrowLine.computeLineDistances();
           arrowLine.renderOrder = 998;
           group.add(arrowLine);
 
@@ -5418,6 +5477,78 @@ export default function PureThreeGLBViewer({
           scene.add(dotMesh);
           extraObjects.push(dotMesh);
         }
+      }
+
+      // Task #332: AI-sourced (prediction-seeded) marker decoration —
+      // dashed circular ring around the marker + a small "AI" badge sprite.
+      // This visually distinguishes auto-seeded markers from clinician-placed
+      // ones until the clinician edits them (at which point the seed effect
+      // flips marker.source to 'clinician' and re-renders without the badge).
+      if (marker.source === 'prediction') {
+        const ringRadius = (markerType === 'area' ? baseOuterRadius : 0.13) * 1.15;
+        const ringSegments = 48;
+        const ringPts: THREE.Vector3[] = [];
+        for (let i = 0; i <= ringSegments; i++) {
+          const a = (i / ringSegments) * Math.PI * 2;
+          ringPts.push(new THREE.Vector3(Math.cos(a) * ringRadius, Math.sin(a) * ringRadius, 0));
+        }
+        const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+        const ringMat = new THREE.LineDashedMaterial({
+          color: 0x22d3ee,
+          dashSize: 0.025,
+          gapSize: 0.018,
+          transparent: true,
+          opacity: 0.85,
+          depthTest: false,
+          depthWrite: false,
+        });
+        ringMat.userData.baseOpacity = 0.85;
+        const ringLine = new THREE.LineLoop(ringGeo, ringMat);
+        ringLine.computeLineDistances();
+        ringLine.position.copy(pos);
+        ringLine.lookAt(pos.x, pos.y, pos.z + 1);
+        ringLine.renderOrder = 1002;
+        ringLine.userData.isPainMarker = true;
+        ringLine.userData.markerId = marker.id;
+        scene.add(ringLine);
+        extraObjects.push(ringLine);
+
+        const aiCanvas = document.createElement('canvas');
+        aiCanvas.width = 96;
+        aiCanvas.height = 48;
+        const aictx = aiCanvas.getContext('2d');
+        if (aictx) {
+          aictx.fillStyle = 'rgba(8, 47, 73, 0.95)';
+          aictx.beginPath();
+          aictx.roundRect(2, 2, 92, 44, 10);
+          aictx.fill();
+          aictx.strokeStyle = '#22d3ee';
+          aictx.lineWidth = 2;
+          aictx.beginPath();
+          aictx.roundRect(2, 2, 92, 44, 10);
+          aictx.stroke();
+          aictx.font = 'bold 24px sans-serif';
+          aictx.fillStyle = '#67e8f9';
+          aictx.textAlign = 'center';
+          aictx.textBaseline = 'middle';
+          aictx.fillText('AI', 48, 26);
+        }
+        const aiTex = new THREE.CanvasTexture(aiCanvas);
+        aiTex.needsUpdate = true;
+        const aiMat = new THREE.SpriteMaterial({
+          map: aiTex,
+          transparent: true,
+          depthTest: false,
+          opacity: 0.95,
+        });
+        const aiSprite = new THREE.Sprite(aiMat);
+        aiSprite.position.set(pos.x + ringRadius * 0.95, pos.y + ringRadius * 0.95, pos.z);
+        aiSprite.scale.set(0.06, 0.03, 1);
+        aiSprite.renderOrder = 1003;
+        aiSprite.userData.isPainMarker = true;
+        aiSprite.userData.markerId = marker.id;
+        scene.add(aiSprite);
+        extraObjects.push(aiSprite);
       }
 
       const newMeshes = { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined };

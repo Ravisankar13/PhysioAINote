@@ -7345,15 +7345,21 @@ ${ddxList}`;
   }, [lastClinicalParseResult]);
 
   const activeCapacitiesEnabled = skeletonMode === 'movement' && !!activeCaseId;
-  const { profile: activeCapacityProfile, effectiveProfile: activeCapacityEffective, profileMap: activeCapacityMap, generate: generateActiveCapacity, generating: generatingActiveCapacity }
-    = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
+  const {
+    profile: activeCapacityProfile,
+    effectiveProfile: activeCapacityEffective,
+    profileMap: activeCapacityMap,
+    generate: generateActiveCapacity,
+    refreshFromContext: refreshActiveCapacity,
+    generating: generatingActiveCapacity,
+    refreshing: refreshingActiveCapacity,
+  } = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
   void activeCapacityEffective;
 
-  // Task #331: build the slim painMarkers + intakeContext payloads forwarded
-  // to the AI so it can infer painful arcs for ANY plausible diagnosis (not
-  // just pre-coded ones). Memoised on the marker IDs/types/locations and the
-  // patient-context signature so we only re-fire when the clinician actually
-  // changes the case — not on every render.
+  // Build the slim painMarkers + intakeContext payloads forwarded to the AI
+  // so it can infer painful arcs for ANY plausible diagnosis. Memoised on
+  // marker shape + patient-context so we only re-fire when the clinician
+  // actually changes the case.
   const activeCapacityAiContext = useMemo(() => {
     const markers = painMarkers.map(m => ({
       location: m.anatomicalLabel || m.nearestBone,
@@ -7401,26 +7407,21 @@ ${ddxList}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
 
-  // Task #331: re-infer painful arcs when the clinician adds / edits / removes
-  // pain markers OR submits new patient-context answers. Debounced 1.5s so a
-  // burst of marker placements triggers a single refresh, not one per click.
-  // Only fires when Movement Mode is engaged AND a profile already exists
-  // (initial generation is handled by the effect above so we don't double-fire
-  // on first entry).
+  // Re-infer painful arcs when the clinician adds / edits / removes pain
+  // markers OR submits new patient-context answers. Debounced 1.5 s so a
+  // burst of marker placements triggers a single refresh. Only fires when
+  // Movement Mode is engaged AND a profile already exists; initial
+  // generation is handled by the effect above.
   const lastAiContextSigRef = useRef<string>('');
   useEffect(() => {
     if (skeletonMode !== 'movement') return;
     if (!activeCaseId) return;
     if (!activeCapacityProfile) return;
-    if (generatingActiveCapacity) return;
-    // Build a stable signature from the marker shape + intake keys/values so
-    // we can dedupe and avoid re-firing on irrelevant churn (e.g. timestamps).
+    if (generatingActiveCapacity || refreshingActiveCapacity) return;
     const sig = JSON.stringify({
       markers: activeCapacityAiContext.markers.map(m => [m.location, m.type, m.symptomType, m.severity, (m.description || '').slice(0, 40)]),
       intake: activeCapacityAiContext.intake,
     });
-    // Skip the very first run after entry — the auto-generate effect already
-    // fired with this exact context. Record the sig and exit.
     if (!lastAiContextSigRef.current) {
       lastAiContextSigRef.current = sig;
       return;
@@ -7428,16 +7429,15 @@ ${ddxList}`;
     if (lastAiContextSigRef.current === sig) return;
     const t = window.setTimeout(() => {
       lastAiContextSigRef.current = sig;
-      generateActiveCapacity.mutate({
-        refresh: true,
+      refreshActiveCapacity.mutate({
         painMarkers: activeCapacityAiContext.markers,
         intakeContext: activeCapacityAiContext.intake,
       });
     }, 1500);
     return () => window.clearTimeout(t);
-    // generateActiveCapacity is a stable mutation object from React Query.
+    // refreshActiveCapacity is a stable mutation object from React Query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity, activeCapacityAiContext]);
+  }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity, refreshingActiveCapacity, activeCapacityAiContext]);
 
   // Reset the dedup signature when the case changes so the next case doesn't
   // inherit a stale context hash.
@@ -9674,6 +9674,15 @@ ${ddxList}`;
                   Active Movement Mode
                   {generatingActiveCapacity && <span className="text-emerald-100 font-normal">· generating capacities…</span>}
                 </div>
+                {refreshingActiveCapacity && !generatingActiveCapacity && (
+                  <div
+                    className="absolute top-2 right-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-rose-500/90 text-white text-[10px] font-semibold shadow-lg"
+                    data-testid="painmap-refresh-badge"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                    Updating pain map…
+                  </div>
+                )}
               </div>
             ); return __viewer; })()}
 

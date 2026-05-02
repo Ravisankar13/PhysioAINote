@@ -9913,9 +9913,8 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
         ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
         : [];
-      // Task #331 — accept clinician-placed pain markers + intake context so the
-      // AI can infer painful arcs for ANY plausible diagnosis (not just the
-      // pre-coded baselines). Both are optional and validated leniently.
+      // Accept optional pain markers + intake context so the AI can infer
+      // painful arcs for any plausible diagnosis. Validated leniently.
       const painMarkersRaw = body.painMarkers;
       const painMarkers = Array.isArray(painMarkersRaw)
         ? (painMarkersRaw as unknown[]).filter((m): m is Record<string, unknown> => !!m && typeof m === 'object').map(m => ({
@@ -9970,6 +9969,84 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       res.status(500).json({ error: "Failed to generate active capacities", details: message });
     }
   });
+
+  // Refresh-from-context alias: dedicated endpoint that ALWAYS forces a
+  // regeneration using the latest pain markers + intake context. Mirrors
+  // POST /api/active-capacity/:caseId with refresh=true so the client can
+  // call a stable, intent-named URL whenever the patient's clinical
+  // picture changes (markers added/removed, intake answers updated). Both
+  // paths are accepted to keep older clients working.
+  const refreshActiveCapacityHandler = async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      const inferredFromExisting = (existing?.inferredVariables || {}) as Record<string, unknown>;
+      const phenotypeFromExisting = (existing?.phenotype || {}) as Record<string, unknown>;
+      const body = (req.body || {}) as Record<string, unknown>;
+      const condition = (body.condition as string | undefined) || existing?.condition || "Unspecified";
+      const caseSummary = (body.caseSummary as string | undefined) || existing?.caseSummary || "";
+      const ageRaw = (body.age ?? inferredFromExisting.age ?? phenotypeFromExisting.age) as number | string | undefined;
+      const sexRaw = (body.sex ?? inferredFromExisting.sex ?? phenotypeFromExisting.sex) as string | undefined;
+      const pathologiesRaw = body.pathologies ?? inferredFromExisting.pathologies ?? phenotypeFromExisting.pathologies ?? [];
+      const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
+        ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
+      const painMarkersRaw = body.painMarkers;
+      const painMarkers = Array.isArray(painMarkersRaw)
+        ? (painMarkersRaw as unknown[]).filter((m): m is Record<string, unknown> => !!m && typeof m === 'object').map(m => ({
+            location: typeof m.location === 'string' ? m.location : (typeof m.anatomicalLabel === 'string' ? m.anatomicalLabel : (typeof m.nearestBone === 'string' ? m.nearestBone : '')),
+            type: typeof m.type === 'string' ? m.type : undefined,
+            symptomType: typeof m.symptomType === 'string' ? m.symptomType : undefined,
+            description: typeof m.description === 'string' ? m.description : undefined,
+            subjectiveHistory: typeof m.subjectiveHistory === 'string' ? m.subjectiveHistory : undefined,
+            painMechanism: typeof m.painMechanism === 'string' ? m.painMechanism : undefined,
+            nerveRoot: typeof m.nerveRoot === 'string' ? m.nerveRoot : undefined,
+            severity: typeof m.severity === 'number' ? m.severity : undefined,
+          })).filter(m => m.location)
+        : undefined;
+      const intakeRaw = body.intakeContext;
+      const intakeContext = (intakeRaw && typeof intakeRaw === 'object' && !Array.isArray(intakeRaw))
+        ? (intakeRaw as Record<string, string | number | boolean | undefined>)
+        : undefined;
+      const { generateActiveCapacities } = await import("./services/activeCapacityService");
+      const profile = await generateActiveCapacities({
+        condition,
+        caseSummary,
+        literatureSummary: existing?.synthesizedAnswer,
+        age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
+        sex: typeof sexRaw === 'string' ? sexRaw : undefined,
+        inferredPathologies,
+        painMarkers,
+        intakeContext,
+      });
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing?.contentHash || `active-capacity:${caseId}`,
+        condition,
+        caseSummary,
+        phenotype: existing?.phenotype ?? null,
+        inferredVariables: existing?.inferredVariables ?? { age: ageRaw, sex: sexRaw, pathologies: inferredPathologies },
+        queriesRan: existing?.queriesRan ?? [],
+        seedBroadenings: existing?.seedBroadenings ?? [],
+        retrievedPapers: existing?.retrievedPapers ?? [],
+        retrievedTrials: existing?.retrievedTrials ?? [],
+        synthesizedAnswer: existing?.synthesizedAnswer ?? "",
+        confidence: existing?.confidence ?? "unknown",
+        confidenceReason: existing?.confidenceReason ?? null,
+        droppedVariables: existing?.droppedVariables ?? [],
+        activeCapacities: profile,
+        researchTreatmentPlan: existing?.researchTreatmentPlan ?? null,
+      });
+      res.json({ ...saved, cached: false, refreshed: true });
+    } catch (error: unknown) {
+      console.error("Refresh active capacities from context error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to refresh active capacities", details: message });
+    }
+  };
+  app.post("/api/case-research/:caseId/active-capacities/refresh-from-context", ensureAuthenticated, refreshActiveCapacityHandler);
 
   app.patch("/api/active-capacity/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
     try {

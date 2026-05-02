@@ -368,10 +368,10 @@ export async function generateActiveCapacities(input: {
   age?: number;
   sex?: string;
   inferredPathologies?: string[];
-  /** NEW (Task #331) — clinician-placed pain markers. Drive painful-arc
+  /** Clinician-placed pain markers. Drive painful-arc
    *  inference for ANY diagnosis, not just pre-coded ones. */
   painMarkers?: PainMarkerHint[];
-  /** NEW (Task #331) — patient-context intake for additional grounding
+  /** Patient-context intake for additional grounding
    *  (aggravating activities, easing positions, occupation, …). */
   intakeContext?: IntakeContextHint;
 }): Promise<ActiveCapacityProfile> {

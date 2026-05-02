@@ -238,21 +238,16 @@ export default function MovementJointSliderHUD({
                   }}
                 />
                 {dof.painfulArc && arcHi > arcLo && (() => {
-                  // Task #331: directional shading + chevron on the painful-arc
-                  // band. When the AI tags an arc with `direction`, render a
-                  // tiny chevron at the leading edge that points the way the
-                  // joint must move to enter pain (↑ for ascending, ↓ for
-                  // descending) and stripe the band so it visually reads as a
-                  // one-way zone. Loading-mode is shown as a 1-2-letter pill
-                  // anchored above the band.
+                  // Directional shading + chevron + loading-mode pill on the
+                  // painful-arc band. Diagonal stripes convey one-way motion;
+                  // chevron points to the leading edge the joint must cross
+                  // to ENTER pain in the AI's flagged direction.
                   const arcLeftPct = valueToPct(arcLo, dof.hardMin, dof.hardMax);
                   const arcRightPct = valueToPct(arcHi, dof.hardMin, dof.hardMax);
                   const arcWidthPct = Math.max(0, arcRightPct - arcLeftPct);
                   const dir = dof.painfulArc.direction;
                   const lm = dof.painfulArc.loadingMode;
-                  // Diagonal stripe pattern conveys "directional" at a glance;
-                  // angle flips for descending so the eye reads the slope as
-                  // moving the right way.
+                  const arcIntensity = dof.painfulArc.intensity ?? 5;
                   const stripeAngle = dir === 'descending' ? '-45deg' : dir === 'ascending' ? '45deg' : null;
                   const bandStyle: React.CSSProperties = {
                     top: 5,
@@ -264,14 +259,27 @@ export default function MovementJointSliderHUD({
                     bandStyle.background = `repeating-linear-gradient(${stripeAngle}, rgba(239,68,68,0.85) 0, rgba(239,68,68,0.85) 3px, rgba(220,38,38,0.55) 3px, rgba(220,38,38,0.55) 6px)`;
                   }
                   const chevron = dir === 'ascending' ? '▶' : dir === 'descending' ? '◀' : null;
-                  // Chevron sits at the LEADING edge of the painful zone — the
-                  // edge the joint angle must cross to ENTER pain, in the
-                  // direction the AI flagged.
                   const chevronLeftPct = dir === 'ascending' ? arcLeftPct : dir === 'descending' ? arcRightPct : null;
                   const lmShort = lm === 'eccentric' ? 'ECC'
                     : lm === 'concentric' ? 'CON'
                       : lm === 'isometric' ? 'ISO'
                         : null;
+                  // Pain intensity meter: vertical bar to the right of the
+                  // track that fills as the live angle approaches the arc
+                  // midpoint. The fill height = arcIntensity × proximity (0-1)
+                  // so the clinician sees pain RISING as they move into the
+                  // most painful part of the arc, and falling as they back
+                  // out. Empty until inside the band.
+                  const arcMid = (arcLo + arcHi) / 2;
+                  const arcHalf = Math.max(1, (arcHi - arcLo) / 2);
+                  const inArc = current >= arcLo && current <= arcHi;
+                  const proximity = inArc ? Math.max(0, 1 - Math.abs(current - arcMid) / arcHalf) : 0;
+                  const meterPct = Math.round(proximity * (arcIntensity / 10) * 100);
+                  const meterTint = arcIntensity >= 7
+                    ? 'bg-red-500'
+                    : arcIntensity >= 4
+                      ? 'bg-orange-400'
+                      : 'bg-amber-400';
                   return (
                     <>
                       <div
@@ -307,6 +315,17 @@ export default function MovementJointSliderHUD({
                           {lmShort}
                         </div>
                       )}
+                      <div
+                        className="absolute right-[-10px] top-0 w-[5px] h-[18px] rounded-sm bg-slate-900/70 border border-slate-700/60 overflow-hidden"
+                        title={`Pain intensity meter (max ${arcIntensity}/10)`}
+                        data-testid={`slider-pain-intensity-meter-${dof.configKey}`}
+                        data-meter-pct={meterPct}
+                      >
+                        <div
+                          className={`absolute bottom-0 left-0 right-0 ${meterTint} transition-[height] duration-100 ease-out`}
+                          style={{ height: `${meterPct}%` }}
+                        />
+                      </div>
                     </>
                   );
                 })()}

@@ -111,6 +111,30 @@ export function useActiveCapacities(caseId: string | null, enabled: boolean) {
     },
   });
 
+  /** Dedicated re-inference endpoint. Always forces a regeneration with
+   *  the latest pain markers + intake context. Used for context-driven
+   *  refreshes (markers added/removed, intake updated) so callers can
+   *  show a clear "Updating pain map…" indicator without confusing it
+   *  with the initial generation flow. */
+  const refreshFromContext = useMutation({
+    mutationFn: async (
+      arg: {
+        painMarkers?: Array<Record<string, unknown>>;
+        intakeContext?: Record<string, string | number | boolean | undefined>;
+      } = {},
+    ) => {
+      if (!caseId) throw new Error('No caseId');
+      return apiRequest(
+        `/api/case-research/${caseId}/active-capacities/refresh-from-context`,
+        'POST',
+        arg,
+      );
+    },
+    onSuccess: () => {
+      if (caseId) queryClient.invalidateQueries({ queryKey: ['/api/case-research', caseId] });
+    },
+  });
+
   const override = useMutation({
     mutationFn: async (patch: Partial<ActiveCapacityRow> & { joint: string; movement: string }) => {
       if (!caseId) throw new Error('No caseId');
@@ -161,8 +185,10 @@ export function useActiveCapacities(caseId: string | null, enabled: boolean) {
     isFetching: query.isFetching,
     error: query.error,
     generate,
+    refreshFromContext,
     override,
     generating: generate.isPending,
+    refreshing: refreshFromContext.isPending,
     overriding: override.isPending,
   };
 }

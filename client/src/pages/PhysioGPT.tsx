@@ -15536,11 +15536,15 @@ ${ddxList}`;
           Findings stream renders into the same right-rail slot the
           ClinicalReasoningPanel normally occupies. */}
       {skeletonMode === 'movement' && (
-        <div className="absolute top-0 right-0 h-full w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto" data-testid="movement-findings-rail">
+        // Task #320: drop `h-full` from the wrapper so it sizes to its
+        // collapsed/expanded child Card instead of permanently reserving
+        // the full viewer height. This also lets the rest of the right
+        // edge of the 3D viewer receive pointer events again when the
+        // panel is collapsed.
+        <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto" data-testid="movement-findings-rail">
           <MovementFindingsStream
             findings={movementFindings}
             onClear={() => setMovementFindings([])}
-            className="h-full"
           />
         </div>
       )}

@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Activity, Trash2 } from 'lucide-react';
+import { Activity, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 export interface MovementFinding {
   id: string;
@@ -47,28 +47,61 @@ export default function MovementFindingsStream({ findings, onClear, className = 
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
+  // Collapsible UI (Task #320). The panel defaults to collapsed so an empty
+  // Movement Mode session doesn't visually dominate the 3D skeleton viewer.
+  // It auto-expands exactly once when the first finding arrives in this
+  // session, after which the clinician's manual toggle is the source of
+  // truth. State is per-mount, so leaving and re-entering Movement Mode
+  // resets to the default — that's the desired behaviour.
+  const [collapsed, setCollapsed] = useState(true);
+  const userToggledRef = useRef(false);
+  const lastCountRef = useRef(findings.length);
+  useEffect(() => {
+    const prev = lastCountRef.current;
+    lastCountRef.current = findings.length;
+    if (!userToggledRef.current && prev === 0 && findings.length > 0) {
+      setCollapsed(false);
+    }
+  }, [findings.length]);
+  const toggleCollapsed = () => {
+    userToggledRef.current = true;
+    setCollapsed(c => !c);
+  };
+  const ChevIcon = collapsed ? ChevronDown : ChevronUp;
+
   return (
     <Card className={`bg-emerald-950/50 border-emerald-700/50 text-emerald-50 ${className}`}>
-      <div className="flex items-center justify-between p-3 border-b border-emerald-700/40">
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className={`w-full flex items-center justify-between p-3 text-left hover:bg-emerald-900/40 transition-colors ${collapsed ? '' : 'border-b border-emerald-700/40'}`}
+        data-testid="movement-findings-toggle"
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Expand Movement Findings' : 'Collapse Movement Findings'}
+      >
         <div className="flex items-center gap-2">
           <Activity className="h-3.5 w-3.5 text-emerald-300" />
           <div className="text-xs font-semibold uppercase tracking-wider text-emerald-200">Movement Findings</div>
-          <span className="text-[10px] text-emerald-300/80">{findings.length}</span>
+          <span className="text-[10px] text-emerald-300/80" data-testid="movement-findings-count">{findings.length}</span>
         </div>
-        {findings.length > 0 && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-6 text-[10px] text-emerald-200 hover:bg-emerald-800/40"
-            onClick={onClear}
-            data-testid="clear-movement-findings"
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Clear
-          </Button>
-        )}
-      </div>
-      <ScrollArea className="max-h-[260px]">
+        <div className="flex items-center gap-1">
+          {!collapsed && findings.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] text-emerald-200 hover:bg-emerald-800/40"
+              onClick={(e) => { e.stopPropagation(); onClear(); }}
+              data-testid="clear-movement-findings"
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Clear
+            </Button>
+          )}
+          <ChevIcon className="h-3.5 w-3.5 text-emerald-300" />
+        </div>
+      </button>
+      {!collapsed && (
+      <ScrollArea className="max-h-[260px]" data-testid="movement-findings-body">
         <div className="p-2 space-y-1.5">
           {findings.length === 0 && (
             <div className="text-[11px] text-emerald-100/70 italic px-2 py-3 text-center">
@@ -106,6 +139,7 @@ export default function MovementFindingsStream({ findings, onClear, className = 
           })}
         </div>
       </ScrollArea>
+      )}
     </Card>
   );
 }

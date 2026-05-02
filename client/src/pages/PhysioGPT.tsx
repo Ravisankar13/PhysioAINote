@@ -5171,6 +5171,13 @@ ${ddxList}`;
 
     setPainMarkers(prev => {
       const dismissed = dismissedSeedIdsRef.current;
+      // Scope tombstones to the current prediction: drop any tombstone whose
+      // seed ID is no longer produced by the active prediction so a future
+      // prediction that yields a brand-new ID is never silently suppressed.
+      const liveIds = new Set(seeds.map(s => s.id));
+      for (const id of Array.from(dismissed)) {
+        if (!liveIds.has(id)) dismissed.delete(id);
+      }
       const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
       const seedById = new Map(filteredSeeds.map(s => [s.id, s]));
       let mutated = false;
@@ -9890,6 +9897,16 @@ ${ddxList}`;
                                         onClick={() => {
                                           setClinicalBubbleMarker(m);
                                           setEditingMarkerId(m.id);
+                                          // Drive the camera to the marker's region using the
+                                          // existing zoom path so the click visibly focuses.
+                                          if (m.nearestBone) {
+                                            for (const [region, bones] of Object.entries(REGION_BONE_MAPPING)) {
+                                              if ((bones as string[]).includes(m.nearestBone)) {
+                                                setZoomToRegion(region as AnatomicalRegion);
+                                                break;
+                                              }
+                                            }
+                                          }
                                         }}
                                         title={m.source === 'prediction' ? `Auto-placed from clinical prediction: ${m.anatomicalLabel ?? ''}` : (m.description ?? m.anatomicalLabel ?? '')}
                                         className="text-rose-300 hover:text-rose-200 underline-offset-2 hover:underline"

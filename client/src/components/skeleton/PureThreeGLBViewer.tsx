@@ -4404,14 +4404,15 @@ export default function PureThreeGLBViewer({
         const seg0Data = getSegmentActivation(seg);
         const seg1Data = getSegmentActivation(seg + 1);
 
-        // Per-segment color: blend activation heat with the sling's overall
-        // status color so the status reads at a glance while the activation
-        // gradient still hints at where the weakness sits.
+        // Main ribbon path is strictly status-coloured so the sling's overall
+        // state reads at a glance. Activation heat is preserved only on weak
+        // segments (where it actually pinpoints the weakness) and as a very
+        // subtle tint on overloaded ribbons.
         const segColorFor = (interpAct: number, interpFound: boolean): THREE.Color => {
-          if (sling.status === 'normal') {
-            return activationToColor(interpAct, interpFound).lerp(slingStatusThree, 0.35);
+          if (isWeakSeg) {
+            return activationToColor(interpAct, interpFound).lerp(slingStatusThree, 0.5);
           }
-          return slingStatusThree.clone().lerp(activationToColor(interpAct, interpFound), 0.25);
+          return slingStatusThree.clone();
         };
 
         const renderAsDashed = isWeakSeg || isUnderperforming;

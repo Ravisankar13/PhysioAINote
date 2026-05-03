@@ -20,6 +20,7 @@ import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-h
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { physioGptService } from "./physioGptService";
+import { physioGptStorage } from "./physioGptStorage";
 import { physioGptStreamService } from "./physioGptStreamService";
 import { researchGapAnalysisService } from "./researchGapAnalysis";
 import { researchStorage } from "./researchStorage";
@@ -12124,6 +12125,35 @@ Now produce the refined hypothesis JSON.`;
     } catch (error) {
       console.error("Error deleting conversation:", error);
       res.status(500).json({ error: "Unable to delete conversation" });
+    }
+  });
+
+  app.post("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { caseSnapshot, title } = req.body ?? {};
+      const parsed = physioGptCaseSnapshotSchema.safeParse(caseSnapshot);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid caseSnapshot payload" });
+      }
+
+      const snap = parsed.data as PhysioGptCaseSnapshot;
+      const explicitTitle = typeof title === "string" && title.trim().length > 0 ? title.trim() : "";
+      const subjective = (snap as any)?.subjectiveHistoryInput;
+      const subjectiveTitle =
+        typeof subjective === "string" && subjective.trim().length > 0
+          ? subjective.trim().slice(0, 80)
+          : "";
+      const derivedTitle = explicitTitle || subjectiveTitle || `Case ${new Date().toLocaleString()}`;
+
+      const conversation = await physioGptStorage.createConversation({
+        userId: req.user!.id,
+        title: derivedTitle,
+        caseSnapshot: snap,
+      });
+      res.status(201).json(conversation);
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      res.status(500).json({ error: "Unable to create conversation" });
     }
   });
 

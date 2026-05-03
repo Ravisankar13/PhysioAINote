@@ -79,6 +79,8 @@ import {
   Leaf,
   ScrollText,
   Copy,
+  Save,
+  FilePlus2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -1993,69 +1995,72 @@ export default function PhysioGPT() {
     };
   }, [selectedConversationId]);
 
-  // Debounced auto-save of the snapshot to the conversation row.
-  useEffect(() => {
-    if (!selectedConversationId) return;
-    if (isHydratingRef.current) return;
-    if (hydratedConversationIdRef.current !== selectedConversationId) return;
-    // Hard gate: never auto-save (and therefore never backfill) a legacy
-    // conversation that did not have a snapshot at load time.
-    if (!snapshotEligibleRef.current.has(selectedConversationId)) return;
+  // Manual save — no auto-save. Persists the current case snapshot via
+  // PATCH to the open conversation, or POST to create a new one.
+  const [isSavingCase, setIsSavingCase] = useState(false);
+  const currentCaseSnapshotRef = useRef(currentCaseSnapshot);
+  useEffect(() => { currentCaseSnapshotRef.current = currentCaseSnapshot; }, [currentCaseSnapshot]);
 
-    let serialized: string;
+  const saveCurrentCase = useCallback(async () => {
+    if (isSavingCase) return;
+    const snap = currentCaseSnapshotRef.current;
+    setIsSavingCase(true);
     try {
-      serialized = JSON.stringify(currentCaseSnapshot);
-    } catch {
-      return;
-    }
-    if (serialized === lastSavedSnapshotRef.current) return;
-
-    if (snapshotSaveTimerRef.current) clearTimeout(snapshotSaveTimerRef.current);
-    const conversationIdForSave = selectedConversationId;
-    snapshotSaveTimerRef.current = setTimeout(async () => {
-      snapshotSaveTimerRef.current = null;
-      try {
+      if (selectedConversationId) {
         await apiRequest(
-          `/api/physiogpt/conversations/${conversationIdForSave}`,
+          `/api/physiogpt/conversations/${selectedConversationId}`,
           "PATCH",
-          { caseSnapshot: currentCaseSnapshot },
+          { caseSnapshot: snap },
         );
-        lastSavedSnapshotRef.current = serialized;
-      } catch {
-        // best-effort; the next state change will retry
+        try { lastSavedSnapshotRef.current = JSON.stringify(snap); } catch {}
+        queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${selectedConversationId}`] });
+        toast({ title: "Case saved" });
+      } else {
+        const subjective = (snap as any)?.subjectiveHistoryInput;
+        const derivedTitle =
+          (typeof subjective === "string" && subjective.trim().length > 0
+            ? subjective.trim().slice(0, 80)
+            : "") || `Case ${new Date().toLocaleString()}`;
+        const created = await apiRequest(
+          `/api/physiogpt/conversations`,
+          "POST",
+          { caseSnapshot: snap, title: derivedTitle },
+        );
+        if (created && typeof created.id === "number") {
+          hydratedConversationIdRef.current = created.id;
+          snapshotEligibleRef.current.add(created.id);
+          try { lastSavedSnapshotRef.current = JSON.stringify(snap); } catch {}
+          setSelectedConversationId(created.id);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+        toast({ title: "Case saved" });
       }
-    }, 1500);
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: err instanceof Error ? err.message : "Unable to save case",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingCase(false);
+    }
+  }, [isSavingCase, selectedConversationId, queryClient, toast]);
 
-    return () => {
-      if (snapshotSaveTimerRef.current) {
-        clearTimeout(snapshotSaveTimerRef.current);
-        snapshotSaveTimerRef.current = null;
-      }
-    };
-  }, [selectedConversationId, currentCaseSnapshot, snapshotSaveCounter]);
-
-  // Best-effort flush on tab close / navigation away. Uses fetch with
-  // `keepalive: true` because navigator.sendBeacon doesn't support PATCH.
+  // Cmd/Ctrl+S keyboard shortcut to trigger manual save.
   useEffect(() => {
-    const handler = () => {
-      if (!selectedConversationId) return;
-      if (hydratedConversationIdRef.current !== selectedConversationId) return;
-      // Same eligibility gate as the debounced autosave — never backfill a
-      // legacy conversation on tab close.
-      if (!snapshotEligibleRef.current.has(selectedConversationId)) return;
-      try {
-        fetch(`/api/physiogpt/conversations/${selectedConversationId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ caseSnapshot: currentCaseSnapshot }),
-          keepalive: true,
-          credentials: "include",
-        }).catch(() => {});
-      } catch {}
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.key === "s" || e.key === "S")) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      void saveCurrentCase();
     };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [selectedConversationId, currentCaseSnapshot]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [saveCurrentCase]);
   // ───────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -16188,6 +16193,33 @@ ${ddxList}`;
           >
             <Clock className="h-3.5 w-3.5" />
             History
+          </button>
+          <button
+            onClick={() => void saveCurrentCase()}
+            disabled={isSavingCase}
+            data-testid="button-save-case"
+            title="Save Case (Ctrl/Cmd+S)"
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/90 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+          >
+            {isSavingCase ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            {isSavingCase ? "Saving…" : "Save Case"}
+          </button>
+          <button
+            onClick={() => {
+              const ok = window.confirm("Start a new case? Unsaved changes will be lost.");
+              if (!ok) return;
+              handleNewConversation();
+            }}
+            data-testid="button-new-case"
+            title="New Case"
+            className="flex items-center gap-1.5 px-3 py-2 bg-sky-600/90 hover:bg-sky-600 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+          >
+            <FilePlus2 className="h-3.5 w-3.5" />
+            New Case
           </button>
           <button
             onClick={() => setClinicalNotesOpen(prev => !prev)}

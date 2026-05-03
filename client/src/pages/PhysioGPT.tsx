@@ -95,6 +95,7 @@ import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, 
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import ActiveCapacitiesPanel from "@/components/skeleton/ActiveCapacitiesPanel";
 import MovementFindingsStream, { type MovementFinding } from "@/components/skeleton/MovementFindingsStream";
+import MovementAiSimulatorPanel, { type MovementSimResult, type MovementSimContext } from "@/components/skeleton/MovementAiSimulatorPanel";
 import { useActiveCapacities } from "@/hooks/useActiveCapacities";
 import type {
   DiagnosisProvocationMovement,
@@ -7946,6 +7947,103 @@ ${ddxList}`;
       setMovementFindings(prev => prev.map(f => f.id === id ? { ...f, sentence: `${attempt.joint} ${attempt.movement} reached ${Math.round(attempt.achievedAngle)}° (offline).`, loading: false } : f));
     }
   }, [lastClinicalParseResult]);
+
+  // ─── Movement-Mode AI Simulator (Task #343) ───────────
+  // Build the de-identified context payload sent to /api/movement-sim/predict.
+  // Painful tissues come from painMarkers (label+severity+symptom-type), the
+  // posture deviations from the engine model-config diff, sling activations
+  // from the sling analysis output, and a compact HUD-force summary line.
+  // The panel mounts only in Movement Mode and only when the sidebar is
+  // closed (lifecycle gating below).
+  const movementSimContext = useMemo<MovementSimContext>(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+    const condition = (extractionResult?.mainComplaint
+      || (summary && summary.length <= 240 ? summary : desc)
+      || '').slice(0, 240) || 'Unspecified condition';
+    const caseSummary = (summary || desc).slice(0, 1600);
+
+    const painfulTissues = painMarkers
+      .map(m => ({
+        label: (m.anatomicalLabel || m.nearestBone || '').toString().trim(),
+        severity: typeof m.severity === 'number' ? m.severity : undefined,
+        type: (m.symptomType || m.type || undefined) as string | undefined,
+      }))
+      .filter(t => t.label.length > 0)
+      .slice(0, 12);
+
+    const postureDeviations = collectModelConfigDeviations(modelConfig)
+      .map(d => `${d.joint}.${d.param} = ${Math.round(d.value * 100) / 100}`)
+      .slice(0, 16);
+
+    const slingActivations = (slingAnalysis?.slings || [])
+      .map(s => ({ slingId: s.slingId as string, activation: typeof s.activationLevelPct === 'number' ? s.activationLevelPct : 0 }))
+      .slice(0, 8);
+
+    const topJoints = (hudForceAnalysis?.joints || [])
+      .slice()
+      .sort((a, b) => (b as { magnitudeBW?: number }).magnitudeBW
+        != null && (a as { magnitudeBW?: number }).magnitudeBW != null
+        ? ((b as { magnitudeBW?: number }).magnitudeBW! - (a as { magnitudeBW?: number }).magnitudeBW!)
+        : 0)
+      .slice(0, 5)
+      .map(j => {
+        const jj = j as { name?: string; jointName?: string; type?: string; magnitudeBW?: number; status?: string };
+        const name = jj.name || jj.jointName || jj.type || 'joint';
+        const bw = typeof jj.magnitudeBW === 'number' ? `${jj.magnitudeBW.toFixed(2)}×BW` : '';
+        return `${name} ${bw}${jj.status ? ` (${jj.status})` : ''}`.trim();
+      });
+    const hudForceSummary = topJoints.length ? `Top joint loads: ${topJoints.join('; ')}` : '';
+
+    return { condition, caseSummary, painfulTissues, postureDeviations, slingActivations, hudForceSummary };
+  }, [
+    lastClinicalParseResult, extractionResult, painMarkers, modelConfig,
+    collectModelConfigDeviations, slingAnalysis, hudForceAnalysis,
+  ]);
+
+  // Tissue overlay (green = symptoms improve, amber = mixed/worsen) — derived
+  // from the latest sim result. Cleared on case change / mode switch.
+  const [movementSimTissueOverlay, setMovementSimTissueOverlay] = useState<Array<{ tissue: string; tone: 'green' | 'amber' }>>([]);
+
+  const handleMovementSimResult = useCallback((res: MovementSimResult) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    // Tissue overlay: tag each painful tissue green when symptoms improve and
+    // load is non-increasing, amber otherwise (worsen, neutral-with-overload,
+    // mixed). Bounded to engine-modelled targets implicitly via the input.
+    const overlay = res.tissueLoadImpact.map(t => {
+      const helpful = t.symptomDirection === 'improve' && t.loadDirection !== 'up';
+      return { tissue: t.tissue, tone: helpful ? 'green' as const : 'amber' as const };
+    });
+    setMovementSimTissueOverlay(overlay);
+
+    // One MovementFinding per simulator run, summarising the verdict so the
+    // findings stream stays the canonical movement-mode log.
+    const id = `mfsim-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const verdictText = res.netVerdict.toUpperCase();
+    const headline = res.verdictRationale
+      ? `${verdictText}: ${res.verdictRationale}`
+      : `${verdictText} prediction (${res.confidence} confidence).`;
+    const tissueLine = res.tissueLoadImpact.length
+      ? ' · ' + res.tissueLoadImpact.slice(0, 3).map(t => `${t.tissue} load ${t.loadDirection}, sx ${t.symptomDirection}`).join('; ')
+      : '';
+    setMovementFindings(prev => [{
+      id,
+      timestamp: Date.now(),
+      joint: 'simulator',
+      movement: 'AI sim',
+      achievedAngle: 0,
+      inPainfulArc: res.netVerdict === 'mixed',
+      exceededActiveLimit: res.netVerdict === 'harmful',
+      sentence: headline + tissueLine,
+      loading: false,
+    }, ...prev].slice(0, 12));
+  }, []);
+
+  // Lifecycle: clear simulator overlay on case change AND when leaving
+  // Movement Mode (Posture mode + sidebar-open both gate the panel away).
+  useEffect(() => {
+    setMovementSimTissueOverlay([]);
+  }, [activeCaseId, skeletonMode]);
 
   // Lightweight reshape of the capacity map → the prop expected by
   // PureThreeGLBViewer (lookup by `joint:movement`). We pass the
@@ -16438,17 +16536,59 @@ ${ddxList}`;
           clinical reasoning AI pipeline is gated off; the per-movement
           Findings stream renders into the same right-rail slot the
           ClinicalReasoningPanel normally occupies. */}
-      {skeletonMode === 'movement' && (
+      {skeletonMode === 'movement' && !sidebarOpen && (
         // Task #320: drop `h-full` from the wrapper so it sizes to its
         // collapsed/expanded child Card instead of permanently reserving
         // the full viewer height. This also lets the rest of the right
         // edge of the 3D viewer receive pointer events again when the
         // panel is collapsed.
-        <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto" data-testid="movement-findings-rail">
+        // Task #343: AI Simulator panel sits above the findings stream in
+        // the same right-rail slot. Both are gated by Movement Mode AND
+        // !sidebarOpen so the rail vanishes when the user opens the
+        // sidebar (as the spec requires) instead of stacking under it.
+        <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto space-y-2" data-testid="movement-findings-rail">
+          <MovementAiSimulatorPanel
+            context={movementSimContext}
+            onResult={handleMovementSimResult}
+          />
           <MovementFindingsStream
             findings={movementFindings}
             onClear={() => setMovementFindings([])}
           />
+        </div>
+      )}
+
+      {/* Task #343: green/amber tissue-overlay legend, anchored to the
+          left edge of the 3D viewer so it visually overlays the skeleton.
+          Same lifecycle gating as the simulator panel — hidden in Posture
+          mode, hidden when the sidebar is open, cleared on case change. */}
+      {skeletonMode === 'movement' && !sidebarOpen && movementSimTissueOverlay.length > 0 && (
+        <div
+          className="absolute top-24 left-3 z-30 w-[200px] pointer-events-none animate-in fade-in duration-200"
+          data-testid="movement-sim-tissue-overlay"
+        >
+          <div className="rounded-md bg-black/70 backdrop-blur border border-white/10 p-2 space-y-1">
+            <div className="text-[9px] uppercase tracking-wider text-white/70 mb-1">
+              Tissue impact
+            </div>
+            {movementSimTissueOverlay.map((t, i) => (
+              <div
+                key={i}
+                className={`text-[10px] rounded border px-1.5 py-0.5 flex items-center gap-1 ${
+                  t.tone === 'green'
+                    ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
+                    : 'bg-amber-500/15 border-amber-400/40 text-amber-200'
+                }`}
+                data-tissue={t.tissue}
+                data-tone={t.tone}
+              >
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${t.tone === 'green' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                />
+                <span className="truncate">{t.tissue}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {skeletonMode !== 'movement' && (

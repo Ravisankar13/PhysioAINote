@@ -10187,6 +10187,259 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ───────────────────────────────────────────────────────
+  // Movement-Mode AI Simulator (Task #343)
+  // Predicts downstream outcome of clinician-composed interventions for the
+  // active patient/pathology. Bounded targets (engine MUSCLE_TARGETS /
+  // JOINT_TARGETS / SlingId), Zod-validated I/O, deterministic-hash cached
+  // in-process, returns one structured prediction object.
+  // ───────────────────────────────────────────────────────
+  const movementSimAllowedMuscles = new Set<string>([
+    'glute_l','glute_r','core','quad_l','quad_r','hamstring_l','hamstring_r',
+    'hip_flexor_l','hip_flexor_r','adductor_l','adductor_r','piriformis_l','piriformis_r',
+    'calf_l','calf_r','peroneal_l','peroneal_r','tib_post_l','tib_post_r',
+    'scapula_l','scapula_r','rotator_cuff_l','rotator_cuff_r','deltoid_l','deltoid_r',
+    'spine','neck','chest','bicep_l','bicep_r','tricep_l','tricep_r',
+    'wrist_flex_l','wrist_flex_r','wrist_ext_l','wrist_ext_r',
+    'scm','suboccipitals','levator_scapulae','scalenes','shin_l','shin_r',
+  ]);
+  const movementSimAllowedJoints = new Set<string>([
+    'leftAnkle','rightAnkle','leftKnee','rightKnee','leftHip','rightHip',
+    'spine','leftShoulder','rightShoulder','leftElbow','rightElbow',
+    'leftWrist','rightWrist','neck',
+  ]);
+  const movementSimAllowedSlings = new Set<string>([
+    'posterior_oblique','anterior_oblique','lateral','deep_longitudinal','scapular_shoulder',
+  ]);
+  const movementSimCache = new Map<string, unknown>();
+  const MOVEMENT_SIM_CACHE_MAX = 200;
+
+  app.post("/api/movement-sim/predict", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const interventionSchema = z.object({
+        kind: z.enum(['strengthen','inhibit','lengthen','shorten','restoreROM','restrictROM','changeSling','other']),
+        target: z.string().max(80).optional(),
+        magnitude: z.number().min(-100).max(100).optional(),
+        unit: z.string().max(8).optional(),
+        slingId: z.string().max(60).optional(),
+        freeText: z.string().max(280).optional(),
+      });
+      const inputSchema = z.object({
+        condition: z.string().max(500).default(''),
+        caseSummary: z.string().max(2000).default(''),
+        painfulTissues: z.array(z.object({
+          label: z.string().min(1).max(120),
+          severity: z.number().optional(),
+          type: z.string().max(60).optional(),
+        })).max(20).default([]),
+        interventions: z.array(interventionSchema).min(1).max(6),
+        postureDeviations: z.array(z.string().max(160)).max(20).default([]),
+        slingActivations: z.array(z.object({
+          slingId: z.string().max(60),
+          activation: z.number(),
+        })).max(10).default([]),
+        hudForceSummary: z.string().max(1000).default(''),
+      });
+      const parsed = inputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
+      }
+      const data = parsed.data;
+
+      // Bound interventions to engine-modelled targets. Reject anything that
+      // names a target/sling outside the allowed set so the AI never
+      // predicts on something the engine can't represent.
+      for (const i of data.interventions) {
+        if (i.kind === 'changeSling') {
+          if (!i.slingId || !movementSimAllowedSlings.has(i.slingId)) {
+            return res.status(400).json({ error: `Unknown sling id: ${i.slingId ?? '(missing)'}` });
+          }
+        } else if (i.kind === 'restoreROM' || i.kind === 'restrictROM') {
+          if (!i.target || !movementSimAllowedJoints.has(i.target)) {
+            return res.status(400).json({ error: `Unknown joint target for ROM intervention: ${i.target ?? '(missing)'}` });
+          }
+        } else if (i.kind === 'strengthen' || i.kind === 'inhibit' || i.kind === 'lengthen' || i.kind === 'shorten') {
+          if (!i.target || !movementSimAllowedMuscles.has(i.target)) {
+            return res.status(400).json({ error: `Unknown muscle target: ${i.target ?? '(missing)'}` });
+          }
+        } else if (i.kind === 'other') {
+          if (!i.freeText || !i.freeText.trim()) {
+            return res.status(400).json({ error: 'Free-text intervention requires a description.' });
+          }
+        }
+      }
+
+      // Deterministic hash for caching.
+      const crypto = await import("crypto");
+      const normalized = JSON.stringify({
+        c: data.condition.trim().toLowerCase(),
+        s: data.caseSummary.trim().toLowerCase().slice(0, 800),
+        t: [...data.painfulTissues.map(t => t.label.toLowerCase())].sort(),
+        i: data.interventions.map(i => ({
+          k: i.kind,
+          t: (i.target || '').toLowerCase(),
+          m: typeof i.magnitude === 'number' ? Math.round(i.magnitude) : null,
+          u: i.unit || '',
+          s: i.slingId || '',
+          f: (i.freeText || '').trim().toLowerCase().slice(0, 200),
+        })),
+        p: [...data.postureDeviations].sort(),
+        sl: data.slingActivations.map(s => `${s.slingId}:${Math.round(s.activation)}`).sort(),
+        h: data.hudForceSummary.slice(0, 400),
+      });
+      const cacheKey = crypto.createHash('sha256').update(normalized).digest('hex');
+      const cached = movementSimCache.get(cacheKey);
+      if (cached) return res.json({ ...(cached as Record<string, unknown>), cached: true });
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const tissuesText = data.painfulTissues.length
+        ? data.painfulTissues.map(t => `- ${t.label}${typeof t.severity === 'number' ? ` (severity ${t.severity}/10)` : ''}${t.type ? ` [${t.type}]` : ''}`).join('\n')
+        : '(none recorded — infer 1–3 primary symptomatic tissues from the diagnosis)';
+      const interventionsText = data.interventions.map((i, idx) => {
+        const parts = [`${idx + 1}. ${i.kind}`];
+        if (i.target) parts.push(`target=${i.target}`);
+        if (typeof i.magnitude === 'number') parts.push(`magnitude=${i.magnitude}${i.unit || ''}`);
+        if (i.slingId) parts.push(`sling=${i.slingId}`);
+        if (i.freeText) parts.push(`note="${i.freeText}"`);
+        return parts.join(' · ');
+      }).join('\n');
+      const slingText = data.slingActivations.length
+        ? data.slingActivations.map(s => `- ${s.slingId}: ${Math.round(s.activation)}%`).join('\n')
+        : '(no sling activation data)';
+      const postureText = data.postureDeviations.length
+        ? data.postureDeviations.map(p => `- ${p}`).join('\n')
+        : '(no posture deviations recorded)';
+
+      const systemPrompt = `You are a senior musculoskeletal physiotherapist running a clinical thought-experiment for ONE specific patient.
+
+Given the patient's pathology, current biomechanical state, and the proposed clinician intervention(s), predict the DOWNSTREAM outcome:
+- biomechanicalChanges: specific joints/segments that will move/load differently, with magnitude+direction
+- slingRebalancing: which functional slings up- or down-regulate, by approximately how many percentage points, and the load-redistribution consequence
+- compensationShift: compensations that will resolve, persist, or newly appear
+- tissueLoadImpact: per painful tissue — load direction (up/down/neutral), magnitude band (mild <10% / moderate 10–25% / large >25%), symptom direction (improve/worsen/neutral) and the mechanism. You MUST include EVERY painful tissue listed in the input. If the input lists no painful tissues, infer the 1–3 primary symptomatic tissues directly from the diagnosis (e.g. plantar fasciitis → plantar fascia; lateral epicondylalgia → common extensor tendon).
+- netVerdict: helpful | mixed | harmful | neutral, with a one-sentence rationale
+- confidence: low | moderate | high, with a one-sentence reason
+- caveats: short bullets — overload risk, dose dependency, contraindications, tissue-irritability concerns, missing data
+
+RULES:
+- Stay grounded in the named pathology and the provided assessment context. Do not invent findings.
+- Be concrete and clinically specific. Avoid generic platitudes.
+- Load direction and symptom direction are NOT always the same: protective offloading reduces load AND improves symptoms; therapeutic tendon loading may increase load yet improve symptoms long-term — call this out in 'mechanism'.
+- If interventions are clinically nonsensical or contraindicated for this pathology, set verdict='harmful' or 'mixed' and explain in caveats.
+- Return ONLY valid JSON matching the requested schema. No prose outside JSON.`;
+
+      const userPrompt = `WORKING DIAGNOSIS: ${data.condition || 'Unspecified'}
+
+CASE SUMMARY (de-identified):
+${data.caseSummary || '(not provided)'}
+
+PAINFUL TISSUES:
+${tissuesText}
+
+CURRENT POSTURE DEVIATIONS:
+${postureText}
+
+CURRENT SLING ACTIVATION:
+${slingText}
+
+LIVE FORCE / BIOMECHANICS SUMMARY:
+${data.hudForceSummary || '(not provided)'}
+
+PROPOSED INTERVENTION(S):
+${interventionsText}
+
+Respond with JSON of EXACT shape:
+{
+  "biomechanicalChanges": ["string", ...],
+  "slingRebalancing": [{"slingId": "string", "directionPct": number, "note": "string"}, ...],
+  "compensationShift": ["string", ...],
+  "tissueLoadImpact": [{"tissue": "string", "loadDirection": "up"|"down"|"neutral", "magnitude": "mild"|"moderate"|"large", "symptomDirection": "improve"|"worsen"|"neutral", "mechanism": "string"}, ...],
+  "netVerdict": "helpful"|"mixed"|"harmful"|"neutral",
+  "verdictRationale": "string",
+  "confidence": "low"|"moderate"|"high",
+  "confidenceReason": "string",
+  "caveats": ["string", ...]
+}`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 1800,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return res.status(502).json({ error: "AI returned empty response" });
+
+      const responseSchema = z.object({
+        biomechanicalChanges: z.array(z.string()).default([]),
+        slingRebalancing: z.array(z.object({
+          slingId: z.string(),
+          directionPct: z.number().default(0),
+          note: z.string().default(''),
+        })).default([]),
+        compensationShift: z.array(z.string()).default([]),
+        tissueLoadImpact: z.array(z.object({
+          tissue: z.string(),
+          loadDirection: z.enum(['up','down','neutral']).default('neutral'),
+          magnitude: z.enum(['mild','moderate','large']).default('mild'),
+          symptomDirection: z.enum(['improve','worsen','neutral']).default('neutral'),
+          mechanism: z.string().default(''),
+        })).default([]),
+        netVerdict: z.enum(['helpful','mixed','harmful','neutral']).default('neutral'),
+        verdictRationale: z.string().default(''),
+        confidence: z.enum(['low','moderate','high']).default('moderate'),
+        confidenceReason: z.string().default(''),
+        caveats: z.array(z.string()).default([]),
+      });
+      let raw: unknown;
+      try { raw = JSON.parse(content); } catch {
+        return res.status(502).json({ error: "AI returned non-JSON content" });
+      }
+      const validated = responseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Movement sim response validation failed:", validated.error.format());
+        return res.status(502).json({ error: "AI response did not match expected format", details: validated.error.format() });
+      }
+
+      // Backfill any painful tissue the AI omitted so the UI ALWAYS shows a
+      // row per recorded painful tissue (per spec: plantar fascia must show
+      // in plantar fasciitis example).
+      const tissueMap = new Map(validated.data.tissueLoadImpact.map(t => [t.tissue.toLowerCase(), t]));
+      for (const t of data.painfulTissues) {
+        if (!tissueMap.has(t.label.toLowerCase())) {
+          validated.data.tissueLoadImpact.push({
+            tissue: t.label,
+            loadDirection: 'neutral',
+            magnitude: 'mild',
+            symptomDirection: 'neutral',
+            mechanism: 'No specific prediction returned for this tissue.',
+          });
+        }
+      }
+
+      const result = { ...validated.data, hash: cacheKey, cached: false };
+      movementSimCache.set(cacheKey, result);
+      if (movementSimCache.size > MOVEMENT_SIM_CACHE_MAX) {
+        const firstKey = movementSimCache.keys().next().value;
+        if (firstKey) movementSimCache.delete(firstKey);
+      }
+      res.json(result);
+    } catch (error: unknown) {
+      console.error("Movement sim predict error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to predict movement-sim outcome", details: message });
+    }
+  });
+
   app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const adjunctInputSchema = z.object({

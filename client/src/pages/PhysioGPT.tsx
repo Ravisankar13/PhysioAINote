@@ -173,6 +173,8 @@ import { aggregateTissueIntelligence, filterInflammationIntelligence, type Tissu
 import { tissueIntelligenceToOverlayHighlight, paletteForState, TISSUE_ANCHOR_CATALOGUE } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import MovementSlingSpotlight, { type SlingPartTreatmentRecord } from "@/components/skeleton/MovementSlingSpotlight";
+import SlingFailureVisualizerPanel, { type SlingFailureVisualizerSelection } from "@/components/skeleton/SlingFailureVisualizerPanel";
+import SlingFailureVisualizerOverlay from "@/components/skeleton/SlingFailureVisualizerOverlay";
 import { pickSpotlightSling, type SpotlightPick, type SpotlightInputMarker } from "@/lib/movementSlingSpotlight";
 import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
@@ -1063,6 +1065,10 @@ export default function PhysioGPT() {
   // be toggled from the toolbar pill or dismissed via the panel X. Persists
   // in the case snapshot.
   const [movementSpotlightEnabled, setMovementSpotlightEnabled] = useState(true);
+  // Task #353 — Sling Failure Movement Visualizer: which sling+scenario
+  // is currently being played (drives the SVG overlay over the 3D viewer).
+  const [activeFailureSel, setActiveFailureSel] = useState<SlingFailureVisualizerSelection | null>(null);
+  const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
   // Last bone the clinician interacted with via Pose / Auto-pose. Drives
   // a "focus bonus" in the spotlight selector so dragging a bone that
   // belongs to a sling's pathway nudges the spotlight toward it.
@@ -10669,6 +10675,39 @@ ${ddxList}`;
                       }
                     }}
                     onClose={() => setMovementSpotlightEnabled(false)}
+                  />
+                )}
+                {/* Task #353 — Sling Failure Movement Visualizer SVG overlay
+                    rendered over the 3D viewer. Anchored to live bone screen
+                    positions; draws the continuous tube + tension pulse +
+                    failure-frame badge + reroute arrow for the active scenario. */}
+                {skeletonMode === 'movement' && activeFailureSel && (
+                  <SlingFailureVisualizerOverlay
+                    scenario={activeFailureSel.scenario}
+                    bonePathway={activeFailureSel.sling.bonePathway}
+                    slingColor={activeFailureSel.sling.color}
+                    progress={animationState.progress}
+                    boneScreenPositionsRef={boneScreenPositionsRef}
+                    isPlaying={!!animationState.isPlaying}
+                  />
+                )}
+                {/* Floating panel — lists compromised slings, plays the
+                    trigger movement, scrubs the timeline, shows joint
+                    deltas + narration. */}
+                {skeletonMode === 'movement' && slingAnalysis && slingFailureVisualizerOpen && (
+                  <SlingFailureVisualizerPanel
+                    caseId={activeCaseId ?? 'case-default'}
+                    condition={lastClinicalParseResult?.clinical_summary || lastClinicalParseResult?.original_description || null}
+                    analysis={slingAnalysis}
+                    markers={painMarkers.map(pm => ({
+                      nearestBone: pm.nearestBone,
+                      anatomicalLabel: pm.anatomicalLabel,
+                      severity: typeof pm.severity === 'number' ? pm.severity : undefined,
+                    }))}
+                    animationState={animationState}
+                    onAnimationStateChange={setAnimationState}
+                    onActiveScenarioChange={setActiveFailureSel}
+                    onClose={() => setSlingFailureVisualizerOpen(false)}
                   />
                 )}
               </div>

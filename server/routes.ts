@@ -427,6 +427,21 @@ function formatPatientContextBlock(
   return lines.join('\n');
 }
 
+// ---------- Task #353: Sling Failure Scenario cache ----------
+type CachedSlingFailureEntry = { fingerprint: string; scenarios: any[]; cachedAt: number };
+const slingFailureCache = new Map<string, CachedSlingFailureEntry>();
+const SLING_FAILURE_CACHE_TTL_MS = 1000 * 60 * 60; // 1 h
+function pruneSlingFailureCache(): void {
+  const now = Date.now();
+  for (const [k, v] of slingFailureCache.entries()) {
+    if (now - v.cachedAt > SLING_FAILURE_CACHE_TTL_MS) slingFailureCache.delete(k);
+  }
+  if (slingFailureCache.size > 200) {
+    const oldest = [...slingFailureCache.entries()].sort((a, b) => a[1].cachedAt - b[1].cachedAt)[0];
+    if (oldest) slingFailureCache.delete(oldest[0]);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints for deployment verification (must be early in route registration)
   app.get('/health', (req: Request, res: Response) => {
@@ -12023,6 +12038,120 @@ Now produce the refined hypothesis JSON.`;
       console.error("Hypothesis refine error:", error?.message || error);
       const status = error?.status === 429 ? 429 : 500;
       res.status(status).json({ error: error?.status === 429 ? "AI quota exceeded — try again shortly." : "Unable to refine hypothesis" });
+    }
+  });
+
+  // ==================================================================
+  // Task #353 — Sling Failure Movement Visualizer
+  // Generates one SlingFailureScenario per compromised sling using
+  // GPT-4o, with deterministic local fallback computed client-side.
+  // Cached by (caseId + fingerprint).
+  // ==================================================================
+  app.post("/api/sling-failure-scenarios", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { slingFailureScenarioRequestSchema } = await import("@shared/schema");
+      const parsed = slingFailureScenarioRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+      }
+      const body = parsed.data;
+      const cacheKey = `${body.caseId}::${body.fingerprint}`;
+
+      pruneSlingFailureCache();
+      if (!body.refresh) {
+        const hit = slingFailureCache.get(cacheKey);
+        if (hit && hit.fingerprint === body.fingerprint) {
+          return res.json({ scenarios: hit.scenarios, cached: true, source: 'ai' });
+        }
+      }
+
+      const compromised = body.slings.filter(s => s.status !== 'normal');
+      if (compromised.length === 0) {
+        return res.json({ scenarios: [], cached: false, source: 'local' });
+      }
+
+      const TRIGGER_HINTS: Record<string, { id: string; label: string; failureFrame: number }> = {
+        deep_longitudinal:  { id: 'sfv_single_leg_calf_raise', label: 'Single-leg calf raise',           failureFrame: 0.6 },
+        lateral:            { id: 'sfv_single_leg_stance',     label: 'Single-leg stance (Trendelenburg)', failureFrame: 0.5 },
+        scapular_shoulder:  { id: 'sfv_overhead_reach',        label: 'Overhead reach',                  failureFrame: 0.7 },
+        anterior_oblique:   { id: 'sfv_forward_lunge',         label: 'Forward lunge with rotation',     failureFrame: 0.55 },
+        posterior_oblique:  { id: 'sfv_gait_stance_push_off',  label: 'Gait stance push-off',            failureFrame: 0.65 },
+      };
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ error: "AI unavailable — client should fall back to local generator" });
+      }
+
+      const prompt = `You are a senior physiotherapist building movement-failure scenarios for a 3D skeleton visualizer.
+For each compromised sling listed below, return a JSON object describing how its failure would look on a movement test.
+
+Patient context:
+- Condition: ${body.condition ?? 'unspecified'}
+- Patient factors: ${(body.patientFactors ?? []).join(', ') || 'none'}
+- Pain markers: ${JSON.stringify((body.markers ?? []).slice(0, 8))}
+
+Compromised slings:
+${compromised.map(s => `- ${s.slingId} (${s.status}, activation ${s.activationScore}%, weak: ${s.weakLinks.map(w => `${w.muscle}@${w.activationPct}%`).join('; ') || 'n/a'})`).join('\n')}
+
+Pick the SINGLE most loaded test movement per sling using these canonical ids only:
+${Object.entries(TRIGGER_HINTS).map(([k, v]) => `  ${k} → "${v.id}" (${v.label}, failureFrame ${v.failureFrame})`).join('\n')}
+
+For joint deltas use joints from {leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftShoulder, rightShoulder, leftScapula, rightScapula, spine} and axes from {flexion, extension, abduction, lateralFlexion, plantarflexion, varus, thoracicRotation, upwardRotation}. intendedDeg is healthy reference (often 0). actualDeg is the deviated value (signed). Keep |actualDeg - intendedDeg| <= 25.
+
+Return STRICT JSON of shape:
+{ "scenarios": [ { "slingId": "...", "slingLabel": "...", "triggerMovementId": "...", "triggerMovementLabel": "...", "triggerReason": "...", "failureFrame": 0..1, "weakSegmentMuscle": "...", "weakSegmentBones": ["..."], "rerouteTargetMuscle": "...", "rerouteTargetBones": ["..."], "jointDeltas": [{"joint":"...","axis":"...","intendedDeg":0,"actualDeg":6,"description":"..."}], "narration": "<= 3 sentences", "confidence": 0..1 } ] }`;
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: "You are an expert physiotherapist. Always return valid JSON matching the requested schema." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.4,
+          max_tokens: 1800,
+        });
+
+        const raw = completion.choices[0]?.message?.content ?? "{}";
+        const parsedJson = JSON.parse(raw);
+        const rawScenarios: any[] = Array.isArray(parsedJson?.scenarios) ? parsedJson.scenarios : [];
+
+        // Validate & coerce. Drop bad ones; if all bad, signal local fallback.
+        const { slingFailureScenarioSchema } = await import("@shared/schema");
+        const validated = rawScenarios
+          .map(r => {
+            const hint = TRIGGER_HINTS[r?.slingId as string];
+            const candidate = {
+              ...r,
+              source: 'ai' as const,
+              triggerMovementId: hint?.id ?? r?.triggerMovementId ?? 'sfv_single_leg_stance',
+              triggerMovementLabel: hint?.label ?? r?.triggerMovementLabel ?? 'Single-leg stance',
+              failureFrame: typeof r?.failureFrame === 'number' ? Math.max(0, Math.min(1, r.failureFrame)) : (hint?.failureFrame ?? 0.5),
+              weakSegmentBones: Array.isArray(r?.weakSegmentBones) ? r.weakSegmentBones.slice(0, 8) : [],
+              rerouteTargetBones: Array.isArray(r?.rerouteTargetBones) ? r.rerouteTargetBones.slice(0, 8) : [],
+              jointDeltas: Array.isArray(r?.jointDeltas) ? r.jointDeltas.slice(0, 12) : [],
+              confidence: typeof r?.confidence === 'number' ? Math.max(0, Math.min(1, r.confidence)) : 0.7,
+            };
+            const result = slingFailureScenarioSchema.safeParse(candidate);
+            return result.success ? result.data : null;
+          })
+          .filter((s): s is NonNullable<typeof s> => !!s);
+
+        if (validated.length === 0) {
+          return res.status(502).json({ error: "AI returned no usable scenarios — client should fall back to local generator" });
+        }
+
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: validated, cachedAt: Date.now() });
+        return res.json({ scenarios: validated, cached: false, source: 'ai' });
+      } catch (err: any) {
+        console.error("[sling-failure-scenarios] OpenAI error:", err?.message || err);
+        return res.status(502).json({ error: "AI generation failed — client should fall back to local generator" });
+      }
+    } catch (err: any) {
+      console.error("[sling-failure-scenarios] error:", err);
+      return res.status(500).json({ error: "Internal error" });
     }
   });
 

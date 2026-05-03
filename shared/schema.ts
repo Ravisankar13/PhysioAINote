@@ -6374,3 +6374,73 @@ export type InsertTreatmentHypothesis = z.infer<typeof insertTreatmentHypothesis
 export type TreatmentHypothesis = typeof treatmentHypotheses.$inferSelect;
 
 
+
+// ==========================================================
+// Task #353 — Sling Failure Movement Visualizer
+// AI-driven, case-adaptive playback that picks the trigger movement
+// loading a compromised sling, with intended-vs-actual joint deltas,
+// failure-frame timing, narration, and reroute target.
+// ==========================================================
+export const slingIdSchema = z.enum([
+  'posterior_oblique', 'anterior_oblique', 'lateral',
+  'deep_longitudinal', 'scapular_shoulder',
+]);
+
+export const slingFailureJointDeltaSchema = z.object({
+  joint: z.string().min(1).max(40),
+  axis: z.string().min(1).max(40),
+  intendedDeg: z.number().finite(),
+  actualDeg: z.number().finite(),
+  description: z.string().max(200).optional(),
+});
+
+export const slingFailureScenarioSchema = z.object({
+  slingId: slingIdSchema,
+  slingLabel: z.string().min(1).max(80),
+  triggerMovementId: z.string().min(1).max(80),
+  triggerMovementLabel: z.string().min(1).max(120),
+  triggerReason: z.string().min(1).max(400),
+  failureFrame: z.number().min(0).max(1),
+  weakSegmentMuscle: z.string().min(1).max(80),
+  weakSegmentBones: z.array(z.string().max(40)).max(8),
+  rerouteTargetMuscle: z.string().min(1).max(80),
+  rerouteTargetBones: z.array(z.string().max(40)).max(8),
+  jointDeltas: z.array(slingFailureJointDeltaSchema).max(12),
+  narration: z.string().min(1).max(800),
+  confidence: z.number().min(0).max(1),
+  source: z.enum(['ai', 'local']),
+});
+export type SlingFailureScenario = z.infer<typeof slingFailureScenarioSchema>;
+
+export const slingFailureScenarioRequestSchema = z.object({
+  caseId: z.string().min(1).max(120),
+  fingerprint: z.string().min(1).max(200),
+  condition: z.string().max(300).optional(),
+  patientFactors: z.array(z.string().max(120)).max(20).optional(),
+  refresh: z.boolean().optional(),
+  slings: z.array(z.object({
+    slingId: slingIdSchema,
+    slingLabel: z.string().min(1).max(80),
+    status: z.enum(['underperforming', 'overloaded', 'compensating', 'normal']),
+    activationScore: z.number(),
+    weakLinks: z.array(z.object({
+      muscle: z.string().max(80),
+      activationPct: z.number(),
+    })).max(8),
+    bonePathway: z.array(z.string().max(40)).max(20),
+    forceTransferQuality: z.enum(['good', 'reduced', 'poor']),
+  })).min(1).max(8),
+  markers: z.array(z.object({
+    nearestBone: z.string().max(40).optional(),
+    anatomicalLabel: z.string().max(120).optional(),
+    severity: z.number().min(0).max(10).optional(),
+  })).max(12).optional(),
+});
+export type SlingFailureScenarioRequest = z.infer<typeof slingFailureScenarioRequestSchema>;
+
+export const slingFailureScenarioResponseSchema = z.object({
+  scenarios: z.array(slingFailureScenarioSchema),
+  cached: z.boolean(),
+  source: z.enum(['ai', 'local', 'mixed']),
+});
+export type SlingFailureScenarioResponse = z.infer<typeof slingFailureScenarioResponseSchema>;

@@ -437,7 +437,7 @@ export default function MovementSlingSpotlight(props: Props) {
                         <div className="flex gap-1 pt-0.5">
                           <button
                             type="button"
-                            onClick={() => isApplied ? clearTreatment(p.id) : applyIntervention(p, intv)}
+                            onClick={() => isApplied ? clearTreatment(partKey(p.id)) : applyIntervention(p, intv)}
                             className={`flex-1 text-[9px] px-1.5 py-1 rounded border font-medium ${
                               isApplied
                                 ? 'border-emerald-500/60 bg-emerald-500/25 text-emerald-100'

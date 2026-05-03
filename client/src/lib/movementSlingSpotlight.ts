@@ -333,6 +333,44 @@ const LINK_LABELS: Record<string, string> = {
   scapular_shoulder: 'Scapulothoracic interface link',
 };
 
+// Anatomically-correct muscle → bone anchors per sling. Sourced from the
+// SLING_DEFINITIONS bonePathway in slingEngine.ts so each muscle dot lands
+// on the bone(s) it actually attaches to (not by index spreading).
+const MUSCLE_BONE_ANCHORS: Record<SlingId, Record<string, string[]>> = {
+  posterior_oblique: {
+    latissimus_dorsi: ['Shoulder_L', 'ShoulderPart1_L'],
+    thoracolumbar_fascia: ['Spine1Part1_M', 'Spine1_M', 'RootPart2_M'],
+    gluteus_maximus: ['Hip_R', 'HipPart1_R'],
+    contralateral_gluteus_maximus: ['Hip_R', 'HipPart1_R'],
+  },
+  anterior_oblique: {
+    external_oblique: ['Shoulder_R', 'Chest_M'],
+    anterior_abdominal_fascia: ['Chest_M', 'Spine1_M', 'RootPart2_M'],
+    internal_oblique: ['Spine1_M', 'RootPart2_M'],
+    adductors: ['Hip_L', 'HipPart1_L'],
+  },
+  lateral: {
+    gluteus_medius: ['Hip_L', 'HipPart1_L'],
+    gluteus_minimus: ['Hip_L', 'HipPart1_L'],
+    tensor_fasciae_latae: ['HipPart1_L', 'Knee_R'],
+    adductors: ['Hip_R', 'HipPart1_R'],
+    quadratus_lumborum: ['Spine1_M', 'RootPart1_M'],
+  },
+  deep_longitudinal: {
+    peroneus_longus: ['Ankle_L'],
+    biceps_femoris: ['Knee_L', 'Hip_L'],
+    sacrotuberous_ligament: ['Hip_L', 'HipPart1_L', 'Root_M'],
+    erector_spinae: ['RootPart2_M', 'Spine1_M', 'Spine1Part1_M', 'Chest_M'],
+    thoracolumbar_fascia: ['RootPart1_M', 'RootPart2_M', 'Spine1_M'],
+  },
+  scapular_shoulder: {
+    serratus_anterior: ['Chest_M', 'Shoulder_L'],
+    lower_trapezius: ['Spine1Part2_M', 'ShoulderPart1_L'],
+    rhomboids: ['Spine1Part2_M', 'Shoulder_L'],
+    rotator_cuff: ['Shoulder_L', 'ShoulderPart1_L'],
+  },
+};
+
 export function getSlingParts(
   sling: SlingResult,
   markerBones: Set<string>,
@@ -351,29 +389,37 @@ export function getSlingParts(
     ? slingMuscles.map(m => m.muscle)
     : sling.weakLinks.map(w => w.muscle);
 
-  // Naive muscle→bone mapping: spread muscles across the pathway by index.
-  const muscleAnchor = (idx: number): string[] => {
+  // Anatomical muscle→bone anchor lookup. Falls back to the pathway
+  // midpoint only when no explicit anchor exists, so most clicks land
+  // on the actual attachment bone for that muscle.
+  const anchorMap = MUSCLE_BONE_ANCHORS[sling.slingId] ?? {};
+  const muscleAnchor = (muscle: string): string[] => {
+    const explicit = anchorMap[muscle];
+    if (explicit && explicit.length > 0) {
+      return explicit.filter(b => pathway.length === 0 || pathway.includes(b));
+    }
     if (pathway.length === 0) return [];
-    const total = Math.max(1, muscleNames.length);
-    const i = Math.min(pathway.length - 1, Math.round((idx / total) * pathway.length));
-    return [pathway[i]];
+    return [pathway[Math.floor(pathway.length / 2)]];
   };
 
-  muscleNames.forEach((m, idx) => {
+  muscleNames.forEach((m, _idx) => {
     const weakAct = weakMap.get(m);
     const score = scoreMap.get(m) ?? 50;
     const intensity = weakAct !== undefined
       ? Math.max(0.5, Math.min(1, (60 - weakAct) / 60 + 0.4))
       : Math.max(0.15, Math.min(1, Math.abs(50 - score) / 50));
-    const anchor = muscleAnchor(idx);
+    const anchor = muscleAnchor(m);
+    const resolvedAnchor = anchor.length > 0
+      ? anchor
+      : pathway.length > 0 ? [pathway[Math.floor(pathway.length / 2)]] : [];
     parts.push({
       id: `muscle::${sling.slingId}::${m}`,
       kind: 'muscle',
       label: prettifyMuscle(m),
       ref: m,
-      anchorBones: anchor,
+      anchorBones: resolvedAnchor,
       intensity,
-      markerBiased: anchor.some(b => markerBones.has(b)),
+      markerBiased: resolvedAnchor.some(b => markerBones.has(b)),
     });
   });
 

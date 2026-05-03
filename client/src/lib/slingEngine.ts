@@ -403,6 +403,21 @@ function applyMuscleOverrides(
       let modifiedRole = baseRole;
       if (override.tension !== undefined) {
         modifiedActivation = Math.max(0, Math.min(100, baseActivation + (override.tension - 50) * 0.5));
+        // Treatment-side override: a positive tension boost means the
+        // clinician is actively recruiting / facilitating the muscle.
+        // Once the resulting activation crosses the underactive
+        // threshold (35) and clears 50%, the muscle is no longer
+        // weak-link material — flip role to 'normal' so
+        // detectWeakLinks releases it and the sling can de-escalate.
+        if (override.tension > 50 && modifiedActivation >= 50 &&
+            (baseRole === 'underactive' || baseRole === 'inhibited')) {
+          modifiedRole = 'normal';
+        }
+        // Conversely, an inhibitory override below 50 should mark the
+        // muscle inhibited so weak-link detection picks it up.
+        if (override.tension < 35 && baseRole === 'normal') {
+          modifiedRole = 'underactive';
+        }
       }
       if (override.pathology) {
         modifiedActivation = Math.max(0, modifiedActivation * 0.6);

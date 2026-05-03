@@ -1159,11 +1159,14 @@ export default function PhysioGPT() {
     }
   }, [clinicalNotesReasoningKey]);
 
-  const inFlightClinicalNotesKeyRef = useRef<string | null>(null);
+  // Kept current on every render so async response handlers can compare
+  // their captured request key against the latest reasoning signature.
+  const currentClinicalNotesKeyRef = useRef<string>("");
+  currentClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+
   const generateClinicalNotesFromToolbar = useCallback(async () => {
     if (!hasReasoningContentForNotes || isGeneratingClinicalNotes) return;
     const requestKey = clinicalNotesReasoningKey;
-    inFlightClinicalNotesKeyRef.current = requestKey;
     setIsGeneratingClinicalNotes(true);
     setClinicalNotesError(null);
     try {
@@ -1171,20 +1174,19 @@ export default function PhysioGPT() {
         reasoningData: clinicalReasoningData,
         subjectiveHistory: subjectiveHistoryInput,
       });
-      // Stale-response guard: drop the result if the reasoning data has
-      // moved on since the request started.
-      if (inFlightClinicalNotesKeyRef.current !== requestKey) return;
+      // Drop the result if reasoning data has moved on since the
+      // request started — the cache-invalidation effect has already
+      // cleared `clinicalNotes`, and the auto-generate effect will
+      // kick off a fresh request once `isGenerating` flips to false.
+      if (currentClinicalNotesKeyRef.current !== requestKey) return;
       setClinicalNotes(notes);
       lastClinicalNotesKeyRef.current = requestKey;
     } catch (err) {
-      if (inFlightClinicalNotesKeyRef.current !== requestKey) return;
+      if (currentClinicalNotesKeyRef.current !== requestKey) return;
       console.error("Failed to generate clinical notes:", err);
       setClinicalNotesError("Couldn't generate notes. Please try again.");
     } finally {
-      if (inFlightClinicalNotesKeyRef.current === requestKey) {
-        inFlightClinicalNotesKeyRef.current = null;
-        setIsGeneratingClinicalNotes(false);
-      }
+      setIsGeneratingClinicalNotes(false);
     }
   }, [hasReasoningContentForNotes, isGeneratingClinicalNotes, clinicalReasoningData, subjectiveHistoryInput, clinicalNotesReasoningKey]);
 

@@ -15806,6 +15806,7 @@ ${ddxList}`;
             the case-specific treatment plan and the recovery sim. */}
         {lastClinicalParseResult && (
           <div ref={patientContextSectionRef} className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300 space-y-2">
+            {skeletonMode !== 'movement' && (
             <PatientContextPanel
               parseResult={lastClinicalParseResult}
               state={patientContextState}
@@ -15821,9 +15822,11 @@ ${ddxList}`;
                 clinicalTextInputRef.current?.triggerIncrementalParse();
               }}
             />
+            )}
             {/* Task #240 — Structured Patient Factors form. Lives next
                 to the AI Q&A panel; edits flow into the recovery sim's
                 multipliers via `effectivePatientFactors`. */}
+            {skeletonMode !== 'movement' && (
             <Suspense fallback={<LazyPanelFallback />}>
               <PatientFactorsForm
                 factors={effectivePatientFactors}
@@ -15832,6 +15835,7 @@ ${ddxList}`;
                 onChange={handlePatientFactorsChange}
               />
             </Suspense>
+            )}
             {/* Task #281 — Case-Aware Research Engine v1. Mounted next to
                 Patient Context so the synthesis is anchored to the same
                 inputs the clinician has just curated. caseId is a stable
@@ -15840,6 +15844,7 @@ ${ddxList}`;
                 description + patient context sig so any meaningful
                 change marks the cached synthesis stale. */}
             {(() => {
+              if (skeletonMode === 'movement') return null;
               const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
               const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
               if (!desc) return null;
@@ -15971,7 +15976,7 @@ ${ddxList}`;
             )}
           </div>
         )}
-        {hasClinicalTextData && (
+        {hasClinicalTextData && skeletonMode !== 'movement' && (
           <div ref={masterPlanContainerRef} className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
             <div className="flex gap-1.5">
               <Button

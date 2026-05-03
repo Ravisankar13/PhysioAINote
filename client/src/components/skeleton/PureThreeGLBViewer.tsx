@@ -1689,11 +1689,7 @@ interface PureThreeGLBViewerProps {
     exceededActiveLimit: boolean;
     compensationsTriggered: string[];
   }) => void;
-  /** Fired when a Movement Mode pose drag begins (true) and ends (false),
-   *  so the host can freeze expensive downstream re-computations (sling
-   *  analysis, unified biomechanics, hud muscle analysis) while the
-   *  clinician is mid-drag and refresh them once on release. Posture
-   *  Mode drags do not fire this. */
+  /** Fired only on Movement Mode pose drag start (true) and end (false). */
   onPoseDragChange?: (active: boolean) => void;
   /** Fired the moment a movement-mode drag enters a painful arc, so
    *  the predicted-pain layer can register a transient flare on the
@@ -2947,8 +2943,6 @@ export default function PureThreeGLBViewer({
   // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
   // event rate. Re-using a ref avoids a re-render every cap check.
   const lastMovementOverlayPushRef = useRef<number>(0);
-  // Cheap activation-chip cadence (~30 Hz). The heavy muscle/JRF block
-  // above runs at ~10 Hz via lastMovementOverlayPushRef.
   const lastMovementActivationPushRef = useRef<number>(0);
   const bodyWeightKgRef = useRef<number>(70);
   // Task #323 — review-2 fix: snapshot of every DOF value taken when the
@@ -6711,9 +6705,7 @@ export default function PureThreeGLBViewer({
       if (inPainfulArc) drag.lastPainfulArc = true;
       if (skeletonModeRef.current === 'movement' && row) {
         const now = performance.now();
-        // Two-tier overlay cadence: the cheap activation chip runs at
-        // ~30 Hz so the on-body badge feels live, while the heavy
-        // muscle/JRF block runs at ~10 Hz so the React tree can breathe.
+        // Activation chip throttled to ~30 Hz; heavy muscle/JRF block to ~10 Hz.
         const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
         if (now - lastMovementActivationPushRef.current >= 33) {
           lastMovementActivationPushRef.current = now;
@@ -6850,14 +6842,6 @@ export default function PureThreeGLBViewer({
         setLivePainfulArc(null);
       }
       lastPainfulArcStateRef.current = inPainfulArc;
-      // Sync the host's modelConfig every drag tick so the bone-
-      // application effect (deps: [modelConfig, status, livePose])
-      // keeps the dragged bone glued to the cursor at full frame rate.
-      // The page-level heavy memos (sling, unified biomechanics, hud
-      // muscle/weight analysis) short-circuit to cached values via the
-      // isPoseDragging flag, so the per-tick parent re-render is a
-      // cheap reconciliation pass — none of the multi-second pipelines
-      // run again until drag release.
       onModelConfigChangeRef.current?.(drag.configKey, newValue);
 
       if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
@@ -6923,8 +6907,6 @@ export default function PureThreeGLBViewer({
         startSpringBack(drag.springBackValues);
       }
       poseDragRef.current = null;
-      // Drop the drag-active flag so the host page runs a fresh sling
-      // re-analysis once against the post-drag pose.
       onPoseDragChangeRef.current?.(false);
       controls.enabled = true;
       domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
@@ -7871,9 +7853,7 @@ export default function PureThreeGLBViewer({
               const occluder = hits.find(h => h.distance < jointDist - 0.04);
               lastJointOccluded = !!occluder;
             }
-            // Skip the anchor write when the projected position moved
-            // less than ~1 px so the HUD's RAF loop doesn't churn on
-            // sub-pixel jitter. Visibility flips always pass through.
+            // Skip writes under ~1 px to avoid HUD churn on sub-pixel jitter.
             const next = (offscreen || lastJointOccluded) ? null : { x: sx, y: sy };
             const prev = selectedJointAnchorRef.current;
             if (next === null) {

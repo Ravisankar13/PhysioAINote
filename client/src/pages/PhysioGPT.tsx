@@ -1073,9 +1073,6 @@ export default function PhysioGPT() {
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
   const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
   const [cachedBiomechanicsOutput, setCachedBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
-  // True while a Movement Mode pose drag is in flight. Heavy memos
-  // below short-circuit to their cached value while this is true and
-  // refresh once on drag release.
   const [isPoseDragging, setIsPoseDragging] = useState(false);
   const hudMuscleAnalysisRef = useRef<ReturnType<typeof applyOverridesToAnalysis> | null>(null);
   const hudWeightDistributionRef = useRef<ReturnType<typeof computeWeightDistribution> | null>(null);

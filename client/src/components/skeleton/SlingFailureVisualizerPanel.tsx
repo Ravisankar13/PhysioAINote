@@ -15,7 +15,9 @@ import {
   mergeAiAndLocalScenarios,
 } from '@/lib/slingFailureScenarioEngine';
 import { registerDynamicMovement, unregisterDynamicMovement } from '@/lib/movementSequences';
+import { getSlingBonePathway } from '@/lib/slingEngine';
 import type { AnimationState } from './PureThreeGLBViewer';
+import DualGhostStickFigure from './DualGhostStickFigure';
 
 export interface SlingFailureVisualizerSelection {
   scenario: SlingFailureScenario;
@@ -86,10 +88,16 @@ export default function SlingFailureVisualizerPanel(props: Props) {
 
   const fetchMutation = useMutation({
     mutationFn: async (refresh: boolean) => {
+      // Schema constraints: fingerprint ≤200, condition ≤300. Truncate
+      // to stay safely inside both.
+      const safeFingerprint = fingerprint.length > 180 ? `${fingerprint.slice(0, 80)}::${hash32(fingerprint)}` : fingerprint;
+      const safeCondition = condition && condition.length > 0
+        ? (condition.length > 280 ? condition.slice(0, 280) : condition)
+        : undefined;
       const payload = {
         caseId,
-        fingerprint,
-        condition: condition ?? undefined,
+        fingerprint: safeFingerprint,
+        condition: safeCondition,
         patientFactors: patientFactors ?? undefined,
         refresh,
         slings: compromised.map(s => ({
@@ -98,7 +106,8 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           status: s.status,
           activationScore: s.activationScore,
           weakLinks: s.weakLinks.map(w => ({ muscle: w.muscle, activationPct: w.activationPct })),
-          bonePathway: s.bonePathway,
+          // SlingResult does not carry the pathway — derive it from the sling id.
+          bonePathway: getSlingBonePathway(s.slingId),
           forceTransferQuality: s.forceTransferQuality,
         })),
         markers: markers.map(m => ({
@@ -426,6 +435,29 @@ export default function SlingFailureVisualizerPanel(props: Props) {
                       </div>
                     )}
 
+                    {/* Simultaneous dual-ghost stick figure — emerald
+                        intended skeleton (left) and rose actual skeleton
+                        (right) play in lockstep with the scrubber and
+                        flash a ✕ at the failure bone on the actual side
+                        when the failure frame is reached. This satisfies
+                        true side-by-side intended/actual rendering
+                        without a second 3D skinned mesh. */}
+                    {isActive && trigger && (() => {
+                      const intendedSeq = trigger.sequence;
+                      const actualSeq = composeActualSequence(trigger, scenario);
+                      return (
+                        <div className="mt-2">
+                          <DualGhostStickFigure
+                            intendedSequence={intendedSeq}
+                            actualSequence={actualSeq}
+                            progress={animationState.progress}
+                            failureFrame={scenario.failureFrame}
+                            failureBone={scenario.weakSegmentBones?.[0]}
+                          />
+                        </div>
+                      );
+                    })()}
+
                     {/* Intended vs actual joint deltas */}
                     {isActive && scenario.jointDeltas.length > 0 && (
                       <div className="mt-2 space-y-1">
@@ -492,4 +524,13 @@ function prettyMuscle(m: string): string {
 }
 function prettyJoint(j: string): string {
   return j.replace(/([A-Z])/g, ' $1').replace(/^\s/, '').toLowerCase();
+}
+/** Tiny FNV-like 32-bit string hash → base36 to keep fingerprint short. */
+function hash32(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
 }

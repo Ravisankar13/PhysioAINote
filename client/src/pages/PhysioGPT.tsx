@@ -10684,7 +10684,7 @@ ${ddxList}`;
                 {skeletonMode === 'movement' && activeFailureSel && (
                   <SlingFailureVisualizerOverlay
                     scenario={activeFailureSel.scenario}
-                    bonePathway={activeFailureSel.sling.bonePathway}
+                    bonePathway={getSlingBonePathway(activeFailureSel.sling.slingId)}
                     slingColor={activeFailureSel.sling.color}
                     progress={animationState.progress}
                     boneScreenPositionsRef={boneScreenPositionsRef}

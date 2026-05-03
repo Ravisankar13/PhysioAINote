@@ -6375,12 +6375,9 @@ export type TreatmentHypothesis = typeof treatmentHypotheses.$inferSelect;
 
 
 
-// ==========================================================
-// Task #353 — Sling Failure Movement Visualizer
-// AI-driven, case-adaptive playback that picks the trigger movement
-// loading a compromised sling, with intended-vs-actual joint deltas,
-// failure-frame timing, narration, and reroute target.
-// ==========================================================
+// Sling Failure Movement Visualizer — schemas for trigger-movement
+// playback with intended-vs-actual joint deltas, failure-frame timing,
+// narration, and reroute target.
 export const slingIdSchema = z.enum([
   'posterior_oblique', 'anterior_oblique', 'lateral',
   'deep_longitudinal', 'scapular_shoulder',

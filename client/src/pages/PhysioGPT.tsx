@@ -16694,8 +16694,8 @@ ${ddxList}`;
                 visual slot as the static-posture reasoning panel it
                 replaces. */}
             {skeletonMode === 'movement' && activeCaseId && (
-              <div className="mt-3 space-y-3" data-testid="movement-mode-panels">
-                <ActiveCapacitiesPanel caseId={activeCaseId} />
+              <div className="mt-3 space-y-3 w-[340px] max-w-full" data-testid="movement-mode-panels">
+                <ActiveCapacitiesPanel caseId={activeCaseId} className="w-full" />
               </div>
             )}
           </div>

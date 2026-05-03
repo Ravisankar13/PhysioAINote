@@ -27,6 +27,12 @@ import {
   type DriverRole,
 } from '@/lib/slingDriverAnalysis';
 import SlingLoadFlowMap from './SlingLoadFlowMap';
+import PainStorylineCard from './PainStorylineCard';
+import {
+  buildTopPainStoryline,
+  buildPainStorylineForSling,
+  type PainStoryline,
+} from '@/lib/painStorylineEngine';
 import { AddToPlanButton, makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
 
 interface SlingAnalysisPanelProps {
@@ -215,6 +221,7 @@ function SlingCard({
   activationValue,
   onActivationChange,
   onActivationReset,
+  storyline,
 }: {
   sling: SlingResult;
   isSelected: boolean;
@@ -222,8 +229,10 @@ function SlingCard({
   activationValue: number;
   onActivationChange: (val: number) => void;
   onActivationReset: () => void;
+  storyline: PainStoryline | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
 
   return (
     <div
@@ -318,7 +327,22 @@ function SlingCard({
         )}
       </div>
 
-      <div className="px-2.5 pb-1">
+      <div className="px-2.5 pb-1 space-y-1">
+        {storyline && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setStoryOpen(s => !s); }}
+            className="text-[10px] text-rose-300 hover:text-rose-200 flex items-center gap-0.5 w-full"
+            data-testid={`sling-why-this-hurts-${sling.slingId}`}
+          >
+            {storyOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            Why this hurts
+          </button>
+        )}
+        {storyOpen && storyline && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <PainStorylineCard storyline={storyline} variant="inline" defaultExpanded />
+          </div>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
           className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 w-full"
@@ -733,6 +757,13 @@ export default function SlingAnalysisPanel({
     return runDriverAnalysis(painMarkers, analysis);
   }, [driverAnalysis, painMarkers, analysis]);
 
+  // Cause-and-effect storyline for the top hypothesis — auto-shown above the
+  // driver section so it appears as soon as a prediction is available.
+  const topStoryline = useMemo(
+    () => buildTopPainStoryline(computedDriverAnalysis, analysis?.slings),
+    [computedDriverAnalysis, analysis?.slings],
+  );
+
   if (!analysis) {
     return (
       <div className="p-4 text-center text-[11px] text-slate-500">
@@ -772,6 +803,10 @@ export default function SlingAnalysisPanel({
             </button>
           )}
         </div>
+
+        {topStoryline && (
+          <PainStorylineCard storyline={topStoryline} variant="standalone" defaultExpanded />
+        )}
 
         <DriverAnalysisSection result={computedDriverAnalysis} />
         {computedDriverAnalysis.topFlowGraph && (
@@ -816,6 +851,7 @@ export default function SlingAnalysisPanel({
               activationValue={slingActivation?.[sling.slingId] ?? sling.activationLevelPct ?? SLING_ACTIVATION_BASELINE}
               onActivationChange={(val) => onSlingActivationChange?.(sling.slingId, val)}
               onActivationReset={() => onResetSling?.(sling.slingId)}
+              storyline={buildPainStorylineForSling(sling.slingId, computedDriverAnalysis, sling)}
             />
           ))}
         </div>

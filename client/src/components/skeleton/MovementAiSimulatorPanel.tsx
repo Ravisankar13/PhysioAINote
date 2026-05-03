@@ -11,6 +11,7 @@ import {
   Sparkles, Plus, Trash2, ChevronDown, ChevronUp,
   CheckCircle2, AlertTriangle, XCircle, MinusCircle,
   ArrowUp, ArrowDown, Equal, RotateCcw, RefreshCw,
+  GripVertical,
 } from 'lucide-react';
 import { MUSCLE_TARGETS, JOINT_TARGETS } from '@/lib/whatIfSimulationEngine';
 
@@ -218,6 +219,58 @@ export default function MovementAiSimulatorPanel({ context, onResult, onReset, c
     setCollapsed(false);
     rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [expandSignal]);
+
+  // Drag-to-move (mirrors the pattern used by ClinicalReasoningPanel).
+  // Default: panel is a normal flow child of the right-rail in PhysioGPT.
+  // Once the user grabs the header, we switch to position:fixed and let the
+  // user place the panel anywhere within the viewport.
+  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const PANEL_W = 340;
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Skip drag if the user clicked on an interactive control inside the
+    // header (e.g. the chevron collapse/expand button or the verdict pill).
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select, [role="radio"], [role="button"]')) return;
+    e.preventDefault();
+    const panelEl = rootRef.current;
+    if (!panelEl) return;
+    const rect = panelEl.getBoundingClientRect();
+    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // Seed dragPos with the panel's current viewport position so the first
+    // mousemove doesn't jump it across the screen.
+    setDragPos({ left: rect.left, top: rect.top });
+    setIsDragging(true);
+  }, []);
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMove = (e: MouseEvent) => {
+      let left = e.clientX - dragOffset.current.x;
+      let top = e.clientY - dragOffset.current.y;
+      // Clamp so the panel stays on-screen and below the top app bar (~64px).
+      left = Math.max(8, Math.min(left, window.innerWidth - PANEL_W - 8));
+      top = Math.max(64, Math.min(top, window.innerHeight - 80));
+      setDragPos({ left, top });
+    };
+    const handleUp = () => setIsDragging(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+  }, [isDragging]);
+  const panelStyle: React.CSSProperties = dragPos
+    ? {
+        position: 'fixed',
+        left: dragPos.left,
+        top: dragPos.top,
+        right: 'auto',
+        width: PANEL_W,
+        zIndex: 50,
+        maxHeight: `calc(100vh - ${dragPos.top + 16}px)`,
+      }
+    : { maxHeight: 'calc(100vh - 6rem)' };
   const [interventions, setInterventions] = useState<Intervention[]>([defaultIntervention()]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -344,19 +397,18 @@ export default function MovementAiSimulatorPanel({ context, onResult, onReset, c
   return (
     <Card
       ref={rootRef}
-      className={`bg-indigo-950/55 border-indigo-700/50 text-indigo-50 ${className}`}
+      className={`bg-indigo-950/55 border-indigo-700/50 text-indigo-50 flex flex-col overflow-hidden ${className}`}
+      style={panelStyle}
       data-testid="movement-ai-simulator-panel"
     >
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setCollapsed(c => !c)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(c => !c); } }}
-        className={`w-full flex items-center justify-between p-3 cursor-pointer select-none hover:bg-indigo-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 transition-colors ${collapsed ? '' : 'border-b border-indigo-700/40'}`}
-        aria-expanded={!collapsed}
-        data-testid="movement-sim-toggle"
+        className={`shrink-0 w-full flex items-center justify-between p-3 select-none hover:bg-indigo-900/40 transition-colors ${collapsed ? '' : 'border-b border-indigo-700/40'} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleDragStart}
+        title="Drag to move"
+        data-testid="movement-sim-header"
       >
         <div className="flex items-center gap-2">
+          <GripVertical className="h-3 w-3 text-indigo-400/70" />
           <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
           <div className="text-xs font-semibold uppercase tracking-wider text-indigo-200">Movement AI Simulator</div>
           {result && (
@@ -368,11 +420,21 @@ export default function MovementAiSimulatorPanel({ context, onResult, onReset, c
             </span>
           )}
         </div>
-        <ChevIcon className="h-3.5 w-3.5 text-indigo-300" />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setCollapsed(c => !c); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="rounded p-0.5 hover:bg-indigo-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 cursor-pointer"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand simulator' : 'Collapse simulator'}
+          data-testid="movement-sim-toggle"
+        >
+          <ChevIcon className="h-3.5 w-3.5 text-indigo-300" />
+        </button>
       </div>
 
       {!collapsed && (
-        <ScrollArea className="max-h-[60vh]" data-testid="movement-sim-body">
+        <ScrollArea className="flex-1 min-h-0" data-testid="movement-sim-body">
           <div className="p-3 space-y-3">
             <div className="space-y-2">
               {interventions.map((iv, idx) => {

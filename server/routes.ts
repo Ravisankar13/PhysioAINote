@@ -10233,6 +10233,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           label: z.string().min(1).max(120),
           severity: z.number().optional(),
           type: z.string().max(60).optional(),
+          irritability: z.enum(['low','moderate','high']).optional(),
         })).max(20).default([]),
         interventions: z.array(interventionSchema).min(1).max(6),
         postureDeviations: z.array(z.string().max(160)).max(20).default([]),
@@ -10317,7 +10318,9 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const normalized = JSON.stringify({
         c: safeCondition.trim().toLowerCase(),
         s: safeCaseSummary.trim().toLowerCase().slice(0, 800),
-        t: [...data.painfulTissues.map(t => t.label.toLowerCase())].sort(),
+        t: [...data.painfulTissues.map(t =>
+          `${t.label.toLowerCase()}|sev=${typeof t.severity === 'number' ? Math.round(t.severity) : '_'}|ty=${(t.type || '').toLowerCase()}|ir=${t.irritability || '_'}`
+        )].sort(),
         i: safeInterventions.map(i => ({
           k: i.kind,
           t: (i.target || '').toLowerCase(),
@@ -10343,7 +10346,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const aiClient = new OpenAI({ apiKey, baseURL });
 
       const tissuesText = data.painfulTissues.length
-        ? data.painfulTissues.map(t => `- ${t.label}${typeof t.severity === 'number' ? ` (severity ${t.severity}/10)` : ''}${t.type ? ` [${t.type}]` : ''}`).join('\n')
+        ? data.painfulTissues.map(t => `- ${t.label}${typeof t.severity === 'number' ? ` (severity ${t.severity}/10)` : ''}${t.type ? ` [${t.type}]` : ''}${t.irritability ? ` · ${t.irritability} irritability` : ''}`).join('\n')
         : '(none recorded — infer 1–3 primary symptomatic tissues from the diagnosis)';
       const interventionsText = safeInterventions.map((i, idx) => {
         const parts = [`${idx + 1}. ${i.kind}`];
@@ -10376,7 +10379,7 @@ Given the patient's pathology, current biomechanical state, and the proposed cli
 - biomechanicalChanges: specific joints/segments that will move/load differently, with magnitude+direction
 - slingRebalancing: which functional slings up- or down-regulate, by approximately how many percentage points, and the load-redistribution consequence
 - compensationShift: compensations that will resolve, persist, or newly appear
-- tissueLoadImpact: per painful tissue — load direction (up/down/neutral), magnitude band (mild <10% / moderate 10–25% / large >25%), symptom direction (improve/worsen/neutral) and the mechanism. You MUST include EVERY painful tissue listed in the input. If the input lists no painful tissues, infer the 1–3 primary symptomatic tissues directly from the diagnosis (e.g. plantar fasciitis → plantar fascia; lateral epicondylalgia → common extensor tendon).
+- tissueLoadImpact: per painful tissue — load direction (up/down/neutral), magnitude band (small <10% / moderate 10–25% / large >25%), symptom direction (improve/worsen/neutral) and the mechanism. You MUST include EVERY painful tissue listed in the input. Use the listed irritability to temper the symptom direction — high-irritability tissues should not be predicted to improve under added load. If the input lists no painful tissues, infer the 1–3 primary symptomatic tissues directly from the diagnosis (e.g. plantar fasciitis → plantar fascia; lateral epicondylalgia → common extensor tendon).
 - netVerdict: helpful | mixed | harmful | neutral, with a one-sentence rationale
 - confidence: low | moderate | high, with a one-sentence reason
 - caveats: short bullets — overload risk, dose dependency, contraindications, tissue-irritability concerns, missing data
@@ -10416,7 +10419,7 @@ Respond with JSON of EXACT shape:
   "biomechanicalChanges": ["string", ...],
   "slingRebalancing": [{"slingId": "string", "directionPct": number, "note": "string"}, ...],
   "compensationShift": ["string", ...],
-  "tissueLoadImpact": [{"tissue": "string", "loadDirection": "up"|"down"|"neutral", "magnitude": "mild"|"moderate"|"large", "symptomDirection": "improve"|"worsen"|"neutral", "mechanism": "string"}, ...],
+  "tissueLoadImpact": [{"tissue": "string", "loadDirection": "up"|"down"|"neutral", "magnitude": "small"|"moderate"|"large", "symptomDirection": "improve"|"worsen"|"neutral", "mechanism": "string"}, ...],
   "netVerdict": "helpful"|"mixed"|"harmful"|"neutral",
   "verdictRationale": "string",
   "confidence": "low"|"moderate"|"high",
@@ -10449,7 +10452,10 @@ Respond with JSON of EXACT shape:
         tissueLoadImpact: z.array(z.object({
           tissue: z.string(),
           loadDirection: z.enum(['up','down','neutral']).default('neutral'),
-          magnitude: z.enum(['mild','moderate','large']).default('mild'),
+          magnitude: z.preprocess(
+            (v) => (v === 'mild' ? 'small' : v),
+            z.enum(['small','moderate','large']).default('small')
+          ),
           symptomDirection: z.enum(['improve','worsen','neutral']).default('neutral'),
           mechanism: z.string().default(''),
         })).default([]),
@@ -10478,7 +10484,7 @@ Respond with JSON of EXACT shape:
           validated.data.tissueLoadImpact.push({
             tissue: t.label,
             loadDirection: 'neutral',
-            magnitude: 'mild',
+            magnitude: 'small',
             symptomDirection: 'neutral',
             mechanism: 'No specific prediction returned for this tissue.',
           });

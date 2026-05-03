@@ -138,7 +138,7 @@ export interface MovementSimResult {
   tissueLoadImpact: Array<{
     tissue: string;
     loadDirection: 'up' | 'down' | 'neutral';
-    magnitude: 'mild' | 'moderate' | 'large';
+    magnitude: 'small' | 'moderate' | 'large';
     symptomDirection: 'improve' | 'worsen' | 'neutral';
     mechanism: string;
   }>;
@@ -162,7 +162,7 @@ export interface ActiveCapacityRowSlim {
 export interface MovementSimContext {
   condition: string;
   caseSummary: string;
-  painfulTissues: Array<{ label: string; severity?: number; type?: string }>;
+  painfulTissues: Array<{ label: string; severity?: number; type?: string; irritability?: 'low' | 'moderate' | 'high' }>;
   postureDeviations: string[];
   slingActivations: Array<{ slingId: string; activation: number }>;
   hudForceSummary: string;

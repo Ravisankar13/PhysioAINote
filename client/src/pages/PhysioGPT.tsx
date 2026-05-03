@@ -7956,11 +7956,13 @@ ${ddxList}`;
       || '').slice(0, 240) || 'Unspecified condition';
     const caseSummary = (summary || desc).slice(0, 1600);
 
+    const caseIrritability = (extractionResult?.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined;
     const painfulTissues = painMarkers
       .map(m => ({
         label: (m.anatomicalLabel || m.nearestBone || '').toString().trim(),
         severity: typeof m.severity === 'number' ? m.severity : undefined,
         type: (m.symptomType || m.type || undefined) as string | undefined,
+        irritability: caseIrritability,
       }))
       .filter(t => t.label.length > 0)
       .slice(0, 12);
@@ -8414,8 +8416,26 @@ ${ddxList}`;
       const seen = new Set(out.map(h => h.tissueId));
       for (const t of movementSimTissueOverlay) {
         const ids = matchTissueIds(t.tissue);
-        if (ids.length === 0) continue;
         const colorOverride = t.tone === 'green' ? 0x10b981 : 0xf59e0b;
+        if (ids.length === 0) {
+          const fallbackId = `mvsim_fallback:${t.tissue.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40)}`;
+          if (!seen.has(fallbackId)) {
+            out.push({
+              tissueId: fallbackId,
+              tissueType: 'tendon',
+              label: t.tissue,
+              bones: [],
+              severity: 0.5,
+              healingStage: 'baseline',
+              irritability: 'low',
+              isDeep: false,
+              hasRecipe: false,
+              colorOverride,
+            });
+            seen.add(fallbackId);
+          }
+          continue;
+        }
         for (const id of ids) {
           if (seen.has(id)) {
             const idx = out.findIndex(h => h.tissueId === id);

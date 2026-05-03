@@ -1689,6 +1689,11 @@ interface PureThreeGLBViewerProps {
     exceededActiveLimit: boolean;
     compensationsTriggered: string[];
   }) => void;
+  /** Task #349: fired when a pose drag begins (true) and ends (false).
+   *  Used by the host page to freeze expensive downstream re-computations
+   *  (e.g. sling analysis) while the clinician is mid-drag, then run a
+   *  single fresh recompute on release. */
+  onPoseDragChange?: (active: boolean) => void;
   /** Fired the moment a movement-mode drag enters a painful arc, so
    *  the predicted-pain layer can register a transient flare on the
    *  affected joint/movement. Fires once per arc entry (not per frame). */
@@ -2731,6 +2736,7 @@ export default function PureThreeGLBViewer({
   activeCapacities = null,
   onActiveMovementAttempt,
   onPainfulArcFlare,
+  onPoseDragChange,
   selectedBoneSegmentId: selectedBoneSegmentIdProp,
   onSelectedBoneSegmentChange,
   enableZoomTool = false,
@@ -3029,6 +3035,10 @@ export default function PureThreeGLBViewer({
   onActiveMovementAttemptRef.current = onActiveMovementAttempt;
   const onPainfulArcFlareRef = useRef(onPainfulArcFlare);
   onPainfulArcFlareRef.current = onPainfulArcFlare;
+  // Task #349: latest onPoseDragChange callback held in a ref so the THREE
+  // mouse handlers can fire it without forcing the host effect to re-run.
+  const onPoseDragChangeRef = useRef(onPoseDragChange);
+  onPoseDragChangeRef.current = onPoseDragChange;
   const movementSettleTimerRef = useRef<number | null>(null);
   const pendingMovementAttemptRef = useRef<Parameters<NonNullable<typeof onActiveMovementAttempt>>[0] | null>(null);
   // Task #321: per-frame screen-projected anchor for the currently-selected
@@ -6703,7 +6713,11 @@ export default function PureThreeGLBViewer({
         // compute itself is cheap; the bottleneck is React re-rendering the
         // overlay legend + force chip on every mouse-move tick.
         const now = performance.now();
-        if (now - lastMovementOverlayPushRef.current >= 33) {
+        // Task #349: lift the heavy overlay throttle from ~30Hz to ~10Hz.
+        // computeFullMuscleAnalysis + setState fan-out into PhysioGPT is
+        // the dominant cost per drag tick; 10Hz still feels live while
+        // letting the React tree breathe between updates.
+        if (now - lastMovementOverlayPushRef.current >= 100) {
           lastMovementOverlayPushRef.current = now;
           // Task #323 — review-2 fix: diff against the Movement-Mode entry
           // baseline (snapshot in the skeletonMode useEffect above), not the
@@ -6905,6 +6919,9 @@ export default function PureThreeGLBViewer({
         startSpringBack(drag.springBackValues);
       }
       poseDragRef.current = null;
+      // Task #349: drop the drag-active flag so the host page can run a
+      // fresh sling re-analysis once with the post-drag pose.
+      onPoseDragChangeRef.current?.(false);
       controls.enabled = true;
       domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
       lastPainfulArcStateRef.current = false;
@@ -6946,6 +6963,7 @@ export default function PureThreeGLBViewer({
         // precedence on its own mouseDown.
         if (poseDragRef.current) {
           poseDragRef.current = null;
+          onPoseDragChangeRef.current?.(false);
           setMovementMuscleActivation(null);
           setMovementMuscleStatesOverlay(null);
           setMovementJointReactionForce(null);
@@ -6991,6 +7009,9 @@ export default function PureThreeGLBViewer({
             };
           }
         }
+        // Task #349: signal drag-start so the host page can freeze
+        // expensive sling re-analysis until release.
+        onPoseDragChangeRef.current?.(true);
         poseDragRef.current = {
           configKey,
           startX: 0,
@@ -7550,6 +7571,8 @@ export default function PureThreeGLBViewer({
           // Cancel any in-flight spring-back so a new drag on the same
           // joint takes precedence cleanly.
           cancelSpringBack();
+          // Task #349: signal drag-start so host can freeze sling memo.
+          onPoseDragChangeRef.current?.(true);
           poseDragRef.current = {
             configKey: a.def.configKey,
             startX: e.clientX,
@@ -7684,6 +7707,8 @@ export default function PureThreeGLBViewer({
               pendingMovementAttemptRef.current = null;
             }
             cancelSpringBack();
+            // Task #349: signal drag-start so host can freeze sling memo.
+            onPoseDragChangeRef.current?.(true);
             poseDragRef.current = {
               configKey: primaryArrow.def.configKey,
               startX: e.clientX,
@@ -7910,7 +7935,10 @@ export default function PureThreeGLBViewer({
       selectedBoneSegmentId = null;
       poseSelectedBoneRef.current = null;
       poseHighlightMeshRef.current = null;
-      poseDragRef.current = null;
+      if (poseDragRef.current) {
+        poseDragRef.current = null;
+        onPoseDragChangeRef.current?.(false);
+      }
       controls.enabled = true;
       domElement.style.cursor = '';
       setPoseModeTooltip(null);

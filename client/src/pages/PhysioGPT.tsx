@@ -1073,6 +1073,12 @@ export default function PhysioGPT() {
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
   const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
   const [cachedBiomechanicsOutput, setCachedBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
+  // Task #349: latched true while the clinician is mid-drag in Movement
+  // Mode. While true, the heavy slingAnalysis memo returns its cached
+  // result instead of re-running computeSlingAnalysis on every drag tick.
+  // Flipped back to false on drag-release, which forces one fresh memo
+  // recompute against the post-drag pose.
+  const [isPoseDragging, setIsPoseDragging] = useState(false);
 
   const [evidenceEngineResult, setEvidenceEngineResult] = useState<{
     options: Array<{
@@ -7468,6 +7474,13 @@ ${ddxList}`;
 
   const slingAnalysis = useMemo(() => {
     if (computeStage < 3) return null;
+    // Task #349: while a pose drag is in flight, return the last computed
+    // sling analysis so we don't re-run the engine ~30 times per second
+    // during the drag. The dependency on isPoseDragging guarantees a
+    // fresh recompute the moment the clinician releases the drag.
+    if (isPoseDragging && slingAnalysisRef.current) {
+      return slingAnalysisRef.current;
+    }
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
     // Merge per-part spotlight adjustments into the engine's duck-typed
     // override shape so per-part treatments actually re-score weak links.
@@ -7497,7 +7510,7 @@ ${ddxList}`;
     const result = computeSlingAnalysis(slingInput);
     slingAnalysisRef.current = result;
     return result;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, slingPartMuscleAdjustments, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, slingPartMuscleAdjustments, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides, isPoseDragging]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
 
@@ -10396,6 +10409,7 @@ ${ddxList}`;
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={finalModelConfig as any}
+              onPoseDragChange={setIsPoseDragging}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
               highlightRegions={[

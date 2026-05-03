@@ -15844,7 +15844,6 @@ ${ddxList}`;
                 description + patient context sig so any meaningful
                 change marks the cached synthesis stale. */}
             {(() => {
-              if (skeletonMode === 'movement') return null;
               const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
               const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
               if (!desc) return null;
@@ -15959,6 +15958,7 @@ ${ddxList}`;
                   caseSummary={caseSummary}
                   contentHash={contentHash}
                   caseContext={caseContext}
+                  visible={skeletonMode !== 'movement'}
                   className="w-full"
                 />
               );

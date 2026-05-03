@@ -10587,9 +10587,6 @@ ${ddxList}`;
                     partTreatments={slingPartTreatments}
                     onApplyPartTreatment={(rec, cartItem) => {
                       const prior = slingPartTreatments[rec.partId];
-                      // Reverse any prior treatment on this part first so deltas
-                      // don't stack and the old cart item is dropped before the
-                      // new one is added.
                       let activationDelta = rec.appliedActivationDelta;
                       let priorMuscleRef: string | null = null;
                       if (prior) {
@@ -10600,11 +10597,13 @@ ${ddxList}`;
                         if (prior.partKind === 'muscle') priorMuscleRef = prior.ref;
                       }
                       setSlingActivationOverrides(prev => {
-                        const baseSling = slingAnalysis.slings.find(s => s.slingId === rec.slingId);
-                        const baseScore = baseSling?.activationScore ?? SLING_ACTIVATION_BASELINE;
-                        const current = prev[rec.slingId] ?? baseScore;
+                        // Engine reads override as an activation level centered on
+                        // SLING_ACTIVATION_BASELINE (100). Seed at 100 so a +delta
+                        // truly boosts the score; revert to 100 (no change) drops
+                        // the override entirely.
+                        const current = prev[rec.slingId] ?? SLING_ACTIVATION_BASELINE;
                         const next = Math.max(0, Math.min(200, current + activationDelta));
-                        if (Math.abs(next - baseScore) < 0.5) {
+                        if (Math.abs(next - SLING_ACTIVATION_BASELINE) < 0.5) {
                           const { [rec.slingId]: _omit, ...rest } = prev;
                           return rest;
                         }
@@ -10634,11 +10633,9 @@ ${ddxList}`;
                       const rec = slingPartTreatments[partId];
                       if (rec) {
                         setSlingActivationOverrides(prev => {
-                          const baseSling = slingAnalysis.slings.find(s => s.slingId === rec.slingId);
-                          const baseScore = baseSling?.activationScore ?? SLING_ACTIVATION_BASELINE;
-                          const current = prev[rec.slingId] ?? baseScore;
+                          const current = prev[rec.slingId] ?? SLING_ACTIVATION_BASELINE;
                           const reverted = Math.max(0, Math.min(200, current - rec.appliedActivationDelta));
-                          if (Math.abs(reverted - baseScore) < 0.5) {
+                          if (Math.abs(reverted - SLING_ACTIVATION_BASELINE) < 0.5) {
                             const { [rec.slingId]: _omit, ...rest } = prev;
                             return rest;
                           }
@@ -10662,179 +10659,6 @@ ${ddxList}`;
                     onClose={() => setMovementSpotlightEnabled(false)}
                   />
                 )}
-                {/* Legacy "Poor Slings" callout removed — replaced by MovementSlingSpotlight above. */}
-                {false && (() => {
-                  const _analysis = slingAnalysis!;
-                  const poor = _analysis.slings.filter(s => s.status !== 'normal');
-                  if (poor.length === 0) return null;
-                  const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; label: string }> = {
-                    underperforming: { bg: 'bg-orange-500/15', ring: 'ring-orange-400/60', dot: 'bg-orange-400', label: 'Underperforming' },
-                    overloaded: { bg: 'bg-red-500/15', ring: 'ring-red-400/60', dot: 'bg-red-400', label: 'Overloaded' },
-                    compensating: { bg: 'bg-amber-500/15', ring: 'ring-amber-400/60', dot: 'bg-amber-400', label: 'Compensating' },
-                  };
-                  return (
-                    <div
-                      className="absolute bottom-2 right-2 z-30 w-[300px] max-h-[60%] overflow-y-auto rounded-lg border border-slate-700/70 bg-slate-900/95 backdrop-blur-sm shadow-2xl p-2 space-y-1.5"
-                      data-testid="poor-slings-callout"
-                    >
-                      <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-200 uppercase tracking-wide sticky top-0 bg-slate-900/95 pb-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        Poor Slings
-                        <span className="ml-auto text-slate-500 font-normal normal-case">{poor.length}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {poor.map(s => {
-                          const style = STATUS_STYLE[s.status] ?? STATUS_STYLE.compensating;
-                          const isSelected = selectedSlingId === s.slingId;
-                          const pathway = getSlingBonePathway(s.slingId);
-                          const weakIdxSet = new Set<number>();
-                          for (const wl of s.weakLinks) {
-                            for (const idx of wl.boneSegmentIndices ?? []) weakIdxSet.add(idx);
-                          }
-                          const targetBones = new Set<string>(
-                            weakIdxSet.size > 0
-                              ? Array.from(weakIdxSet).map(i => pathway[i]).filter(Boolean)
-                              : pathway
-                          );
-                          const supportingMarkers = painMarkers.filter(m => m.nearestBone && targetBones.has(m.nearestBone));
-                          const aiSeededMarkerCount = supportingMarkers.filter(
-                            m => m.id.startsWith('pred-seed-') || m.source === 'prediction' || m.sourceKind != null
-                          ).length;
-                          // s.compensations attaches to the compensator; for the failing
-                          // sling we need the inverse direction.
-                          const compensatingFrom = slingAnalysis?.crossSlingCompensations.find(
-                            c => c.compensatedSling === s.slingId
-                          );
-                          // For compensating slings, also surface what they're carrying load FOR.
-                          const compensatingFor = s.status === 'compensating'
-                            ? slingAnalysis?.crossSlingCompensations.find(c => c.compensatingSling === s.slingId)
-                            : undefined;
-                          const rationale = s.clinicalConsequences[0];
-                          return (
-                            <div
-                              key={s.slingId}
-                              className={`rounded-md p-2 ring-1 ${style.bg} ${style.ring} ${isSelected ? 'ring-2 ring-cyan-400/70' : ''} space-y-1.5`}
-                              data-testid={`poor-sling-${s.slingId}`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedSlingId(s.slingId);
-                                  setExpandedSlingDetailId(prev => prev === s.slingId ? null : s.slingId);
-                                }}
-                                className="w-full text-left hover:opacity-90"
-                                data-testid={`poor-sling-header-${s.slingId}`}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`h-2 w-2 rounded-full ${style.dot} shrink-0`} />
-                                  <span className="text-[11px] font-medium text-slate-100 truncate flex-1">{s.label}</span>
-                                  <span className="text-[9px] text-slate-400 font-mono shrink-0">{Math.round(s.activationScore)}%</span>
-                                </div>
-                                <div className="text-[9px] text-slate-400 mt-0.5">
-                                  <span className={`px-1 py-px rounded text-[8px] font-semibold uppercase ${style.bg} text-slate-200`}>{style.label}</span>
-                                </div>
-                              </button>
-
-                              {s.weakLinks.length > 0 && (
-                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-weaklinks-${s.slingId}`}>
-                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Weak:</span>
-                                  {s.weakLinks.map((wl, i) => (
-                                    <span key={wl.muscle}>
-                                      {i > 0 && <span className="text-slate-600">, </span>}
-                                      <span className="text-orange-300">{wl.muscle}</span>
-                                      <span className="text-slate-500"> ({Math.round(wl.activationPct)}%)</span>
-                                    </span>
-                                  ))}
-                                  {aiSeededMarkerCount > 0 && (
-                                    <span
-                                      className="ml-1.5 text-[8px] px-1 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-500/30"
-                                      title={`${aiSeededMarkerCount} marker${aiSeededMarkerCount === 1 ? '' : 's'} on weak-link bones were AI-seeded from the active prediction`}
-                                      data-testid={`poor-sling-ai-seed-count-${s.slingId}`}
-                                    >
-                                      {aiSeededMarkerCount} AI-seeded
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {compensatingFrom && (
-                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-comp-${s.slingId}`}>
-                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Compensated by:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedSlingId(compensatingFrom.compensatingSling);
-                                      setExpandedSlingDetailId(compensatingFrom.compensatingSling);
-                                    }}
-                                    className="text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
-                                  >
-                                    {compensatingFrom.compensatingSlingLabel}
-                                  </button>
-                                  <span className="text-slate-500"> · +{Math.round(compensatingFrom.additionalLoadPct)}% load</span>
-                                </div>
-                              )}
-
-                              {compensatingFor && (
-                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-comp-for-${s.slingId}`}>
-                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Compensating for:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedSlingId(compensatingFor.compensatedSling);
-                                      setExpandedSlingDetailId(compensatingFor.compensatedSling);
-                                    }}
-                                    className="text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
-                                  >
-                                    {compensatingFor.compensatedSlingLabel}
-                                  </button>
-                                  <span className="text-slate-500"> · +{Math.round(compensatingFor.additionalLoadPct)}% load</span>
-                                </div>
-                              )}
-
-                              {supportingMarkers.length > 0 && (
-                                <div className="text-[9px] text-slate-300" data-testid={`poor-sling-markers-${s.slingId}`}>
-                                  <span className="text-slate-500 uppercase tracking-wide mr-1">Markers:</span>
-                                  {supportingMarkers.map((m, i) => (
-                                    <span key={m.id}>
-                                      {i > 0 && <span className="text-slate-600">, </span>}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setClinicalBubbleMarker(m);
-                                          setEditingMarkerId(m.id);
-                                          if (m.nearestBone) {
-                                            for (const [region, bones] of Object.entries(REGION_BONE_MAPPING)) {
-                                              if ((bones as string[]).includes(m.nearestBone)) {
-                                                setZoomToRegion(region as AnatomicalRegion);
-                                                break;
-                                              }
-                                            }
-                                          }
-                                        }}
-                                        title={m.source === 'prediction' ? `Auto-placed from clinical prediction: ${m.anatomicalLabel ?? ''}` : (m.description ?? m.anatomicalLabel ?? '')}
-                                        className="text-rose-300 hover:text-rose-200 underline-offset-2 hover:underline"
-                                        data-testid={`poor-sling-marker-${m.id}`}
-                                      >
-                                        {m.anatomicalLabel || m.nearestBone || 'marker'}
-                                        {m.source === 'prediction' && <span className="ml-1 text-cyan-300/70">[AI]</span>}
-                                      </button>
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {rationale && (
-                                <div className="text-[9px] text-slate-400 italic leading-snug border-t border-slate-700/50 pt-1" data-testid={`poor-sling-rationale-${s.slingId}`}>
-                                  {rationale}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             ); return __viewer; })()}
 

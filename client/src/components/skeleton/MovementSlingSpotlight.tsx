@@ -196,11 +196,18 @@ export default function MovementSlingSpotlight(props: Props) {
   if (!sling) return null;
   const style = STATUS_STYLE[sling.status] ?? STATUS_STYLE.compensating;
   const isPinned = pinnedSpotlightSlingId === sling.slingId;
-  const overrideValue = slingActivationOverrides[sling.slingId];
-  const baseline = SLING_ACTIVATION_BASELINE;
-  const currentActivation = overrideValue !== undefined ? overrideValue : sling.activationScore;
+  const overrideLevel = slingActivationOverrides[sling.slingId];
+  const isBoosted = overrideLevel !== undefined && overrideLevel > SLING_ACTIVATION_BASELINE + 0.5;
+  const isReduced = overrideLevel !== undefined && overrideLevel < SLING_ACTIVATION_BASELINE - 0.5;
   const wl = sling.weakLinks[0];
   const isSelected = selectedSlingId === sling.slingId;
+  // Per-part treatments are persisted at case scope, but the spotlight
+  // panel only surfaces the ones that belong to the currently spotlighted
+  // sling so switching focus doesn't show stale entries.
+  const slingPartTreatments = useMemo(
+    () => Object.values(partTreatments).filter(rec => rec.slingId === sling.slingId),
+    [partTreatments, sling.slingId],
+  );
 
   const slingRecs = slingDrivenRecommendations.filter(r => r.slingId === sling.slingId);
 
@@ -364,9 +371,11 @@ export default function MovementSlingSpotlight(props: Props) {
             <div className="flex items-center gap-2 text-[9px] text-slate-300">
               <Activity className="w-3 h-3 text-slate-400" />
               <span>Activation</span>
-              <span className="font-mono text-slate-100">{Math.round(currentActivation)}%</span>
-              {overrideValue !== undefined && Math.round(overrideValue) !== Math.round(sling.activationScore) && (
-                <span className="text-[8px] text-cyan-300">(was {Math.round(sling.activationScore)}%)</span>
+              <span className="font-mono text-slate-100">{Math.round(sling.activationScore)}%</span>
+              {(isBoosted || isReduced) && (
+                <span className={`text-[8px] ${isBoosted ? 'text-emerald-300' : 'text-rose-300'}`} title={`Treatment level ${Math.round(overrideLevel!)}% (baseline ${SLING_ACTIVATION_BASELINE}%)`}>
+                  ({isBoosted ? '+' : ''}{Math.round(overrideLevel! - SLING_ACTIVATION_BASELINE)}% Rx)
+                </span>
               )}
               <span className="ml-auto text-slate-500">FTQ: <span className="text-slate-200 capitalize">{sling.forceTransferQuality}</span></span>
             </div>
@@ -500,23 +509,24 @@ export default function MovementSlingSpotlight(props: Props) {
             );
           })()}
 
-          {Object.keys(partTreatments).length > 0 && (
+          {slingPartTreatments.length > 0 && (
             <div className="border-t border-slate-800 pt-1 space-y-1" data-testid="spotlight-active-treatments">
               <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1">
-                <span>Active per-part ({Object.keys(partTreatments).length})</span>
+                <span>Active per-part ({slingPartTreatments.length})</span>
                 <button
                   type="button"
                   onClick={() => {
-                    for (const id of Object.keys(partTreatments)) clearTreatment(id);
+                    for (const rec of slingPartTreatments) clearTreatment(rec.partId);
                   }}
                   className="ml-auto text-[8px] text-slate-400 hover:text-slate-100 underline normal-case font-normal"
                   data-testid="spotlight-clear-all"
+                  title="Remove all per-part treatments for this sling"
                 >
-                  Reset all
+                  Reset sling
                 </button>
               </div>
               <ul className="space-y-0.5">
-                {Object.values(partTreatments).map(rec => (
+                {slingPartTreatments.map(rec => (
                   <li
                     key={rec.partId}
                     className="flex items-center gap-1.5 text-[9px] text-slate-300 bg-slate-950/50 rounded px-1.5 py-0.5"

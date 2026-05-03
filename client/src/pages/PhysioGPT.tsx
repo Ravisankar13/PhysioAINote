@@ -172,6 +172,7 @@ import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type Joi
 import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
 import { tissueIntelligenceToOverlayHighlight, paletteForState, TISSUE_ANCHOR_CATALOGUE } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import MovementSlingSpotlight, { type SlingPartTreatmentRecord } from "@/components/skeleton/MovementSlingSpotlight";
 import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
@@ -1034,6 +1035,9 @@ export default function PhysioGPT() {
   // (or double-click) on the same circle still opens the side panel.
   // Defaults OFF; auto-clears when leaving Movement Mode below.
   const [slingsOverlayPinned, setSlingsOverlayPinned] = useState(false);
+  const [pinnedSpotlightSlingId, setPinnedSpotlightSlingId] = useState<SlingId | null>(null);
+  const [slingPartTreatments, setSlingPartTreatments] = useState<Record<string, SlingPartTreatmentRecord>>({});
+  const [movementSpotlightDismissed, setMovementSpotlightDismissed] = useState(false);
   const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
@@ -1640,6 +1644,9 @@ export default function PhysioGPT() {
     romMeasurements,
     muscleOverrides,
     slingActivationOverrides,
+    pinnedSpotlightSlingId,
+    slingPartTreatments,
+    movementSpotlightDismissed,
     bodyWeightKg,
     clinicalHighlights,
     subjectiveHistoryInput,
@@ -1699,6 +1706,9 @@ export default function PhysioGPT() {
     romMeasurements,
     muscleOverrides,
     slingActivationOverrides,
+    pinnedSpotlightSlingId,
+    slingPartTreatments,
+    movementSpotlightDismissed,
     bodyWeightKg,
     clinicalHighlights,
     subjectiveHistoryInput,
@@ -1777,6 +1787,9 @@ export default function PhysioGPT() {
     setRomMeasurements([]);
     setMuscleOverrides({});
     setSlingActivationOverrides({});
+    setPinnedSpotlightSlingId(null);
+    setSlingPartTreatments({});
+    setMovementSpotlightDismissed(false);
     setBodyWeightKg(70);
     setClinicalHighlights([]);
     setSubjectiveHistoryInput('');
@@ -1830,6 +1843,15 @@ export default function PhysioGPT() {
       }
       if (snap.slingActivationOverrides && typeof snap.slingActivationOverrides === 'object') {
         setSlingActivationOverrides(snap.slingActivationOverrides as Partial<Record<SlingId, number>>);
+      }
+      if (typeof snap.pinnedSpotlightSlingId === 'string' || snap.pinnedSpotlightSlingId === null) {
+        setPinnedSpotlightSlingId(snap.pinnedSpotlightSlingId as SlingId | null);
+      }
+      if (snap.slingPartTreatments && typeof snap.slingPartTreatments === 'object') {
+        setSlingPartTreatments(snap.slingPartTreatments as Record<string, SlingPartTreatmentRecord>);
+      }
+      if (typeof snap.movementSpotlightDismissed === 'boolean') {
+        setMovementSpotlightDismissed(snap.movementSpotlightDismissed);
       }
       if (typeof snap.bodyWeightKg === 'number') setBodyWeightKg(snap.bodyWeightKg);
       if (Array.isArray(snap.clinicalHighlights)) setClinicalHighlights(snap.clinicalHighlights as RegionHighlight[]);
@@ -4857,6 +4879,9 @@ ${ddxList}`;
     setMessage("");
     setChatPanelOpen(true);
     setSlingActivationOverrides({});
+    setPinnedSpotlightSlingId(null);
+    setSlingPartTreatments({});
+    setMovementSpotlightDismissed(false);
     // Clinical text / voice state — must be wiped so the new case looks
     // like a fresh login (no stale prediction card or voice activity dock).
     setLastClinicalParseResult(null);
@@ -10417,8 +10442,61 @@ ${ddxList}`;
                     Updating pain map…
                   </div>
                 )}
-                {skeletonMode === 'movement' && slingsOverlayPinned && slingAnalysis && (() => {
-                  const poor = slingAnalysis.slings.filter(s => s.status !== 'normal');
+                {skeletonMode === 'movement' && slingsOverlayPinned && slingAnalysis && !movementSpotlightDismissed && (
+                  <MovementSlingSpotlight
+                    analysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      id: pm.id,
+                      nearestBone: pm.nearestBone,
+                      anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+                      severity: pm.severity,
+                    }))}
+                    pinnedSpotlightSlingId={pinnedSpotlightSlingId}
+                    onPin={(slingId) => setPinnedSpotlightSlingId(slingId)}
+                    selectedSlingId={selectedSlingId}
+                    onSelectSling={(slingId) => setSelectedSlingId(slingId)}
+                    onExpandDetail={(slingId) => setExpandedSlingDetailId(prev => prev === slingId ? null : slingId)}
+                    slingActivationOverrides={slingActivationOverrides}
+                    onApplySlingActivationDelta={(slingId, delta) => {
+                      setSlingActivationOverrides(prev => {
+                        if (delta === -9999) {
+                          const { [slingId]: _omit, ...rest } = prev;
+                          return rest;
+                        }
+                        const baseSling = slingAnalysis.slings.find(s => s.slingId === slingId);
+                        const baseScore = baseSling?.activationScore ?? SLING_ACTIVATION_BASELINE;
+                        const current = prev[slingId] ?? baseScore;
+                        const next = Math.max(0, Math.min(200, current + delta));
+                        return { ...prev, [slingId]: next };
+                      });
+                    }}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    partTreatments={slingPartTreatments}
+                    onRecordPartTreatment={(rec) => {
+                      setSlingPartTreatments(prev => ({ ...prev, [rec.partId]: rec }));
+                    }}
+                    onClearPartTreatment={(partId) => {
+                      setSlingPartTreatments(prev => {
+                        const { [partId]: _omit, ...rest } = prev;
+                        return rest;
+                      });
+                    }}
+                    onClose={() => setMovementSpotlightDismissed(true)}
+                  />
+                )}
+                {skeletonMode === 'movement' && slingsOverlayPinned && slingAnalysis && movementSpotlightDismissed && (
+                  <button
+                    type="button"
+                    onClick={() => setMovementSpotlightDismissed(false)}
+                    className="absolute bottom-2 right-2 z-30 text-[10px] px-2 py-1 rounded-full bg-slate-900/90 border border-slate-600/70 text-slate-200 hover:bg-slate-800/90 shadow-lg"
+                    data-testid="spotlight-reopen"
+                  >
+                    Show sling spotlight
+                  </button>
+                )}
+                {false && skeletonMode === 'movement' && slingsOverlayPinned && slingAnalysis && (() => {
+                  const _analysis = slingAnalysis;
+                  const poor = _analysis.slings.filter(s => s.status !== 'normal');
                   if (poor.length === 0) return null;
                   const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; label: string }> = {
                     underperforming: { bg: 'bg-orange-500/15', ring: 'ring-orange-400/60', dot: 'bg-orange-400', label: 'Underperforming' },

@@ -16641,8 +16641,12 @@ ${ddxList}`;
           clinical reasoning AI pipeline is gated off; the per-movement
           Findings stream renders into the same right-rail slot the
           ClinicalReasoningPanel normally occupies. */}
-      {skeletonMode === 'movement' && !sidebarOpen && (
-        <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto space-y-2" data-testid="movement-findings-rail">
+      {skeletonMode === 'movement' && (
+        <div
+          className={`absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 space-y-2 ${sidebarOpen ? 'invisible pointer-events-none' : 'pointer-events-auto'}`}
+          aria-hidden={sidebarOpen ? 'true' : undefined}
+          data-testid="movement-findings-rail"
+        >
           <MovementAiSimulatorPanel
             key={`mvsim:${activeCaseId ?? 'none'}:${skeletonMode}`}
             context={movementSimContext}

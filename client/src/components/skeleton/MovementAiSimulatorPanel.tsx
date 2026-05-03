@@ -96,6 +96,9 @@ const MAGNITUDE_VALUES: Record<InterventionKind, Record<Magnitude, { magnitude: 
   changeSling: { small: { magnitude: 10, unit: '%' }, moderate: { magnitude: 20, unit: '%' }, large: { magnitude: 35, unit: '%' } },
   other:       { small: { magnitude: 0,  unit: '' },  moderate: { magnitude: 0,  unit: '' },  large: { magnitude: 0,  unit: '' } },
 };
+// Free-text ("other") interventions intentionally omit a magnitude band:
+// the user-supplied note carries the dose nuance and there is no canonical
+// engine target to scale, so a magnitude picker would be meaningless.
 
 export interface Intervention {
   uid: string;

@@ -10475,6 +10475,10 @@ Respond with JSON of EXACT shape:
         return res.status(502).json({ error: "AI response did not match expected format", details: validated.error.format() });
       }
 
+      validated.data.slingRebalancing = validated.data.slingRebalancing.filter(
+        s => movementSimAllowedSlings.has(s.slingId)
+      );
+
       // Backfill any painful tissue the AI omitted so the UI ALWAYS shows a
       // row per recorded painful tissue (per spec: plantar fascia must show
       // in plantar fasciitis example).

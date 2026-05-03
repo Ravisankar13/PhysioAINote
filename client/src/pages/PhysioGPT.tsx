@@ -1679,6 +1679,11 @@ export default function PhysioGPT() {
     testChainActive,
     selectedRomJoint,
     romValues,
+    // Clinical text state — persisted so reopening a case restores the
+    // prediction card, and so server-side title derivation can fall back
+    // to the parsed original_description.
+    lastClinicalParseResult,
+    hasClinicalTextData,
     // Autopilot governor state — persisted in the snapshot so reopen
     // guards work without relying on localStorage.
     autopilotStatus: autopilotStatus === 'done' || autopilotStatus === 'converged' || autopilotStatus === 'error'
@@ -1730,6 +1735,8 @@ export default function PhysioGPT() {
     testChainActive,
     selectedRomJoint,
     romValues,
+    lastClinicalParseResult,
+    hasClinicalTextData,
     autopilotStatus,
   ]);
 
@@ -1877,6 +1884,12 @@ export default function PhysioGPT() {
       // case the defaults from Step 1 stand.
       if (snap.extractionResult && typeof snap.extractionResult === 'object') {
         setExtractionResult(snap.extractionResult as ClinicalExtractionResult);
+      }
+      if (snap.lastClinicalParseResult && typeof snap.lastClinicalParseResult === 'object') {
+        setLastClinicalParseResult(snap.lastClinicalParseResult as ClinicalParseResult);
+      }
+      if (typeof snap.hasClinicalTextData === 'boolean') {
+        setHasClinicalTextData(snap.hasClinicalTextData);
       }
       if (snap.structuredReasoningData && typeof snap.structuredReasoningData === 'object') {
         setStructuredReasoningData(snap.structuredReasoningData as StructuredReasoningResult);
@@ -4844,6 +4857,12 @@ ${ddxList}`;
     setMessage("");
     setChatPanelOpen(true);
     setSlingActivationOverrides({});
+    // Clinical text / voice state — must be wiped so the new case looks
+    // like a fresh login (no stale prediction card or voice activity dock).
+    setLastClinicalParseResult(null);
+    setHasClinicalTextData(false);
+    setVoiceActivityEntries([]);
+    clinicalTextAppliedRef.current = null;
     // Reset every panel that participates in the case snapshot so the new
     // case starts from defaults instead of inheriting the previous one.
     setModelConfig({ ...DEFAULT_MODEL_CONFIG });

@@ -12129,7 +12129,7 @@ Now produce the refined hypothesis JSON.`;
   });
 
   const createConversationBodySchema = z.object({
-    title: z.string().trim().min(1).max(60).optional(),
+    title: z.string().trim().min(1).max(120).optional(),
     caseSnapshot: physioGptCaseSnapshotSchema,
     initialMessage: z
       .object({

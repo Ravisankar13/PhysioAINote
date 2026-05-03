@@ -278,6 +278,19 @@ interface ClinicalReasoningPanelProps {
   requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
   onRequestedTabHandled?: () => void;
   onActiveTabChange?: (tab: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence') => void;
+  externalClinicalNotes?: ClinicalNotes | null;
+  onExternalClinicalNotesChange?: (notes: ClinicalNotes | null) => void;
+  externalIsGeneratingNotes?: boolean;
+  onExternalIsGeneratingNotesChange?: (isGenerating: boolean) => void;
+}
+
+export interface ClinicalNotes {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  additionalNotes: string;
+  generatedAt: string;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -504,6 +517,10 @@ export default function ClinicalReasoningPanel({
   requestedTab,
   onRequestedTabHandled,
   onActiveTabChange,
+  externalClinicalNotes,
+  onExternalClinicalNotesChange,
+  externalIsGeneratingNotes,
+  onExternalIsGeneratingNotesChange,
 }: ClinicalReasoningPanelProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
 
@@ -551,15 +568,24 @@ export default function ClinicalReasoningPanel({
     clinicalNotes: true,
   });
 
-  const [clinicalNotes, setClinicalNotes] = useState<{
-    subjective: string;
-    objective: string;
-    assessment: string;
-    plan: string;
-    additionalNotes: string;
-    generatedAt: string;
-  } | null>(null);
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [internalClinicalNotes, setInternalClinicalNotes] = useState<ClinicalNotes | null>(null);
+  const [internalIsGeneratingNotes, setInternalIsGeneratingNotes] = useState(false);
+  const clinicalNotes = externalClinicalNotes !== undefined ? externalClinicalNotes : internalClinicalNotes;
+  const setClinicalNotes = useCallback((notes: ClinicalNotes | null) => {
+    if (onExternalClinicalNotesChange) {
+      onExternalClinicalNotesChange(notes);
+    } else {
+      setInternalClinicalNotes(notes);
+    }
+  }, [onExternalClinicalNotesChange]);
+  const isGeneratingNotes = externalIsGeneratingNotes !== undefined ? externalIsGeneratingNotes : internalIsGeneratingNotes;
+  const setIsGeneratingNotes = useCallback((generating: boolean) => {
+    if (onExternalIsGeneratingNotesChange) {
+      onExternalIsGeneratingNotesChange(generating);
+    } else {
+      setInternalIsGeneratingNotes(generating);
+    }
+  }, [onExternalIsGeneratingNotesChange]);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);

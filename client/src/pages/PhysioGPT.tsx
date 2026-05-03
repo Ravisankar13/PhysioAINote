@@ -77,6 +77,8 @@ import {
   FlaskConical,
   GraduationCap,
   Leaf,
+  ScrollText,
+  Copy,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -1080,6 +1082,16 @@ export default function PhysioGPT() {
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
+  // Clinical Notes — lifted from ClinicalReasoningPanel so the top-left toolbar
+  // can open a dedicated panel and trigger generation independently.
+  const [clinicalNotesOpen, setClinicalNotesOpen] = useState(false);
+  const [clinicalNotes, setClinicalNotes] = useState<import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes | null>(null);
+  const [isGeneratingClinicalNotes, setIsGeneratingClinicalNotes] = useState(false);
+  const [clinicalNotesError, setClinicalNotesError] = useState<string | null>(null);
+  const [copiedNotesSection, setCopiedNotesSection] = useState<string | null>(null);
+  const lastClinicalNotesKeyRef = useRef<string>("");
+  // Implementation of the clinical-notes generation/caching helpers lives
+  // further down, after `subjectiveHistoryInput` is declared.
   // `structuredReasoningData` was hoisted above to avoid a TDZ in the
   // patient-factors memos near the top of the component. Do not
   // redeclare here.
@@ -1107,6 +1119,87 @@ export default function PhysioGPT() {
   // avoid a TDZ in the patient-factors memos near the top of the
   // component. Do not redeclare here.
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
+
+  // Clinical Notes — has-content / cache-key / generation helpers. Must live
+  // after `subjectiveHistoryInput` so the memos can reference it.
+  const hasReasoningContentForNotes = useMemo(() => {
+    const d = clinicalReasoningData;
+    if (!d) return false;
+    return (
+      d.hypotheses.length > 0 ||
+      d.findings.length > 0 ||
+      d.flags.length > 0 ||
+      d.reasoningChain.length > 0 ||
+      (d.treatmentPlan !== null && d.treatmentPlan !== undefined)
+    );
+  }, [clinicalReasoningData]);
+
+  const clinicalNotesReasoningKey = useMemo(() => {
+    const d = clinicalReasoningData;
+    if (!d) return "";
+    return [
+      d.hypotheses.length,
+      d.findings.length,
+      d.flags.length,
+      d.reasoningChain.length,
+      d.clinicalSummary?.length || 0,
+      d.treatmentPlan ? 1 : 0,
+      (subjectiveHistoryInput || "").length,
+    ].join("|");
+  }, [clinicalReasoningData, subjectiveHistoryInput]);
+
+  useEffect(() => {
+    if (
+      clinicalNotesReasoningKey &&
+      lastClinicalNotesKeyRef.current &&
+      lastClinicalNotesKeyRef.current !== clinicalNotesReasoningKey
+    ) {
+      setClinicalNotes(null);
+    }
+  }, [clinicalNotesReasoningKey]);
+
+  const generateClinicalNotesFromToolbar = useCallback(async () => {
+    if (!hasReasoningContentForNotes || isGeneratingClinicalNotes) return;
+    setIsGeneratingClinicalNotes(true);
+    setClinicalNotesError(null);
+    try {
+      const notes = await apiRequest("/api/clinical-notes/generate", "POST", {
+        reasoningData: clinicalReasoningData,
+        subjectiveHistory: subjectiveHistoryInput,
+      });
+      setClinicalNotes(notes);
+      lastClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+    } catch (err) {
+      console.error("Failed to generate clinical notes:", err);
+      setClinicalNotesError("Couldn't generate notes. Please try again.");
+    } finally {
+      setIsGeneratingClinicalNotes(false);
+    }
+  }, [hasReasoningContentForNotes, isGeneratingClinicalNotes, clinicalReasoningData, subjectiveHistoryInput, clinicalNotesReasoningKey]);
+
+  useEffect(() => {
+    if (!clinicalNotesOpen) return;
+    if (!hasReasoningContentForNotes) return;
+    if (clinicalNotes) return;
+    if (isGeneratingClinicalNotes) return;
+    void generateClinicalNotesFromToolbar();
+  }, [clinicalNotesOpen, hasReasoningContentForNotes, clinicalNotes, isGeneratingClinicalNotes, generateClinicalNotesFromToolbar]);
+
+  const copyClinicalNotesSection = useCallback((section: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedNotesSection(section);
+      setTimeout(() => setCopiedNotesSection(null), 2000);
+    });
+  }, []);
+
+  const copyAllClinicalNotes = useCallback(() => {
+    if (!clinicalNotes) return;
+    const fullText = `SUBJECTIVE:\n${clinicalNotes.subjective}\n\nOBJECTIVE:\n${clinicalNotes.objective}\n\nASSESSMENT:\n${clinicalNotes.assessment}\n\nPLAN:\n${clinicalNotes.plan}${clinicalNotes.additionalNotes ? `\n\nADDITIONAL NOTES:\n${clinicalNotes.additionalNotes}` : ''}`;
+    navigator.clipboard.writeText(fullText).then(() => {
+      setCopiedNotesSection('all');
+      setTimeout(() => setCopiedNotesSection(null), 2000);
+    });
+  }, [clinicalNotes]);
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
@@ -15870,6 +15963,20 @@ ${ddxList}`;
             History
           </button>
           <button
+            onClick={() => setClinicalNotesOpen(prev => !prev)}
+            data-testid="button-toggle-clinical-notes"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalNotesOpen ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+          >
+            <ScrollText className="h-3.5 w-3.5" />
+            {clinicalNotesOpen ? 'Hide Notes' : 'Clinical Notes'}
+            {clinicalNotes && !clinicalNotesOpen && (
+              <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+            )}
+            {isGeneratingClinicalNotes && !clinicalNotesOpen && (
+              <Loader2 className="h-3 w-3 animate-spin text-indigo-300" />
+            )}
+          </button>
+          <button
             onClick={() => {
               if (isRecording) {
                 stopRecording();
@@ -16372,7 +16479,134 @@ ${ddxList}`;
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
         onActiveTabChange={setReasoningActiveTab}
+        externalClinicalNotes={clinicalNotes}
+        onExternalClinicalNotesChange={(notes) => {
+          setClinicalNotes(notes);
+          if (notes) lastClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+        }}
+        externalIsGeneratingNotes={isGeneratingClinicalNotes}
+        onExternalIsGeneratingNotesChange={setIsGeneratingClinicalNotes}
       />
+      )}
+
+      {clinicalNotesOpen && !sidebarOpen && (
+        <div
+          className="absolute top-16 left-3 z-40 w-[360px] max-h-[calc(100%-5rem)] flex flex-col bg-black/90 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl animate-in slide-in-from-left-2 duration-200"
+          data-testid="panel-clinical-notes"
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-gradient-to-br from-indigo-500 to-purple-600 rounded">
+                <ScrollText className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="font-semibold text-white text-xs">Clinical Notes (SOAP)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {clinicalNotes && (
+                <button
+                  onClick={copyAllClinicalNotes}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/15 hover:bg-indigo-500/25 rounded text-[10px] text-indigo-200 transition-colors"
+                  data-testid="button-copy-all-clinical-notes"
+                >
+                  {copiedNotesSection === 'all' ? <ClipboardCheck className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                  {copiedNotesSection === 'all' ? 'Copied' : 'Copy all'}
+                </button>
+              )}
+              {clinicalNotes && !isGeneratingClinicalNotes && (
+                <button
+                  onClick={generateClinicalNotesFromToolbar}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 hover:bg-white/10 rounded text-[10px] text-gray-300 transition-colors"
+                  data-testid="button-regenerate-clinical-notes"
+                >
+                  <ScrollText className="h-2.5 w-2.5" />
+                  Regenerate
+                </button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10"
+                onClick={() => setClinicalNotesOpen(false)}
+                data-testid="button-close-clinical-notes"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {!hasReasoningContentForNotes && (
+              <div className="bg-indigo-500/5 rounded-lg p-4 border border-indigo-500/10 text-center">
+                <ScrollText className="h-6 w-6 text-indigo-400/50 mx-auto mb-2" />
+                <p className="text-[11px] text-gray-300 font-medium">No reasoning yet</p>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Add subjective findings or pain markers to generate notes.
+                </p>
+              </div>
+            )}
+
+            {hasReasoningContentForNotes && isGeneratingClinicalNotes && !clinicalNotes && (
+              <div className="space-y-2">
+                {['Subjective', 'Objective', 'Assessment', 'Plan'].map(label => (
+                  <div key={label} className="bg-white/[0.03] rounded-lg border border-white/5 p-3 animate-pulse">
+                    <div className="h-2.5 w-20 bg-white/10 rounded mb-2" />
+                    <div className="h-2 w-full bg-white/5 rounded mb-1" />
+                    <div className="h-2 w-3/4 bg-white/5 rounded" />
+                  </div>
+                ))}
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-indigo-300 mt-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generating SOAP notes…
+                </div>
+              </div>
+            )}
+
+            {clinicalNotesError && !isGeneratingClinicalNotes && (
+              <div className="bg-red-500/5 rounded-lg p-3 border border-red-500/15">
+                <p className="text-[11px] text-red-300 font-medium mb-2">{clinicalNotesError}</p>
+                <button
+                  onClick={generateClinicalNotesFromToolbar}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/15 hover:bg-red-500/25 rounded text-[10px] text-red-200 transition-colors"
+                >
+                  <ScrollText className="h-2.5 w-2.5" />
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {clinicalNotes && (
+              <>
+                <p className="text-[9px] text-gray-500 px-1">
+                  Generated {new Date(clinicalNotes.generatedAt).toLocaleTimeString()}
+                </p>
+                {([
+                  { key: 'subjective', label: 'Subjective', bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/15', textClass: 'text-blue-300' },
+                  { key: 'objective', label: 'Objective', bgClass: 'bg-green-500/5', borderClass: 'border-green-500/15', textClass: 'text-green-300' },
+                  { key: 'assessment', label: 'Assessment', bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/15', textClass: 'text-amber-300' },
+                  { key: 'plan', label: 'Plan', bgClass: 'bg-purple-500/5', borderClass: 'border-purple-500/15', textClass: 'text-purple-300' },
+                  ...(clinicalNotes.additionalNotes ? [{ key: 'additionalNotes', label: 'Additional Notes', bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/15', textClass: 'text-rose-300' }] : []),
+                ] as const).map(({ key, label, bgClass, borderClass, textClass }) => (
+                  <div key={key} className={`${bgClass} rounded-lg border ${borderClass} overflow-hidden`} data-testid={`clinical-notes-section-${key}`}>
+                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/[0.02]">
+                      <span className={`text-[10px] font-semibold ${textClass} uppercase tracking-wider`}>{label}</span>
+                      <button
+                        onClick={() => copyClinicalNotesSection(key, (clinicalNotes as any)[key])}
+                        className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors"
+                        title={`Copy ${label}`}
+                        data-testid={`button-copy-clinical-notes-${key}`}
+                      >
+                        {copiedNotesSection === key ? <ClipboardCheck className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
+                      </button>
+                    </div>
+                    <div className="px-2.5 py-2">
+                      <p className="text-[10.5px] text-gray-300 leading-relaxed whitespace-pre-wrap">{(clinicalNotes as any)[key]}</p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       <HypothesisTestBench

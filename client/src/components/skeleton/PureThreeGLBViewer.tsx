@@ -6403,11 +6403,58 @@ export default function PureThreeGLBViewer({
     };
 
     const MAX_BONE_DISTANCE = 1.5;
+    // Movement Mode uses a tight screen-space cushion so the cursor only
+    // grabs a joint when it is visibly on (or right next to) the bone the
+    // user is pointing at. Posture Mode keeps the looser world-space
+    // behaviour so users can grab joints freely in the editor.
+    const MOVEMENT_PICK_PIXEL_RADIUS = 26;
 
     const findBoneFromRaycast = (ndc: THREE.Vector2): string | null => {
       raycasterRef.current.setFromCamera(ndc, camera);
+      const isMovement = skeletonModeRef.current === 'movement';
+      const rect = domElement.getBoundingClientRect();
+      const cursorPx = new THREE.Vector2(
+        (ndc.x * 0.5 + 0.5) * rect.width,
+        (-ndc.y * 0.5 + 0.5) * rect.height
+      );
+      const projWorld = new THREE.Vector3();
+      const projectedPx = new THREE.Vector2();
+      const projectToPixels = (worldPos: THREE.Vector3, out: THREE.Vector2): boolean => {
+        projWorld.copy(worldPos).project(camera);
+        // Joint is behind the camera or outside clip space — skip it.
+        if (projWorld.z > 1 || projWorld.z < -1) return false;
+        out.set(
+          (projWorld.x * 0.5 + 0.5) * rect.width,
+          (-projWorld.y * 0.5 + 0.5) * rect.height
+        );
+        return true;
+      };
+      const nearestJointWithinPixels = (): string | null => {
+        const worldPos = new THREE.Vector3();
+        let bestName = '';
+        let bestPx = Infinity;
+        for (const name of poseBoneNames) {
+          const bone = bones[name];
+          if (!bone) continue;
+          bone.getWorldPosition(worldPos);
+          if (!projectToPixels(worldPos, projectedPx)) continue;
+          const d = projectedPx.distanceTo(cursorPx);
+          if (d < bestPx) {
+            bestPx = d;
+            bestName = name;
+          }
+        }
+        return bestPx <= MOVEMENT_PICK_PIXEL_RADIUS ? (bestName || null) : null;
+      };
+
       const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
       if (hits.length === 0) {
+        if (isMovement) {
+          // No mesh under the cursor in Movement Mode — only accept a
+          // joint when the cursor is within the small pixel cushion of
+          // an actual joint. Empty-space hovers return null.
+          return nearestJointWithinPixels();
+        }
         const modelCenter = new THREE.Vector3();
         const box = new THREE.Box3().setFromObject(model);
         box.getCenter(modelCenter);
@@ -6447,6 +6494,18 @@ export default function PureThreeGLBViewer({
           nearestDist = d;
           nearestBone = name;
         }
+      }
+      if (isMovement) {
+        // Even on a real mesh hit, require the resolved joint to be
+        // close to the cursor in screen space so a hit on a far-away
+        // mesh region doesn't snap to an unrelated joint.
+        if (!nearestBone) return null;
+        const bone = bones[nearestBone];
+        if (!bone) return null;
+        bone.getWorldPosition(worldPos);
+        if (!projectToPixels(worldPos, projectedPx)) return null;
+        if (projectedPx.distanceTo(cursorPx) > MOVEMENT_PICK_PIXEL_RADIUS) return null;
+        return nearestBone;
       }
       if (nearestDist > MAX_BONE_DISTANCE) return null;
       return nearestBone || null;

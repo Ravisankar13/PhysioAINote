@@ -8044,9 +8044,9 @@ ${ddxList}`;
     }, ...prev].slice(0, 12));
   }, []);
 
-  useEffect(() => {
+  const handleMovementSimReset = useCallback(() => {
     setMovementSimTissueOverlay([]);
-  }, [activeCaseId, skeletonMode]);
+  }, []);
 
   // Lightweight reshape of the capacity map → the prop expected by
   // PureThreeGLBViewer (lookup by `joint:movement`). We pass the
@@ -16625,6 +16625,7 @@ ${ddxList}`;
             key={`mvsim:${activeCaseId ?? 'none'}:${skeletonMode}`}
             context={movementSimContext}
             onResult={handleMovementSimResult}
+            onReset={handleMovementSimReset}
           />
           <MovementFindingsStream
             findings={movementFindings}

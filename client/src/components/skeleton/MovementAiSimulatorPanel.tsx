@@ -172,6 +172,7 @@ export interface MovementSimContext {
 export interface MovementAiSimulatorPanelProps {
   context: MovementSimContext;
   onResult: (result: MovementSimResult, plan: Intervention[]) => void;
+  onReset?: () => void;
   className?: string;
 }
 
@@ -201,13 +202,14 @@ const SYMPTOM_TINT: Record<MovementSimResult['tissueLoadImpact'][number]['sympto
 
 const MAGNITUDE_BANDS: Magnitude[] = ['small', 'moderate', 'large'];
 
-export default function MovementAiSimulatorPanel({ context, onResult, className = '' }: MovementAiSimulatorPanelProps) {
+export default function MovementAiSimulatorPanel({ context, onResult, onReset, className = '' }: MovementAiSimulatorPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [interventions, setInterventions] = useState<Intervention[]>([defaultIntervention()]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MovementSimResult | null>(null);
   const lastBodyRef = useRef<unknown>(null);
+  const lastPlanRef = useRef<Intervention[] | null>(null);
 
   const updateIntervention = useCallback((uid: string, patch: Partial<Intervention>) => {
     setInterventions(prev => prev.map(i => i.uid === uid ? { ...i, ...patch } : i));
@@ -223,7 +225,9 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     setResult(null);
     setError(null);
     lastBodyRef.current = null;
-  }, []);
+    lastPlanRef.current = null;
+    onReset?.();
+  }, [onReset]);
   const onKindChange = useCallback((uid: string, kind: InterventionKind) => {
     const meta = KIND_OPTIONS.find(k => k.id === kind)!;
     const patch: Partial<Intervention> = { kind, target: undefined, slingId: undefined, freeText: undefined, romDirection: undefined, magnitudeBand: 'moderate' };
@@ -282,13 +286,16 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     };
   }, [context, interventions]);
 
-  const runSim = useCallback(async (overrideBody?: unknown) => {
-    if (!canRun || running) return;
+  const runSim = useCallback(async (override?: { body: unknown; plan: Intervention[] }) => {
+    if (!override && (!canRun || running)) return;
+    if (override && running) return;
     setRunning(true);
     setError(null);
+    const planSnapshot = override?.plan ?? interventions.map(i => ({ ...i }));
+    const body = override?.body ?? buildBody();
+    lastBodyRef.current = body;
+    lastPlanRef.current = planSnapshot;
     try {
-      const body = overrideBody ?? buildBody();
-      lastBodyRef.current = body;
       const res = await fetch('/api/movement-sim/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -301,7 +308,7 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
       }
       const data = await res.json() as MovementSimResult;
       setResult(data);
-      onResult(data, interventions);
+      onResult(data, planSnapshot);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to run prediction';
       setError(msg);
@@ -311,8 +318,11 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
   }, [canRun, running, buildBody, onResult, interventions]);
 
   const rerun = useCallback(() => {
-    if (lastBodyRef.current) runSim(lastBodyRef.current);
-    else runSim();
+    if (lastBodyRef.current && lastPlanRef.current) {
+      runSim({ body: lastBodyRef.current, plan: lastPlanRef.current });
+    } else {
+      runSim();
+    }
   }, [runSim]);
 
   const ChevIcon = collapsed ? ChevronDown : ChevronUp;
@@ -570,7 +580,7 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
                 <span>{error}</span>
                 <Button
                   type="button" size="sm" variant="ghost"
-                  onClick={() => runSim(lastBodyRef.current ?? undefined)}
+                  onClick={() => rerun()}
                   className="h-6 text-[10px] text-rose-100 hover:bg-rose-900/60"
                   data-testid="movement-sim-retry"
                 >

@@ -869,8 +869,16 @@ export default function SlingAnalysisPanel({
           </div>
         )}
 
-        {focusStoryline && (
+        {focusStoryline ? (
           <PainStorylineCard storyline={focusStoryline} variant="standalone" defaultExpanded />
+        ) : (
+          <div
+            className="rounded-lg border border-slate-700/40 bg-slate-900/40 p-2.5 text-[10px] text-slate-400"
+            data-testid="pain-storyline-empty"
+          >
+            <span className="text-slate-200 font-semibold">Why this hurts</span> — place
+            or describe a painful area to see the cause-and-effect story.
+          </div>
         )}
 
         <DriverAnalysisSection result={computedDriverAnalysis} />
@@ -916,7 +924,7 @@ export default function SlingAnalysisPanel({
               activationValue={slingActivation?.[sling.slingId] ?? sling.activationLevelPct ?? SLING_ACTIVATION_BASELINE}
               onActivationChange={(val) => onSlingActivationChange?.(sling.slingId, val)}
               onActivationReset={() => onResetSling?.(sling.slingId)}
-              storyline={buildPainStorylineForSling(sling.slingId, computedDriverAnalysis, sling)}
+              storyline={buildPainStorylineForSling(sling.slingId, computedDriverAnalysis, sling, painMarkers)}
             />
           ))}
         </div>

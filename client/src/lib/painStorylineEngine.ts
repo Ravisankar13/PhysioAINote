@@ -85,26 +85,32 @@ function describeCompromisedSling(
   };
 }
 
-function describeWeakLink(sling: SlingResult | undefined): PainStoryStep | null {
+function describeWeakLink(
+  sling: SlingResult | undefined,
+  soft: typeof SOFTENERS[keyof typeof SOFTENERS],
+): PainStoryStep | null {
   if (!sling) return null;
   const wl = sling.weakLinks[0];
   if (!wl) return null;
   return {
     kind: 'weak-link',
     label: 'Weak link',
-    body: `${wl.muscle} is the weak link (activation ${wl.activationPct}%).`,
+    body: `${wl.muscle} ${soft.verb} the weak link (activation ${wl.activationPct}%).`,
     detail: wl.reason,
   };
 }
 
-function describeCompensator(sling: SlingResult | undefined): PainStoryStep | null {
+function describeCompensator(
+  sling: SlingResult | undefined,
+  soft: typeof SOFTENERS[keyof typeof SOFTENERS],
+): PainStoryStep | null {
   if (!sling) return null;
   const fr = sling.forceReroutes[0];
   if (fr) {
     return {
       kind: 'compensator',
       label: 'Compensator picks it up',
-      body: `${fr.toMuscle} is taking over (+${fr.reroutePct}% load from ${fr.fromMuscle}).`,
+      body: `${fr.toMuscle} ${soft.verb} taking over (+${fr.reroutePct}% load from ${fr.fromMuscle}).`,
       detail: fr.clinical,
     };
   }
@@ -113,32 +119,39 @@ function describeCompensator(sling: SlingResult | undefined): PainStoryStep | nu
     return {
       kind: 'compensator',
       label: 'Compensator picks it up',
-      body: `${comp.compensatingSlingLabel} is compensating (${comp.severity}).`,
+      body: `${comp.compensatingSlingLabel} ${soft.verb} compensating (${comp.severity}).`,
       detail: comp.mechanism,
     };
   }
   return null;
 }
 
-function describeOverloadedTissue(sling: SlingResult | undefined): PainStoryStep | null {
+function describeOverloadedTissue(
+  sling: SlingResult | undefined,
+  soft: typeof SOFTENERS[keyof typeof SOFTENERS],
+): PainStoryStep | null {
   if (!sling) return null;
   const area = sling.downstreamRiskArea?.trim();
   if (!area || sling.downstreamRisk === 'none') return null;
   return {
     kind: 'overloaded-tissue',
     label: 'Overloaded tissue',
-    body: `${area} carries the leftover load (${sling.downstreamRisk} risk).`,
+    body: `${area} ${soft.verb} carrying the leftover load (${sling.downstreamRisk} risk).`,
   };
 }
 
-function describeWhyItHurts(sling: SlingResult | undefined): PainStoryStep | null {
+function describeWhyItHurts(
+  sling: SlingResult | undefined,
+  soft: typeof SOFTENERS[keyof typeof SOFTENERS],
+): PainStoryStep | null {
   if (!sling) return null;
   const consequence = sling.clinicalConsequences.find(c => c && c.trim().length > 0);
   if (consequence) {
+    const text = consequence.trim();
     return {
       kind: 'why-it-hurts',
       label: 'Why it hurts',
-      body: consequence.trim(),
+      body: `${soft.lead}${text}`,
       detail: sling.narrative && sling.narrative !== consequence ? sling.narrative : undefined,
     };
   }
@@ -146,7 +159,7 @@ function describeWhyItHurts(sling: SlingResult | undefined): PainStoryStep | nul
     return {
       kind: 'why-it-hurts',
       label: 'Why it hurts',
-      body: sling.narrative,
+      body: `${soft.lead}${sling.narrative}`,
     };
   }
   return null;
@@ -194,10 +207,10 @@ export function buildPainStorylineForHypothesis(
   const stepsRaw: Array<PainStoryStep | null> = [
     describePainHere(hypothesis, soft, focusMarkerLabel),
     describeCompromisedSling(hypothesis, soft),
-    describeWeakLink(slingResult),
-    describeCompensator(slingResult),
-    describeOverloadedTissue(slingResult),
-    describeWhyItHurts(slingResult),
+    describeWeakLink(slingResult, soft),
+    describeCompensator(slingResult, soft),
+    describeOverloadedTissue(slingResult, soft),
+    describeWhyItHurts(slingResult, soft),
     describeFix(recs),
   ];
   const steps = stepsRaw.filter((s): s is PainStoryStep => s !== null);
@@ -232,11 +245,24 @@ export function buildPainStorylineForSling(
   slingId: SlingHypothesis['slingId'],
   driver: DriverAnalysisResult | null | undefined,
   sling: SlingResult | undefined,
+  /** Optional list of all pain markers — used to focus the story on the
+   *  highest-severity supporting marker for this sling. */
+  allMarkers?: DriverAnalysisPainMarker[],
 ): PainStoryline | null {
   if (!driver) return null;
   const hypothesis = driver.hypotheses.find(h => h.slingId === slingId);
   if (!hypothesis) return null;
-  return buildPainStorylineForHypothesis(hypothesis, sling, driver.recommendations);
+  let focusLabel: string | undefined;
+  if (allMarkers && hypothesis.supportingMarkers.length > 0) {
+    const supportingIds = new Set(hypothesis.supportingMarkers.map(m => m.id));
+    const supporting = allMarkers.filter(m => supportingIds.has(m.id));
+    if (supporting.length > 0) {
+      supporting.sort((a, b) => (b.severity ?? 5) - (a.severity ?? 5));
+      const worst = supporting[0];
+      focusLabel = worst.anatomicalLabel || worst.nearestBone;
+    }
+  }
+  return buildPainStorylineForHypothesis(hypothesis, sling, driver.recommendations, focusLabel);
 }
 
 /**

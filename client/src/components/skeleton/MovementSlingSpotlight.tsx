@@ -78,9 +78,6 @@ interface Props {
   onClose: () => void;
 }
 
-// Shared sling-to-cart helpers live in `@/lib/slingCartItems` so the
-// movement spotlight and the full Sling Analysis panel produce identical
-// cart entries (same id, same metadata).
 const recToCartItem = slingRecToCartItem;
 const partToCartItem = slingPartToCartItem;
 
@@ -154,12 +151,15 @@ export default function MovementSlingSpotlight(props: Props) {
   const isReduced = overrideLevel !== undefined && overrideLevel < SLING_ACTIVATION_BASELINE - 0.5;
   const wl = sling.weakLinks[0];
   const isSelected = selectedSlingId === sling.slingId;
-  // Per-part treatments are persisted at case scope, but the spotlight
-  // panel only surfaces the ones that belong to the currently spotlighted
-  // sling so switching focus doesn't show stale entries.
+  // Treatment state is movement-scoped: per-part records are keyed by
+  // `${movementTaskId}::${partId}` so the same anatomical part treated
+  // under different movements stays distinct.
+  const partKey = (id: string) => `${movementTaskId ?? 'no_task'}::${id}`;
   const slingPartTreatments = useMemo(
-    () => Object.values(partTreatments).filter(rec => rec.slingId === sling.slingId),
-    [partTreatments, sling.slingId],
+    () => Object.values(partTreatments).filter(
+      rec => rec.slingId === sling.slingId && (rec.movementTaskId ?? null) === (movementTaskId ?? null),
+    ),
+    [partTreatments, sling.slingId, movementTaskId],
   );
 
   const slingRecs = slingDrivenRecommendations.filter(r => r.slingId === sling.slingId);
@@ -187,7 +187,7 @@ export default function MovementSlingSpotlight(props: Props) {
   const applyIntervention = (part: SpotlightPart, intv: PartIntervention) => {
     const cartItem = partToCartItem(part, intv, sling, movementTaskId);
     const rec: SlingPartTreatmentRecord = {
-      partId: part.id,
+      partId: partKey(part.id),
       partKind: part.kind,
       partLabel: part.label,
       ref: part.ref,
@@ -207,10 +207,10 @@ export default function MovementSlingSpotlight(props: Props) {
     onApplyPartTreatment(rec, cartItem);
   };
 
-  const clearTreatment = (partId: string) => {
-    const rec = partTreatments[partId];
+  const clearTreatment = (key: string) => {
+    const rec = partTreatments[key];
     if (rec?.cartItemId) removeFromCart(rec.cartItemId);
-    onClearPartTreatment(partId);
+    onClearPartTreatment(key);
   };
 
   return (
@@ -221,7 +221,7 @@ export default function MovementSlingSpotlight(props: Props) {
           const pos = hotspotForPart(p);
           if (!pos) return null;
           const ks = PART_KIND_STYLE[p.kind];
-          const treated = !!partTreatments[p.id];
+          const treated = !!partTreatments[partKey(p.id)];
           const isOpen = openPartId === p.id;
           const size = 14 + Math.round(p.intensity * 8);
           return (
@@ -371,7 +371,7 @@ export default function MovementSlingSpotlight(props: Props) {
             <div className="flex flex-wrap gap-1">
               {parts.map(p => {
                 const ks = PART_KIND_STYLE[p.kind];
-                const treated = !!partTreatments[p.id];
+                const treated = !!partTreatments[partKey(p.id)];
                 const isOpen = openPartId === p.id;
                 const opacity = isSelected ? Math.max(0.55, p.intensity) : Math.max(0.4, p.intensity * 0.85);
                 return (
@@ -399,7 +399,7 @@ export default function MovementSlingSpotlight(props: Props) {
             const p = parts.find(x => x.id === openPartId);
             if (!p) return null;
             const interventions = getPartInterventions(p, sling);
-            const treated = partTreatments[p.id];
+            const treated = partTreatments[partKey(p.id)];
             return (
               <div className="rounded border border-slate-700/70 bg-slate-950/70 p-1.5 space-y-1.5" data-testid={`spotlight-popover-${p.id}`}>
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-200">
@@ -409,7 +409,7 @@ export default function MovementSlingSpotlight(props: Props) {
                   {treated && (
                     <button
                       type="button"
-                      onClick={() => clearTreatment(p.id)}
+                      onClick={() => clearTreatment(partKey(p.id))}
                       className="text-[8px] text-slate-400 hover:text-slate-100 underline"
                       data-testid={`spotlight-clear-${p.id}`}
                     >

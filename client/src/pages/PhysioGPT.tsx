@@ -7501,17 +7501,9 @@ ${ddxList}`;
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
 
-  // Re-derive the per-part muscle adjustment map from the full set of
-  // active per-part treatments. The engine's `slingActivationOverrides`
-  // is an absolute activation level (peaked at 100, lower OR higher
-  // hurts force-transfer), so it is the wrong knob for "treatment
-  // boosts the sling". Instead every per-part treatment is mapped to
-  // muscle-level patches that the engine consumes via `muscleOverrides`:
-  //   - muscle parts → patch the targeted muscle directly
-  //   - link / attachment parts → propagate ~60% of the intended delta
-  //     to every weak-link muscle in that sling, so the engine's
-  //     weak-link detector recomputes status / severity / weak-link
-  //     selection downstream of the treatment.
+  // Re-derive muscle adjustments from the active per-part treatments.
+  // Routes link/attachment treatments through weak-link muscles so the
+  // engine's weak-link detector recomputes downstream of the treatment.
   const deriveSlingPartMuscleAdj = useCallback(
     (treatments: Record<string, SlingPartTreatmentRecord>) => {
       const out: Record<string, { tension?: number; pathology?: PathologyType }> = {};
@@ -10640,10 +10632,6 @@ ${ddxList}`;
                       }
                       const nextTreatments = { ...slingPartTreatments, [rec.partId]: rec };
                       setSlingPartTreatments(nextTreatments);
-                      // Re-derive muscle adjustments from the full updated set
-                      // so multi-part contributions to the same weak-link
-                      // muscle accumulate (and undoing one part subtracts only
-                      // its own contribution).
                       setSlingPartMuscleAdjustments(deriveSlingPartMuscleAdj(nextTreatments));
                       planCartReplaceAllRef.current?.([
                         ...(planCartItemsState ?? []).filter(it => it.id !== cartItem.id && (!prior?.cartItemId || it.id !== prior.cartItemId)),

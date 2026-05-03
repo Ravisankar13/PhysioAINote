@@ -19,8 +19,9 @@ export const SLING_PART_MODALITY_TO_CART: Record<PartIntervention['modality'], P
 
 export function slingRecToCartItem(rec: SlingDrivenRecommendation, movementTaskId: string | null = null): PlanCartItem {
   const modality = SLING_DRIVER_MODALITY_TO_CART[rec.modality];
+  const taskKey = movementTaskId ? `task_${movementTaskId}_` : '';
   return {
-    id: makeCartId(modality, `sling_${rec.slingId}_${rec.name}`),
+    id: makeCartId(modality, `sling_${taskKey}${rec.slingId}_${rec.name}`),
     modality,
     name: rec.name,
     targetStructure: rec.target,
@@ -41,8 +42,9 @@ export function slingPartToCartItem(
   movementTaskId: string | null,
 ): PlanCartItem {
   const modality = SLING_PART_MODALITY_TO_CART[intv.modality];
+  const taskKey = movementTaskId ? `task_${movementTaskId}_` : '';
   return {
-    id: makeCartId(modality, `sling_part_${sling.slingId}_${intv.id}`),
+    id: makeCartId(modality, `sling_part_${taskKey}${sling.slingId}_${intv.id}`),
     modality,
     name: `${intv.label} — ${part.label}`,
     targetStructure: part.label,

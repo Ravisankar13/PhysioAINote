@@ -91,7 +91,26 @@ const MOVEMENT_TASK_AFFINITY: Record<string, SlingId[]> = {
   // Scapulo-thoracic / overhead
   overhead_reach: ['scapular_shoulder'],
   scaption: ['scapular_shoulder'],
+  arm_elevation: ['scapular_shoulder'],
+  shoulder_elevation: ['scapular_shoulder'],
+  scapular_elevation: ['scapular_shoulder'],
+  shoulder_abduction: ['scapular_shoulder'],
+  shoulder_flexion: ['scapular_shoulder'],
+  reach: ['scapular_shoulder'],
+  reaching: ['scapular_shoulder'],
 };
+
+// Anatomical-label aliases that should bias a sling even though the
+// underlying skeleton mesh exposes the bone under a different name
+// (e.g. scapular pain markers anchor on shoulder/clavicle bones).
+const MARKER_LABEL_TO_SLING: Array<{ match: RegExp; sling: SlingId }> = [
+  { match: /scapul|rhomboid|trapezius|infraspinat|supraspinat|subscapular/i, sling: 'scapular_shoulder' },
+  { match: /shoulder|deltoid|rotator|gleno/i, sling: 'scapular_shoulder' },
+  { match: /lat\s*dor|latissimus|thoracolumbar|gluteus\s*max/i, sling: 'posterior_oblique' },
+  { match: /linea\s*alba|adductor|external\s*oblique/i, sling: 'anterior_oblique' },
+  { match: /it\s*band|gluteus\s*med|quadratus\s*lumb|tensor\s*fasciae/i, sling: 'lateral' },
+  { match: /sacrotuberous|biceps\s*femoris|erector\s*spinae|deep\s*posterior/i, sling: 'deep_longitudinal' },
+];
 
 function affinityForTask(taskId: string | null | undefined): Set<SlingId> {
   if (!taskId) return new Set();
@@ -132,8 +151,14 @@ export function pickSpotlightSling(
   }
 
   const markerBoneSet = new Set<string>();
+  const markerLabelSlingSet = new Set<SlingId>();
   for (const m of markers) {
     if (m.nearestBone) markerBoneSet.add(m.nearestBone);
+    if (m.anatomicalLabel) {
+      for (const { match, sling } of MARKER_LABEL_TO_SLING) {
+        if (match.test(m.anatomicalLabel)) markerLabelSlingSet.add(sling);
+      }
+    }
   }
 
   const taskAffinity = affinityForTask(movementTaskId);
@@ -164,8 +189,9 @@ export function pickSpotlightSling(
     let markerBias = 0;
     if (markerBoneSet.size > 0) {
       for (const b of pathway) if (markerBoneSet.has(b)) markerBias += 6;
-      markerBias = Math.min(20, markerBias);
     }
+    if (markerLabelSlingSet.has(s.slingId)) markerBias += 12;
+    markerBias = Math.min(20, markerBias);
 
     // Movement task affinity — also capped (+18). Helps tie-break
     // between similarly dysfunctional slings.

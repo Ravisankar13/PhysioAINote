@@ -35,6 +35,7 @@ import {
   type PainStoryline,
 } from '@/lib/painStorylineEngine';
 import { AddToPlanButton, makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
+import { slingRecToCartItem } from '@/lib/slingCartItems';
 
 interface SlingAnalysisPanelProps {
   analysis: SlingAnalysisResult | null;
@@ -85,8 +86,6 @@ const CONFIDENCE_COLOR: Record<SlingHypothesis['confidence'], string> = {
   low: 'bg-slate-700/40 text-slate-300 border-slate-600/50',
 };
 
-// Shared with MovementSlingSpotlight — see `@/lib/slingCartItems`.
-import { slingRecToCartItem } from '@/lib/slingCartItems';
 const recToCartItem = (rec: SlingDrivenRecommendation): PlanCartItem => slingRecToCartItem(rec);
 
 function activationBandLabel(band: SlingActivationBand): string {

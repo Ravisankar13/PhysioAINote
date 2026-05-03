@@ -1136,12 +1136,14 @@ export default function PhysioGPT() {
     const signaturePayload = {
       hypotheses: d.hypotheses.map(h => ({ id: h.id, condition: h.condition, confidence: h.confidence, status: h.status })),
       findings: d.findings.map(f => ({ id: f.id, category: f.category, text: f.text })),
-      flags: d.flags.map(f => f),
-      reasoningChain: d.reasoningChain.map(r => r),
+      flags: d.flags,
+      reasoningChain: d.reasoningChain,
+      biomechanicalLinks: d.biomechanicalLinks ?? [],
       clinicalSummary: d.clinicalSummary || "",
       assessmentPriorities: d.assessmentPriorities || [],
       treatmentPlan: d.treatmentPlan ?? null,
       posturalAnalysis: d.posturalAnalysis ?? null,
+      evidenceReferences: (d as { evidenceReferences?: unknown[] }).evidenceReferences ?? [],
       subjectiveHistory: subjectiveHistoryInput || "",
     };
     return JSON.stringify(signaturePayload);
@@ -1157,8 +1159,11 @@ export default function PhysioGPT() {
     }
   }, [clinicalNotesReasoningKey]);
 
+  const inFlightClinicalNotesKeyRef = useRef<string | null>(null);
   const generateClinicalNotesFromToolbar = useCallback(async () => {
     if (!hasReasoningContentForNotes || isGeneratingClinicalNotes) return;
+    const requestKey = clinicalNotesReasoningKey;
+    inFlightClinicalNotesKeyRef.current = requestKey;
     setIsGeneratingClinicalNotes(true);
     setClinicalNotesError(null);
     try {
@@ -1166,13 +1171,20 @@ export default function PhysioGPT() {
         reasoningData: clinicalReasoningData,
         subjectiveHistory: subjectiveHistoryInput,
       });
+      // Stale-response guard: drop the result if the reasoning data has
+      // moved on since the request started.
+      if (inFlightClinicalNotesKeyRef.current !== requestKey) return;
       setClinicalNotes(notes);
-      lastClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+      lastClinicalNotesKeyRef.current = requestKey;
     } catch (err) {
+      if (inFlightClinicalNotesKeyRef.current !== requestKey) return;
       console.error("Failed to generate clinical notes:", err);
       setClinicalNotesError("Couldn't generate notes. Please try again.");
     } finally {
-      setIsGeneratingClinicalNotes(false);
+      if (inFlightClinicalNotesKeyRef.current === requestKey) {
+        inFlightClinicalNotesKeyRef.current = null;
+        setIsGeneratingClinicalNotes(false);
+      }
     }
   }, [hasReasoningContentForNotes, isGeneratingClinicalNotes, clinicalReasoningData, subjectiveHistoryInput, clinicalNotesReasoningKey]);
 

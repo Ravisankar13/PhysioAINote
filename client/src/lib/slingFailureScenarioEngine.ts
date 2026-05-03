@@ -371,50 +371,46 @@ function sampleKeyframes(keyframes: JointKeyframe[], t: number): number {
   return keyframes[keyframes.length - 1].value;
 }
 
-/* ----------------------------------------------------------------------
- * mergeWithPathologyCompensation — pathology compensation is the PRIMARY
- * source of "actual" deviations. For any joint/axis the pathology engine
- * reports, its deviationDegrees overwrites the template-derived delta
- * (the templates are deterministic fallbacks for the case where the
- * pathology engine has nothing to say about that joint). Joints the
- * pathology engine knows about but the template doesn't are appended.
- * -------------------------------------------------------------------- */
+/**
+ * Authoritative source for actual joint deltas is pathologyCompensationEngine.
+ * Pathology deviations are emitted first; template deltas are appended only
+ * for joints the engine has no opinion on, and tagged as fallback.
+ */
 export function mergeWithPathologyCompensation(
   scenario: SlingFailureScenario,
   comp: PathologyCompensationResult | null | undefined,
 ): SlingFailureScenario {
   if (!comp || !Array.isArray(comp.posturalDeviations) || comp.posturalDeviations.length === 0) {
-    return scenario;
+    const merged = scenario.jointDeltas.map(d => ({
+      ...d,
+      description: d.description?.startsWith('Fallback') ? d.description : `Fallback (no pathology data): ${d.description}`,
+    }));
+    return { ...scenario, jointDeltas: merged };
   }
   const pathologyByKey = new Map<string, { deg: number; reason: string }>();
   for (const dev of comp.posturalDeviations) {
     pathologyByKey.set(`${dev.joint}::${dev.parameter}`, { deg: dev.deviationDegrees, reason: dev.reason });
   }
-  const seen = new Set<string>();
   const merged: SlingFailureScenario['jointDeltas'] = [];
-  for (const d of scenario.jointDeltas) {
-    const key = `${d.joint}::${d.axis}`;
-    seen.add(key);
-    const path = pathologyByKey.get(key);
-    if (path) {
-      merged.push({
-        ...d,
-        actualDeg: path.deg,
-        description: `Pathology compensation: ${path.reason}`,
-      });
-    } else {
-      merged.push(d);
-    }
-  }
+  const usedPathologyKeys = new Set<string>();
   for (const [key, path] of Array.from(pathologyByKey.entries())) {
-    if (seen.has(key)) continue;
     const [joint, axis] = key.split('::');
+    const tmpl = scenario.jointDeltas.find(d => `${d.joint}::${d.axis}` === key);
     merged.push({
       joint,
       axis,
-      intendedDeg: 0,
+      intendedDeg: tmpl?.intendedDeg ?? 0,
       actualDeg: path.deg,
       description: `Pathology compensation: ${path.reason}`,
+    });
+    usedPathologyKeys.add(key);
+  }
+  for (const d of scenario.jointDeltas) {
+    const key = `${d.joint}::${d.axis}`;
+    if (usedPathologyKeys.has(key)) continue;
+    merged.push({
+      ...d,
+      description: d.description?.startsWith('Fallback') ? d.description : `Fallback (no pathology data): ${d.description}`,
     });
   }
   return { ...scenario, jointDeltas: merged.slice(0, 12) };

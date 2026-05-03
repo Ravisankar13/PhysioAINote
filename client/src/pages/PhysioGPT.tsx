@@ -695,11 +695,6 @@ export default function PhysioGPT() {
     speed: 1,
   });
   const [animationConstraints, setAnimationConstraints] = useState<AnimationConstraint[]>([]);
-  // Hoisted to avoid TDZ on activeFailureSel reference (declared above).
-  // SFV at-beat: pulses 3D pain markers + 2D spotlight hotspots whenever
-  // the scrubber is within ±0.06 of the active scenario's failure frame.
-  // Computed inline (not a useEffect) so the boolean stays in lockstep
-  // with the same render frame the rest of the viewer reads.
   const handleAnimationProgress = useCallback((progress: number) => {
     const rounded = Math.round(progress * 1000) / 1000;
     setAnimationState(prev => prev.progress === rounded ? prev : { ...prev, progress: rounded });
@@ -1087,11 +1082,9 @@ export default function PhysioGPT() {
     if (typeof ff !== 'number') return false;
     return Math.abs(animationState.progress - ff) < 0.06;
   }, [activeFailureSel, animationState.progress]);
-  // Failure-frame stall: when the scrubber crosses into the at-beat
-  // window for the first time during a play-through, pause the player
-  // for ~280ms so the weak segment visibly "gives way" instead of
-  // sliding through the failure frame. Re-arms once the scrubber
-  // leaves the window so a single play-through stalls exactly once.
+  const [sfvIntendedVisible, setSfvIntendedVisible] = useState(true);
+  const [sfvActualVisible, setSfvActualVisible] = useState(true);
+  const [sfvGhostOpacity, setSfvGhostOpacity] = useState(0.45);
   const sfvStallArmedRef = useRef(true);
   const sfvStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -10668,7 +10661,16 @@ ${ddxList}`;
             />
             ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'movement') return (
               <div className="relative w-full h-full ring-2 ring-emerald-500/70 ring-inset rounded-md" data-testid="movement-mode-frame">
-                {__viewer}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    opacity: (activeFailureSel?.ghostMode === 'compare' && !sfvActualVisible) ? 0.12 : 1,
+                    transition: 'opacity 180ms ease',
+                  }}
+                  data-testid="sfv-actual-layer"
+                >
+                  {__viewer}
+                </div>
                 <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="movement-mode-pill">
                   <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                   Active Movement Mode
@@ -10736,6 +10738,60 @@ ${ddxList}`;
                 {/* Sling failure visualizer SVG overlay anchored to live
                     bone screen positions: continuous tube + tension pulse +
                     failure-frame badge + reroute arrow for the active scenario. */}
+                {skeletonMode === 'movement' && activeFailureSel && activeFailureSel.ghostMode === 'compare' && sfvIntendedVisible && (
+                  <div
+                    className="absolute inset-0 z-10 pointer-events-none"
+                    style={{ opacity: sfvGhostOpacity, mixBlendMode: 'screen' }}
+                    data-testid="sfv-intended-ghost-layer"
+                  >
+                    <PureThreeGLBViewer
+                      modelPath="/models/skeleton_character.glb"
+                      modelConfig={finalModelConfig}
+                      className="w-full h-full"
+                      animationState={{
+                        ...animationState,
+                        currentMovement: activeFailureSel.scenario.triggerMovementId,
+                      }}
+                      environmentPreset={environmentPreset}
+                      showMuscles={false}
+                    />
+                  </div>
+                )}
+                {skeletonMode === 'movement' && activeFailureSel && activeFailureSel.ghostMode === 'compare' && (
+                  <div
+                    className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-900/85 border border-gray-700/60 shadow-lg backdrop-blur text-[10px] text-gray-200"
+                    style={{ top: 'calc(3.5rem + 310px)', right: '0.75rem' }}
+                    data-testid="sfv-ghost-controls"
+                  >
+                    <button
+                      onClick={() => setSfvActualVisible(v => !v)}
+                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvActualVisible ? 'bg-rose-500/30 text-rose-200' : 'bg-gray-800 text-gray-500 line-through'}`}
+                      data-testid="sfv-toggle-actual"
+                    >
+                      Actual
+                    </button>
+                    <button
+                      onClick={() => setSfvIntendedVisible(v => !v)}
+                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvIntendedVisible ? 'bg-emerald-500/30 text-emerald-200' : 'bg-gray-800 text-gray-500 line-through'}`}
+                      data-testid="sfv-toggle-intended"
+                    >
+                      Intended
+                    </button>
+                    <span className="text-gray-400">Opacity</span>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={0.9}
+                      step={0.05}
+                      value={sfvGhostOpacity}
+                      onChange={(e) => setSfvGhostOpacity(parseFloat(e.target.value))}
+                      className="w-20 accent-emerald-400"
+                      data-testid="sfv-opacity-slider"
+                      disabled={!sfvIntendedVisible}
+                    />
+                    <span className="font-mono text-emerald-300 w-7 text-right">{Math.round(sfvGhostOpacity * 100)}%</span>
+                  </div>
+                )}
                 {skeletonMode === 'movement' && activeFailureSel && (
                   <SlingFailureVisualizerOverlay
                     scenario={activeFailureSel.scenario}

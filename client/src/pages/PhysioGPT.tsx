@@ -102,7 +102,7 @@ import type {
 import type { CompensationResult } from "@/lib/jointConstraints";
 import { type FocusedRegion, FOCUSED_REGIONS } from "@/lib/focusedRegions";
 import { type FocusedCameraResult } from "@/components/skeleton/FocusedCameraCapture";
-import { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
+import { type ClinicalBubbleData, type MarkerRationale } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { ExtendedPoseInput } from "@/utils/poseToControllerMap";
@@ -12577,7 +12577,85 @@ ${ddxList}`;
             )}
 
             {/* Clinical Bubble */}
-            {clinicalBubbleMarker && (
+            {clinicalBubbleMarker && (() => {
+              // Build the structured "Why this marker" rationale from data
+              // already in memory: marker attribution + tissue intelligence
+              // (rationale / candidates / descriptors / aggravators) +
+              // provocation expectations. No new AI calls.
+              const liveMarker = painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker;
+              let markerRationale: MarkerRationale | null = null;
+              if (liveMarker.sourceKind === 'tissue' && liveMarker.sourceTissueLabel) {
+                const tissueKey = `${liveMarker.sourceTissueType ?? ''}:${liveMarker.sourceTissueId ?? ''}`;
+                const intel = tissueIntelligenceMap.get(tissueKey);
+                const sevBlurb = typeof liveMarker.sourceTissueSeverity === 'number'
+                  ? ` (severity ${liveMarker.sourceTissueSeverity.toFixed(1)}/10)`
+                  : '';
+                const tissueType = liveMarker.sourceTissueType ? `${liveMarker.sourceTissueType}: ` : '';
+                const evidence: string[] = [];
+                if (intel?.rationale) evidence.push(intel.rationale);
+                const irritability = intel?.state.irritability;
+                const healingStage = intel?.state.healingStage;
+                if (irritability && (irritability === 'high' || irritability === 'moderate')) {
+                  evidence.push(`State: ${irritability} irritability${healingStage && healingStage !== 'baseline' ? ` · ${healingStage} stage` : ''}`);
+                }
+                const candidates = intel?.painBehavior?.candidates ?? [];
+                for (const c of candidates.slice(0, 2)) {
+                  evidence.push(`Pain generator: ${c.label} (${Math.round(c.probability * 100)}%) — ${c.rationale}`);
+                }
+                const descriptors = intel?.painBehavior?.descriptors ?? [];
+                if (descriptors.length > 0) {
+                  evidence.push(`Descriptors: ${descriptors.slice(0, 4).join(', ')}`);
+                }
+                const aggravators = intel?.painBehavior?.aggravators ?? [];
+                if (aggravators.length > 0) {
+                  evidence.push(`Aggravated by: ${aggravators.slice(0, 3).map(a => a.label).join(', ')}`);
+                }
+                if (intel) {
+                  const overloadPct = Math.round(intel.capacityDemand.overloadRatio * 100);
+                  if (overloadPct >= 80) {
+                    evidence.push(`Capacity vs demand: ${overloadPct}% (overloaded)`);
+                  }
+                }
+                markerRationale = {
+                  sourceKind: 'tissue',
+                  condition: liveMarker.sourceHypothesisCondition || undefined,
+                  primary: `Compromised ${tissueType}${liveMarker.sourceTissueLabel}${sevBlurb}`,
+                  evidence,
+                  edited: liveMarker.source !== 'prediction',
+                };
+              } else if (liveMarker.sourceKind === 'provocation' && liveMarker.sourceProvocationLabel) {
+                const movement = provocationMovements.find(
+                  pm => pm.name === liveMarker.sourceProvocationMovement,
+                );
+                const site = movement?.expectedProvocationSites?.find(
+                  s => s.label === liveMarker.sourceProvocationLabel,
+                );
+                const evidence: string[] = [];
+                if (movement?.clinicalRationale) evidence.push(movement.clinicalRationale);
+                if (movement?.positiveFinding) evidence.push(`Positive finding: ${movement.positiveFinding}`);
+                if (movement?.setupPosture) evidence.push(`Setup: ${movement.setupPosture}`);
+                if (typeof site?.severity === 'number') {
+                  evidence.push(`Expected reproduction: ${liveMarker.sourceProvocationLabel} (~${site.severity}/10)`);
+                }
+                const hyp = clinicalReasoningData?.hypotheses?.find(
+                  h => h.id === liveMarker.sourceHypothesisId
+                    || h.condition === liveMarker.sourceHypothesisCondition,
+                );
+                for (const ev of (hyp?.supportingEvidence ?? []).slice(0, 2)) {
+                  evidence.push(`Supports hypothesis: ${ev}`);
+                }
+                const movementName = liveMarker.sourceProvocationMovement
+                  ? `${liveMarker.sourceProvocationMovement}`
+                  : 'Provocation test';
+                markerRationale = {
+                  sourceKind: 'provocation',
+                  condition: liveMarker.sourceHypothesisCondition || undefined,
+                  primary: `${movementName} → expected pain at ${liveMarker.sourceProvocationLabel}`,
+                  evidence,
+                  edited: liveMarker.source !== 'prediction',
+                };
+              }
+              return (
               <Suspense fallback={<LazyPanelFallback />}>
               <ClinicalBubble
                 key={clinicalBubbleMarker.id}
@@ -12643,9 +12721,11 @@ ${ddxList}`;
                     });
                   };
                 })()}
+                markerRationale={markerRationale}
               />
               </Suspense>
-            )}
+              );
+            })()}
 
             {showPainIntelligence && clinicalBubbleMarker && (
               <div className="absolute top-2 right-2 z-50 animate-in slide-in-from-right-2 duration-200">

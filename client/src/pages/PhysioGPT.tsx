@@ -1087,9 +1087,6 @@ export default function PhysioGPT() {
     if (typeof ff !== 'number') return false;
     return Math.abs(animationState.progress - ff) < 0.06;
   }, [activeFailureSel, animationState.progress]);
-  const [sfvGhostOpacity, setSfvGhostOpacity] = useState(0.42);
-  const [sfvIntendedGhostVisible, setSfvIntendedGhostVisible] = useState(true);
-  const [sfvActualVisible, setSfvActualVisible] = useState(true);
   // Failure-frame stall: when the scrubber crosses into the at-beat
   // window for the first time during a play-through, pause the player
   // for ~280ms so the weak segment visibly "gives way" instead of
@@ -10671,16 +10668,7 @@ ${ddxList}`;
             />
             ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'movement') return (
               <div className="relative w-full h-full ring-2 ring-emerald-500/70 ring-inset rounded-md" data-testid="movement-mode-frame">
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    opacity: (activeFailureSel?.ghostMode === 'compare' && !sfvActualVisible) ? 0.12 : 1,
-                    transition: 'opacity 180ms ease',
-                  }}
-                  data-testid="sfv-primary-viewer-wrap"
-                >
-                  {__viewer}
-                </div>
+                {__viewer}
                 <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="movement-mode-pill">
                   <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                   Active Movement Mode
@@ -10759,77 +10747,11 @@ ${ddxList}`;
                     ghostMode={activeFailureSel.ghostMode}
                   />
                 )}
-                {skeletonMode === 'movement'
-                  && activeFailureSel
-                  && activeFailureSel.ghostMode === 'compare'
-                  && sfvIntendedGhostVisible && (
-                  <div
-                    className="absolute inset-0 z-10 pointer-events-none mix-blend-screen"
-                    style={{ opacity: sfvGhostOpacity }}
-                    data-testid="sfv-dual-ghost-overlay"
-                  >
-                    <PureThreeGLBViewer
-                      modelPath="/models/skeleton_character.glb"
-                      modelConfig={finalModelConfig}
-                      className="w-full h-full"
-                      animationState={{
-                        ...animationState,
-                        currentMovement: activeFailureSel.scenario.triggerMovementId,
-                      }}
-                      environmentPreset={environmentPreset}
-                      showMuscles={false}
-                    />
-                  </div>
-                )}
-                {/* Compare-mode ghost controls: visibility toggles for
-                    the actual (primary) and intended (overlay) skeletons,
-                    plus an opacity slider for the intended ghost. */}
-                {skeletonMode === 'movement'
-                  && activeFailureSel
-                  && activeFailureSel.ghostMode === 'compare' && (
-                  <div
-                    className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-900/85 border border-gray-700/60 shadow-lg backdrop-blur-sm text-[10px] text-gray-200"
-                    style={{ top: 'calc(3.5rem + 310px)', right: '0.75rem' }}
-                    data-testid="sfv-ghost-controls"
-                  >
-                    <button
-                      onClick={() => setSfvActualVisible(v => !v)}
-                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvActualVisible ? 'bg-rose-500/30 text-rose-200' : 'bg-gray-800 text-gray-500 line-through'}`}
-                      data-testid="sfv-toggle-actual"
-                      title="Toggle actual (compensated) skeleton"
-                    >
-                      Actual
-                    </button>
-                    <button
-                      onClick={() => setSfvIntendedGhostVisible(v => !v)}
-                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvIntendedGhostVisible ? 'bg-emerald-500/30 text-emerald-200' : 'bg-gray-800 text-gray-500 line-through'}`}
-                      data-testid="sfv-toggle-intended"
-                      title="Toggle intended (ghost) skeleton"
-                    >
-                      Intended
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400">Opacity</span>
-                      <input
-                        type="range"
-                        min={0.1}
-                        max={0.9}
-                        step={0.05}
-                        value={sfvGhostOpacity}
-                        onChange={(e) => setSfvGhostOpacity(parseFloat(e.target.value))}
-                        className="w-20 accent-emerald-400"
-                        data-testid="sfv-opacity-slider"
-                        disabled={!sfvIntendedGhostVisible}
-                      />
-                      <span className="font-mono text-emerald-300 w-7 text-right">{Math.round(sfvGhostOpacity * 100)}%</span>
-                    </div>
-                  </div>
-                )}
                 {/* Reopen pill — visible only in Movement Mode when the
                     panel has been closed and there is sling analysis to
                     show. Brings the visualizer back without forcing the
                     user to re-run analysis. */}
-                {skeletonMode === 'movement' && slingAnalysis && slingAnalysis.slings.some(s => s.status !== 'optimal') && !slingFailureVisualizerOpen && (
+                {skeletonMode === 'movement' && slingAnalysis && slingAnalysis.slings.some(s => s.status !== 'normal') && !slingFailureVisualizerOpen && (
                   <button
                     onClick={() => setSlingFailureVisualizerOpen(true)}
                     className="absolute z-30 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-[10.5px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition-colors"

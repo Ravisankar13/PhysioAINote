@@ -331,8 +331,21 @@ export function composeActualSequence(
     ].sort((a, b) => a.time - b.time);
   }
 
+  // Content fingerprint so regenerated scenarios (different deltas,
+  // failure frame, or reroute set) yield a fresh sequence id even for
+  // the same trigger+sling combination — prevents the player from
+  // replaying a stale registered actual sequence.
+  let fp = 0;
+  const fpStr = `${failureT.toFixed(3)}|${scenario.jointDeltas
+    .map(d => `${d.joint}:${d.axis}:${d.intendedDeg.toFixed(2)}>${d.actualDeg.toFixed(2)}`)
+    .sort()
+    .join('|')}|${(scenario.rerouteTargetBones ?? []).slice().sort().join(',')}`;
+  for (let i = 0; i < fpStr.length; i++) {
+    fp = ((fp << 5) - fp + fpStr.charCodeAt(i)) | 0;
+  }
+  const fpHex = (fp >>> 0).toString(36);
   return {
-    id: `${base.id}__actual_${scenario.slingId}`,
+    id: `${base.id}__actual_${scenario.slingId}_${fpHex}`,
     name: `${base.name} (compensated)`,
     description: `${base.description} — with ${scenario.slingLabel} failure compensations applied.`,
     duration: base.duration,

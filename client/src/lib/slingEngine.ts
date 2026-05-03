@@ -395,9 +395,15 @@ function applyMuscleOverrides(
 ): { activationPct: number; role: MuscleStateEntry['role'] } {
   if (!overrides) return { activationPct: baseActivation, role: baseRole };
 
-  const aliases = MUSCLE_ALIASES[muscle] ?? [muscle];
-  for (const alias of aliases) {
-    const override = overrides[alias] ?? overrides[alias.toLowerCase()];
+  // Always probe the canonical muscle id (and its lowercase form) first,
+  // then fall through to any aliases. Sling muscles like
+  // `lower_trapezius` / `serratus_anterior` are referenced by canonical
+  // id everywhere in the per-part flow, so they must hit even when an
+  // alias array exists.
+  const aliasList = MUSCLE_ALIASES[muscle] ?? [];
+  const lookupKeys = [muscle, muscle.toLowerCase(), ...aliasList];
+  for (const key of lookupKeys) {
+    const override = overrides[key] ?? overrides[key.toLowerCase()];
     if (override) {
       let modifiedActivation = baseActivation;
       let modifiedRole = baseRole;

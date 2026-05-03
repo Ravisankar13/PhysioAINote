@@ -31,6 +31,7 @@ import PainStorylineCard from './PainStorylineCard';
 import {
   buildTopPainStoryline,
   buildPainStorylineForSling,
+  buildPainStorylineForMarker,
   type PainStoryline,
 } from '@/lib/painStorylineEngine';
 import { AddToPlanButton, makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
@@ -51,6 +52,12 @@ interface SlingAnalysisPanelProps {
   /** Optional precomputed driver analysis (lets PhysioGPT share the result
    *  with engine tabs). When omitted the panel computes its own. */
   driverAnalysis?: DriverAnalysisResult | null;
+  /** Pain marker the clinician most recently clicked on the 3D skeleton.
+   *  Used to render a per-painful-tissue "Why this hurts" storyline. */
+  selectedMarkerId?: string | null;
+  /** Notify the host so clicking a marker chip in the panel can also open
+   *  that marker's clinical bubble / focus on the 3D view. Optional. */
+  onSelectMarker?: (markerId: string | null) => void;
 }
 
 const DRIVER_MODALITY_TO_CART: Record<DriverModality, PlanCartModality> = {
@@ -741,6 +748,8 @@ export default function SlingAnalysisPanel({
   onResetAllSlings,
   painMarkers,
   driverAnalysis,
+  selectedMarkerId,
+  onSelectMarker,
 }: SlingAnalysisPanelProps) {
   const hasModifiedActivations = useMemo(() => {
     if (!slingActivation) return false;
@@ -757,12 +766,36 @@ export default function SlingAnalysisPanel({
     return runDriverAnalysis(painMarkers, analysis);
   }, [driverAnalysis, painMarkers, analysis]);
 
-  // Cause-and-effect storyline for the top hypothesis — auto-shown above the
-  // driver section so it appears as soon as a prediction is available.
-  const topStoryline = useMemo(
-    () => buildTopPainStoryline(computedDriverAnalysis, analysis?.slings),
-    [computedDriverAnalysis, analysis?.slings],
-  );
+  // Per-painful-tissue storylines. We build one per pain marker so each
+  // tissue gets its own cause-and-effect chain.
+  const markerStorylines = useMemo(() => {
+    const map = new Map<string, PainStoryline>();
+    if (!computedDriverAnalysis || !painMarkers || painMarkers.length === 0) return map;
+    for (const m of painMarkers) {
+      const story = buildPainStorylineForMarker(m, computedDriverAnalysis, analysis?.slings);
+      if (story) map.set(m.id, story);
+    }
+    return map;
+  }, [computedDriverAnalysis, painMarkers, analysis?.slings]);
+
+  // Local fallback selection when the host hasn't wired one yet — defaults
+  // to the first painful tissue with a buildable storyline.
+  const [internalSelectedMarkerId, setInternalSelectedMarkerId] = useState<string | null>(null);
+  const effectiveSelectedMarkerId = (selectedMarkerId ?? internalSelectedMarkerId) || null;
+
+  const focusStoryline = useMemo(() => {
+    if (effectiveSelectedMarkerId && markerStorylines.has(effectiveSelectedMarkerId)) {
+      return markerStorylines.get(effectiveSelectedMarkerId) ?? null;
+    }
+    // First marker with a buildable story, else fall back to top hypothesis.
+    if (painMarkers && painMarkers.length > 0) {
+      for (const m of painMarkers) {
+        const s = markerStorylines.get(m.id);
+        if (s) return s;
+      }
+    }
+    return buildTopPainStoryline(computedDriverAnalysis, analysis?.slings);
+  }, [effectiveSelectedMarkerId, markerStorylines, painMarkers, computedDriverAnalysis, analysis?.slings]);
 
   if (!analysis) {
     return (
@@ -804,8 +837,40 @@ export default function SlingAnalysisPanel({
           )}
         </div>
 
-        {topStoryline && (
-          <PainStorylineCard storyline={topStoryline} variant="standalone" defaultExpanded />
+        {painMarkers && painMarkers.length > 1 && markerStorylines.size > 1 && (
+          <div className="flex flex-wrap gap-1" data-testid="pain-storyline-marker-selector">
+            {painMarkers.map(m => {
+              const story = markerStorylines.get(m.id);
+              if (!story) return null;
+              const active = focusStoryline === story;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setInternalSelectedMarkerId(m.id);
+                    onSelectMarker?.(m.id);
+                  }}
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                    active
+                      ? 'bg-rose-500/25 text-rose-100 border-rose-500/50'
+                      : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-700/60'
+                  }`}
+                  data-testid={`pain-storyline-chip-${m.id}`}
+                >
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle"
+                    style={{ backgroundColor: story.slingColor }}
+                  />
+                  {m.anatomicalLabel || m.nearestBone}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {focusStoryline && (
+          <PainStorylineCard storyline={focusStoryline} variant="standalone" defaultExpanded />
         )}
 
         <DriverAnalysisSection result={computedDriverAnalysis} />

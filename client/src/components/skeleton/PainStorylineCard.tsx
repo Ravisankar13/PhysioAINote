@@ -56,7 +56,13 @@ const STEP_TONE: Record<PainStoryStepKind, string> = {
 const CONFIDENCE_BADGE: Record<PainStoryline['confidence'], string> = {
   high: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/40',
   moderate: 'bg-amber-500/20 text-amber-200 border-amber-500/40',
-  low: 'bg-slate-700/50 text-slate-300 border-slate-600/50',
+  low: 'bg-slate-700/50 text-slate-300 border-slate-600/50 italic',
+};
+
+const CONFIDENCE_LABEL: Record<PainStoryline['confidence'], string> = {
+  high: 'high confidence',
+  moderate: 'moderate confidence',
+  low: 'tentative',
 };
 
 const DRIVER_MODALITY_TO_CART: Record<DriverModality, PlanCartModality> = {
@@ -121,7 +127,7 @@ export default function PainStorylineCard({
               className={`text-[8px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_BADGE[storyline.confidence]}`}
               data-testid={`pain-storyline-confidence-${storyline.confidence}`}
             >
-              {storyline.confidence} confidence
+              {CONFIDENCE_LABEL[storyline.confidence]}
             </span>
           </div>
           {!expanded && (

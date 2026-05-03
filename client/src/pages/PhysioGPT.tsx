@@ -15401,6 +15401,12 @@ ${ddxList}`;
                   type: pm.type,
                 }))}
                 driverAnalysis={slingDriverAnalysisResult}
+                selectedMarkerId={clinicalBubbleMarker?.id ?? null}
+                onSelectMarker={(id) => {
+                  if (!id) { setClinicalBubbleMarker(null); return; }
+                  const m = painMarkers.find(pm => pm.id === id);
+                  if (m) setClinicalBubbleMarker(m);
+                }}
               />
               </Suspense>
             </div>

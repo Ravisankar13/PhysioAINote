@@ -3,6 +3,7 @@ import type {
   SlingHypothesis,
   SlingDrivenRecommendation,
   DriverAnalysisResult,
+  DriverAnalysisPainMarker,
 } from './slingDriverAnalysis';
 
 export type PainStoryStepKind =
@@ -41,7 +42,18 @@ const SOFTENERS = {
 function describePainHere(
   hypothesis: SlingHypothesis,
   soft: typeof SOFTENERS[keyof typeof SOFTENERS],
+  /** When provided, the storyline is scoped to a single painful tissue and
+   *  this label is used verbatim instead of summarising every supporting
+   *  marker on the hypothesis. */
+  focusMarkerLabel?: string,
 ): PainStoryStep | null {
+  if (focusMarkerLabel) {
+    return {
+      kind: 'pain-here',
+      label: 'Pain here',
+      body: `${soft.lead}${focusMarkerLabel}`.trim(),
+    };
+  }
   const labels = hypothesis.supportingMarkers.map(m => m.label).filter(Boolean);
   const regions = hypothesis.loadedRegions.filter(Boolean);
   const where = labels.length > 0
@@ -174,12 +186,13 @@ export function buildPainStorylineForHypothesis(
   hypothesis: SlingHypothesis,
   slingResult: SlingResult | undefined,
   allRecommendations: SlingDrivenRecommendation[],
+  focusMarkerLabel?: string,
 ): PainStoryline | null {
   const soft = SOFTENERS[hypothesis.confidence];
   const recs = allRecommendations.filter(r => r.slingId === hypothesis.slingId);
 
   const stepsRaw: Array<PainStoryStep | null> = [
-    describePainHere(hypothesis, soft),
+    describePainHere(hypothesis, soft, focusMarkerLabel),
     describeCompromisedSling(hypothesis, soft),
     describeWeakLink(slingResult),
     describeCompensator(slingResult),
@@ -224,4 +237,44 @@ export function buildPainStorylineForSling(
   const hypothesis = driver.hypotheses.find(h => h.slingId === slingId);
   if (!hypothesis) return null;
   return buildPainStorylineForHypothesis(hypothesis, sling, driver.recommendations);
+}
+
+/**
+ * Build a storyline focused on a single painful tissue (a single pain marker
+ * the clinician clicked). Picks the strongest hypothesis whose
+ * supportingMarkers contain this marker; falls back to one whose
+ * loadedRegions cover the marker's bone/label. Returns null when the marker
+ * cannot be tied to any hypothesis. */
+export function buildPainStorylineForMarker(
+  marker: DriverAnalysisPainMarker | null | undefined,
+  driver: DriverAnalysisResult | null | undefined,
+  slings: SlingResult[] | undefined,
+): PainStoryline | null {
+  if (!marker || !driver) return null;
+  const hyps = driver.hypotheses;
+  if (hyps.length === 0) return null;
+
+  // Hypotheses are returned ranked, so the first match is the strongest.
+  let hypothesis: SlingHypothesis | undefined = hyps.find(h =>
+    h.supportingMarkers.some(m => m.id === marker.id),
+  );
+  if (!hypothesis) {
+    const bone = (marker.nearestBone || '').toLowerCase();
+    const label = (marker.anatomicalLabel || '').toLowerCase();
+    hypothesis = hyps.find(h =>
+      h.loadedRegions.some(r => {
+        const rl = r.toLowerCase();
+        return (bone && rl.includes(bone)) || (label && rl.includes(label));
+      }),
+    );
+  }
+  if (!hypothesis) return null;
+  const slingResult = (slings ?? []).find(s => s.slingId === hypothesis!.slingId);
+  const focusLabel = marker.anatomicalLabel || marker.nearestBone;
+  return buildPainStorylineForHypothesis(
+    hypothesis,
+    slingResult,
+    driver.recommendations,
+    focusLabel,
+  );
 }

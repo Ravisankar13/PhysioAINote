@@ -1150,23 +1150,23 @@ export default function PhysioGPT() {
   }, [clinicalReasoningData, subjectiveHistoryInput]);
 
   useEffect(() => {
+    // Reasoning data was cleared (reset / new consultation / blank chat)
+    // or the signature changed — drop any cached notes so we never show
+    // SOAP from a previous consultation.
+    if (!hasReasoningContentForNotes || !clinicalNotesReasoningKey) {
+      if (clinicalNotes !== null) setClinicalNotes(null);
+      if (clinicalNotesError) setClinicalNotesError(null);
+      lastClinicalNotesKeyRef.current = "";
+      return;
+    }
     if (
-      clinicalNotesReasoningKey &&
       lastClinicalNotesKeyRef.current &&
       lastClinicalNotesKeyRef.current !== clinicalNotesReasoningKey
     ) {
       setClinicalNotes(null);
       setClinicalNotesError(null);
     }
-  }, [clinicalNotesReasoningKey]);
-
-  // Drop a lingering error if the reasoning content is now insufficient
-  // to generate notes (so the panel returns to its empty state cleanly).
-  useEffect(() => {
-    if (!hasReasoningContentForNotes && clinicalNotesError) {
-      setClinicalNotesError(null);
-    }
-  }, [hasReasoningContentForNotes, clinicalNotesError]);
+  }, [clinicalNotesReasoningKey, hasReasoningContentForNotes, clinicalNotes, clinicalNotesError]);
 
   // Kept current on every render so async response handlers can compare
   // their captured request key against the latest reasoning signature.
@@ -16525,7 +16525,7 @@ ${ddxList}`;
               <span className="font-semibold text-white text-xs">Clinical Notes (SOAP)</span>
             </div>
             <div className="flex items-center gap-1">
-              {clinicalNotes && (
+              {hasReasoningContentForNotes && clinicalNotes && (
                 <button
                   onClick={copyAllClinicalNotes}
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/15 hover:bg-indigo-500/25 rounded text-[10px] text-indigo-200 transition-colors"
@@ -16535,7 +16535,7 @@ ${ddxList}`;
                   {copiedNotesSection === 'all' ? 'Copied' : 'Copy all'}
                 </button>
               )}
-              {clinicalNotes && !isGeneratingClinicalNotes && (
+              {hasReasoningContentForNotes && clinicalNotes && !isGeneratingClinicalNotes && (
                 <button
                   onClick={generateClinicalNotesFromToolbar}
                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 hover:bg-white/10 rounded text-[10px] text-gray-300 transition-colors"
@@ -16597,7 +16597,7 @@ ${ddxList}`;
               </div>
             )}
 
-            {clinicalNotes && (() => {
+            {hasReasoningContentForNotes && clinicalNotes && (() => {
               type NotesKey = keyof import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes;
               const sections: { key: NotesKey; label: string; text: string; bgClass: string; borderClass: string; textClass: string }[] = [
                 { key: 'subjective', label: 'Subjective', text: clinicalNotes.subjective, bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/15', textClass: 'text-blue-300' },

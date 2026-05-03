@@ -985,7 +985,6 @@ export default function PhysioGPT() {
 
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
-  // Task #338 — Movement Mode "What-If" extras
   const [whatIfFlareUpId, setWhatIfFlareUpId] = useState<string | null>(null);
   const [whatIfFlareUpBaseline, setWhatIfFlareUpBaseline] = useState<Record<string, Record<string, number>> | null>(null);
   const [whatIfPainfulTissue, setWhatIfPainfulTissue] = useState<PainfulTissueRegion | null>(null);
@@ -6190,7 +6189,6 @@ ${ddxList}`;
     setWhatIfScenarios([]);
   }, []);
 
-  // Task #338 — flare-up pose application (snapshot baseline so we can reset)
   const handleApplyFlareUp = useCallback((flareUpId: string) => {
     setModelConfig(prev => {
       const baseline = whatIfFlareUpBaseline ?? JSON.parse(JSON.stringify(prev));
@@ -6209,7 +6207,6 @@ ${ddxList}`;
     setWhatIfFlareUpId(null);
   }, [whatIfFlareUpBaseline]);
 
-  // Task #338 — saved Treatment Hypotheses (persisted)
   const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
     queryKey: [`/api/treatment-hypotheses/${activeCaseId}`],
     enabled: !!activeCaseId && skeletonMode === 'movement',

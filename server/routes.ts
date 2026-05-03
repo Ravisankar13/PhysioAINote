@@ -9887,11 +9887,6 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
-  // ─── Task #338 — Movement Mode "What-If" Treatment Hypotheses ──────
-  // Persists clinician-saved What-If scenario sets so they can be
-  // re-loaded as starting points for treatment planning. Read-only
-  // list + create + delete; all scoped to the authenticated user +
-  // the per-case caseId derived in the client.
   app.get("/api/treatment-hypotheses/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const caseId = String(req.params.caseId || "").trim();

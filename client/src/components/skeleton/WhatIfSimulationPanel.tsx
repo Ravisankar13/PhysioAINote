@@ -57,7 +57,6 @@ interface WhatIfSimulationPanelProps {
   comparisonB?: WhatIfComparisonResult | null;
   onSetComparisonB?: (scenarios: WhatIfScenario[]) => void;
   painMarkers?: Array<{ id: string; label: string; severity?: number }>;
-  // Task #338 — flare-up pose + painful-tissue + save-hypothesis
   selectedFlareUpId?: string | null;
   onApplyFlareUp?: (flareUpId: string) => void;
   onClearFlareUp?: () => void;
@@ -185,7 +184,6 @@ export default function WhatIfSimulationPanel({
 
   return (
     <div className="space-y-2">
-      {/* Task #338 — Flare-up scenario picker (drives skeleton into pose) */}
       {onApplyFlareUp && (
         <div className="bg-gray-800/60 rounded-md p-2 border border-gray-700/40 space-y-1.5">
           <div className="flex items-center justify-between">
@@ -222,7 +220,6 @@ export default function WhatIfSimulationPanel({
         </div>
       )}
 
-      {/* Task #338 — Painful tissue selector + Pain Load Δ headline */}
       {onSelectPainfulTissue && (
         <div className="bg-gray-800/60 rounded-md p-2 border border-gray-700/40 space-y-1.5">
           <div className="flex items-center justify-between gap-1">
@@ -281,7 +278,6 @@ export default function WhatIfSimulationPanel({
         </div>
       )}
 
-      {/* Task #338 — Save as Treatment Hypothesis */}
       {onSaveHypothesis && activeScenarios.length > 0 && (
         <div className="space-y-1">
           {!showSavePanel ? (

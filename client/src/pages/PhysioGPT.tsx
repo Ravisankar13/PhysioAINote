@@ -16286,7 +16286,7 @@ ${ddxList}`;
           </button>
           <button
             onClick={() => {
-              if (isCaseDirty && hasMeaningfulSnapshotContent(currentCaseSnapshotRef.current)) {
+              if (isCaseDirty) {
                 const ok = window.confirm("Start a new case? Unsaved changes will be lost.");
                 if (!ok) return;
               }

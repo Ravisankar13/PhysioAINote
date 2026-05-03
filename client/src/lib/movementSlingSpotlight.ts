@@ -1,4 +1,9 @@
-import type { SlingAnalysisResult, SlingResult, SlingId } from './slingEngine';
+import {
+  getSlingBonePathway,
+  type SlingAnalysisResult,
+  type SlingResult,
+  type SlingId,
+} from './slingEngine';
 import type { PathologyType } from './muscleBiomechanicsEngine';
 
 export type SpotlightReason =
@@ -6,13 +11,19 @@ export type SpotlightReason =
   | 'overloaded'
   | 'underperforming'
   | 'compensating'
+  | 'movement-task'
+  | 'dragged-bone'
   | 'marker-bias'
+  | 'hysteresis'
   | 'baseline-best';
 
 export interface SpotlightPick {
   slingId: SlingId;
   reason: SpotlightReason;
   reasonText: string;
+  /** 0..1 — how confident the selector is in this pick. Below 0.35 the
+   *  caller should treat the spotlight as a soft suggestion. */
+  confidence: number;
 }
 
 export interface SpotlightInputMarker {
@@ -20,6 +31,23 @@ export interface SpotlightInputMarker {
   nearestBone?: string;
   anatomicalLabel?: string;
   severity?: number;
+}
+
+export interface SpotlightSelectorContext {
+  pinnedSlingId: SlingId | null;
+  /** Active provocation/movement task id (e.g. 'lunge', 'sts',
+   *  'gait_stance'). When set, slings whose movementRole or id matches the
+   *  task get a recruitment bonus. */
+  movementTaskId?: string | null;
+  /** Last bone the clinician dragged in pose mode. Slings whose pathway
+   *  contains this bone get a small focus bonus. */
+  lastInteractedBone?: string | null;
+  /** Previous pick id — used for hysteresis so the spotlight doesn't
+   *  flicker between two near-equal slings. */
+  previousSpotlightId?: SlingId | null;
+  /** Most prominent pain region label (anatomicalLabel or nearestBone of
+   *  highest-severity marker). Used in reason text only. */
+  primaryPainRegion?: string | null;
 }
 
 const STATUS_WEIGHT: Record<SlingResult['status'], number> = {
@@ -36,12 +64,60 @@ const STATUS_REASON: Record<SlingResult['status'], SpotlightReason> = {
   normal: 'baseline-best',
 };
 
+// Movement task → sling id affinity. Conservative — leaves room for the
+// engine status to dominate when there is real dysfunction.
+const MOVEMENT_TASK_AFFINITY: Record<string, SlingId[]> = {
+  // Gait / propulsion
+  gait: ['posterior_oblique', 'deep_longitudinal', 'lateral'],
+  gait_stance: ['lateral', 'deep_longitudinal'],
+  gait_swing: ['posterior_oblique'],
+  walking: ['posterior_oblique', 'deep_longitudinal', 'lateral'],
+  running: ['posterior_oblique', 'deep_longitudinal', 'lateral'],
+  // Single-leg stance / balance
+  single_leg_stance: ['lateral'],
+  step_down: ['lateral', 'deep_longitudinal'],
+  // Squat / sit-to-stand
+  squat: ['deep_longitudinal', 'posterior_oblique'],
+  sts: ['deep_longitudinal'],
+  sit_to_stand: ['deep_longitudinal'],
+  // Lunge / split stance
+  lunge: ['anterior_oblique', 'lateral'],
+  split_squat: ['anterior_oblique', 'lateral'],
+  // Rotational / kicking / throwing
+  rotation: ['posterior_oblique', 'anterior_oblique'],
+  trunk_rotation: ['posterior_oblique', 'anterior_oblique'],
+  kicking: ['anterior_oblique'],
+  throwing: ['anterior_oblique', 'scapular_shoulder'],
+  // Scapulo-thoracic / overhead
+  overhead_reach: ['scapular_shoulder'],
+  scaption: ['scapular_shoulder'],
+};
+
+function affinityForTask(taskId: string | null | undefined): Set<SlingId> {
+  if (!taskId) return new Set();
+  const key = taskId.toLowerCase();
+  if (MOVEMENT_TASK_AFFINITY[key]) return new Set(MOVEMENT_TASK_AFFINITY[key]);
+  // Heuristic substring match
+  for (const [k, v] of Object.entries(MOVEMENT_TASK_AFFINITY)) {
+    if (key.includes(k)) return new Set(v);
+  }
+  return new Set();
+}
+
 export function pickSpotlightSling(
   analysis: SlingAnalysisResult | null,
   markers: SpotlightInputMarker[],
-  pinnedSlingId: SlingId | null,
+  ctx: SpotlightSelectorContext,
 ): SpotlightPick | null {
   if (!analysis || analysis.slings.length === 0) return null;
+
+  const {
+    pinnedSlingId,
+    movementTaskId,
+    lastInteractedBone,
+    previousSpotlightId,
+    primaryPainRegion,
+  } = ctx;
 
   if (pinnedSlingId) {
     const pinned = analysis.slings.find(s => s.slingId === pinnedSlingId);
@@ -50,6 +126,7 @@ export function pickSpotlightSling(
         slingId: pinned.slingId,
         reason: 'pinned',
         reasonText: `Pinned by clinician — ${pinned.label} held in spotlight.`,
+        confidence: 1,
       };
     }
   }
@@ -59,46 +136,130 @@ export function pickSpotlightSling(
     if (m.nearestBone) markerBoneSet.add(m.nearestBone);
   }
 
-  let best: { sling: SlingResult; score: number } | null = null;
-  for (const s of analysis.slings) {
+  const taskAffinity = affinityForTask(movementTaskId);
+
+  // Score each sling. Engine status dominates; movement / drag / marker
+  // are biases capped so they cannot overturn a genuinely dysfunctional
+  // sling vs. a normal one.
+  type Scored = {
+    sling: SlingResult;
+    statusScore: number;   // engine-derived, dominant
+    biasScore: number;     // movement + drag + marker + hysteresis
+    total: number;
+    reasonHint: SpotlightReason;
+  };
+
+  const scored: Scored[] = analysis.slings.map(s => {
     const baseStatus = STATUS_WEIGHT[s.status] * 30;
     const activationDelta = Math.abs(100 - s.activationScore);
     const ftqPenalty = s.forceTransferQuality === 'poor' ? 20 : s.forceTransferQuality === 'reduced' ? 10 : 0;
     const downstream = s.downstreamRisk === 'severe' ? 20 : s.downstreamRisk === 'moderate' ? 10 : s.downstreamRisk === 'mild' ? 4 : 0;
+    const statusScore = baseStatus + activationDelta + ftqPenalty + downstream;
 
-    let markerBonus = 0;
+    const pathway = getSlingBonePathway(s.slingId);
+
+    // Marker bias — capped at +20 so it can flag *which* dysfunctional
+    // sling matters (when several are abnormal) but cannot promote a
+    // normal sling above an abnormal one.
+    let markerBias = 0;
     if (markerBoneSet.size > 0) {
-      const pathway = (s as unknown as { bonePathway?: string[] }).bonePathway;
-      const bones = Array.isArray(pathway) ? pathway : [];
-      for (const b of bones) {
-        if (markerBoneSet.has(b)) markerBonus += 8;
-      }
+      for (const b of pathway) if (markerBoneSet.has(b)) markerBias += 6;
+      markerBias = Math.min(20, markerBias);
     }
 
-    const score = baseStatus + activationDelta + ftqPenalty + downstream + markerBonus;
-    if (!best || score > best.score) best = { sling: s, score };
-  }
+    // Movement task affinity — also capped (+18). Helps tie-break
+    // between similarly dysfunctional slings.
+    const movementBias = taskAffinity.has(s.slingId) ? 18 : 0;
 
-  if (!best) return null;
-  const sling = best.sling;
-  if (sling.status === 'normal' && best.score < 25) {
-    return {
-      slingId: sling.slingId,
-      reason: 'baseline-best',
-      reasonText: 'All slings within normal force-transfer range — spotlight defaults to highest-deviation sling.',
-    };
-  }
+    // Last-dragged bone — small focus bonus (+12) when the clinician
+    // just interacted with a bone in this sling's pathway.
+    const dragBias = lastInteractedBone && pathway.includes(lastInteractedBone) ? 12 : 0;
 
-  const reason = markerBoneSet.size > 0 && sling.status !== 'normal' ? 'marker-bias' : STATUS_REASON[sling.status];
+    // Hysteresis — small bonus to the previously spotlighted sling so
+    // the spotlight doesn't bounce between two near-equal slings frame
+    // to frame.
+    const hysteresisBias = previousSpotlightId === s.slingId ? 8 : 0;
+
+    const biasScore = markerBias + movementBias + dragBias + hysteresisBias;
+    const total = statusScore + biasScore;
+
+    let reasonHint: SpotlightReason = STATUS_REASON[s.status];
+    if (s.status === 'normal') {
+      // Bias-only candidates label themselves accordingly so the
+      // reason text reflects *why* a normal sling came to the top.
+      if (movementBias > 0) reasonHint = 'movement-task';
+      else if (dragBias > 0) reasonHint = 'dragged-bone';
+      else if (markerBias > 0) reasonHint = 'marker-bias';
+      else reasonHint = 'baseline-best';
+    } else if (markerBias > 0 && (movementBias > 0 || dragBias > 0)) {
+      // When several signals agree, prefer the most actionable label
+      reasonHint = 'marker-bias';
+    } else if (movementBias > 0 && dragBias > 0) {
+      reasonHint = 'movement-task';
+    }
+
+    return { sling: s, statusScore, biasScore, total, reasonHint };
+  });
+
+  scored.sort((a, b) => b.total - a.total);
+  const top = scored[0];
+  if (!top) return null;
+
+  // Confidence: status-driven slings are higher confidence; bias-only
+  // picks (no engine dysfunction) are lower.
+  const next = scored[1];
+  const margin = next ? top.total - next.total : top.total;
+  const statusConfidence = Math.min(1, top.statusScore / 120);
+  const marginConfidence = Math.min(1, margin / 30);
+  const confidence = top.sling.status === 'normal'
+    ? Math.max(0.2, marginConfidence * 0.6)
+    : Math.min(1, 0.4 + statusConfidence * 0.4 + marginConfidence * 0.2);
+
+  const sling = top.sling;
   const wl = sling.weakLinks[0];
-  const reasonText = (() => {
-    if (sling.status === 'overloaded') return `Overloaded — activation ${Math.round(sling.activationScore)}%, downstream risk to ${sling.downstreamRiskArea}.`;
-    if (sling.status === 'underperforming') return wl ? `Underperforming — weak link at ${wl.muscle} (${wl.activationPct}%).` : `Underperforming at ${Math.round(sling.activationScore)}% activation.`;
-    if (sling.status === 'compensating') return `Compensating for an adjacent sling — ${sling.forceTransferQuality} force transfer.`;
-    return `Closest to dysfunction (${Math.round(sling.activationScore)}% activation).`;
-  })();
 
-  return { slingId: sling.slingId, reason, reasonText };
+  const movementSuffix = movementTaskId
+    ? ` during the ${humaniseTask(movementTaskId)} task`
+    : '';
+  const painSuffix = primaryPainRegion
+    ? ` · pain reported at ${primaryPainRegion}`
+    : '';
+
+  let reasonText: string;
+  switch (top.reasonHint) {
+    case 'overloaded':
+      reasonText = `Overloaded${movementSuffix} — activation ${Math.round(sling.activationScore)}% with downstream risk to ${sling.downstreamRiskArea}.${painSuffix}`;
+      break;
+    case 'underperforming':
+      reasonText = wl
+        ? `Underperforming${movementSuffix} — engine-detected weak link at ${wl.muscle} (${Math.round(wl.activationPct)}%).${painSuffix}`
+        : `Underperforming at ${Math.round(sling.activationScore)}% activation${movementSuffix}.${painSuffix}`;
+      break;
+    case 'compensating':
+      reasonText = `Compensating for an adjacent sling${movementSuffix} — ${sling.forceTransferQuality} force transfer.${painSuffix}`;
+      break;
+    case 'movement-task':
+      reasonText = `Recruited by the ${humaniseTask(movementTaskId ?? '')} task — surfaced for review.${painSuffix}`;
+      break;
+    case 'dragged-bone':
+      reasonText = `Pathway includes the bone you just adjusted${painSuffix ? '' : ' — surfaced for review.'}${painSuffix}`;
+      break;
+    case 'marker-bias':
+      reasonText = wl
+        ? `Marker overlap with the ${sling.label} pathway — engine still locks the weak link at ${wl.muscle}.${painSuffix}`
+        : `Marker overlap with the ${sling.label} pathway.${painSuffix}`;
+      break;
+    case 'hysteresis':
+    case 'baseline-best':
+    default:
+      reasonText = `Closest to dysfunction (${Math.round(sling.activationScore)}% activation)${movementSuffix}.${painSuffix}`;
+  }
+
+  return { slingId: sling.slingId, reason: top.reasonHint, reasonText, confidence };
+}
+
+function humaniseTask(taskId: string): string {
+  return taskId.replace(/_/g, ' ').toLowerCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +275,9 @@ export interface SpotlightPart {
   /** For muscles: canonical alias used by slingEngine MUSCLE_ALIASES.
    *  For links: pair of adjacent bone names. For attachments: bone name. */
   ref: string;
+  /** Bone (or bone pair) the part anchors to in 3D. Used for screen-space
+   *  hotspot positioning over the 3D viewer. */
+  anchorBones: string[];
   /** Severity hint (0..1) used to colour the chip — derived from the
    *  containing sling's weakLinks / overloaded indices. */
   intensity: number;
@@ -130,7 +294,8 @@ export interface PartIntervention {
   dosage: string;
   /** Delta to apply to the parent sling's activation override (0..200). */
   slingActivationDelta: number;
-  /** Optional muscle override patch when the part is a muscle. */
+  /** Optional muscle override patch when the part is a muscle — composed
+   *  into the engine's `muscleOverrides` for proper re-simulation. */
   muscleOverridePatch?: { tensionOffset?: number; activationOffset?: number; inhibition?: number; pathology?: PathologyType };
 }
 
@@ -147,6 +312,7 @@ export function getSlingParts(
   markerBones: Set<string>,
 ): SpotlightPart[] {
   const parts: SpotlightPart[] = [];
+  const pathway = getSlingBonePathway(sling.slingId);
 
   // ---- Muscles (clickable, severity from weakLinks / scores)
   const weakMap = new Map<string, number>();
@@ -154,29 +320,38 @@ export function getSlingParts(
   const scoreMap = new Map<string, number>();
   for (const ms of sling.muscleScores ?? []) scoreMap.set(ms.muscle, ms.activation);
 
-  const slingMuscles = (sling as unknown as { muscleScores?: { muscle: string }[] }).muscleScores ?? [];
-  const muscleNames = slingMuscles.length > 0
+  const slingMuscles = sling.muscleScores ?? [];
+  const muscleNames: string[] = slingMuscles.length > 0
     ? slingMuscles.map(m => m.muscle)
     : sling.weakLinks.map(w => w.muscle);
 
-  for (const m of muscleNames) {
+  // Naive muscle→bone mapping: spread muscles across the pathway by index.
+  const muscleAnchor = (idx: number): string[] => {
+    if (pathway.length === 0) return [];
+    const total = Math.max(1, muscleNames.length);
+    const i = Math.min(pathway.length - 1, Math.round((idx / total) * pathway.length));
+    return [pathway[i]];
+  };
+
+  muscleNames.forEach((m, idx) => {
     const weakAct = weakMap.get(m);
     const score = scoreMap.get(m) ?? 50;
     const intensity = weakAct !== undefined
       ? Math.max(0.5, Math.min(1, (60 - weakAct) / 60 + 0.4))
       : Math.max(0.15, Math.min(1, Math.abs(50 - score) / 50));
+    const anchor = muscleAnchor(idx);
     parts.push({
       id: `muscle::${sling.slingId}::${m}`,
       kind: 'muscle',
       label: prettifyMuscle(m),
       ref: m,
+      anchorBones: anchor,
       intensity,
-      markerBiased: false,
+      markerBiased: anchor.some(b => markerBones.has(b)),
     });
-  }
+  });
 
   // ---- Connective links (between consecutive bones in pathway)
-  const pathway = (sling as unknown as { bonePathway?: string[] }).bonePathway ?? [];
   const linkLabel = LINK_LABELS[sling.slingId] ?? 'Connective link';
   if (pathway.length >= 3) {
     const midIdx = Math.floor(pathway.length / 2);
@@ -187,6 +362,7 @@ export function getSlingParts(
       kind: 'link',
       label: linkLabel,
       ref: `${a}__${b}`,
+      anchorBones: [a, b],
       intensity: sling.forceTransferQuality === 'poor' ? 0.85 : sling.forceTransferQuality === 'reduced' ? 0.6 : 0.3,
       markerBiased: markerBones.has(a) || markerBones.has(b),
     });
@@ -202,6 +378,7 @@ export function getSlingParts(
         kind: 'attachment',
         label: `${role === 'proximal' ? 'Proximal' : 'Distal'} attachment · ${humaniseBone(bone)}`,
         ref: bone,
+        anchorBones: [bone],
         intensity: markerBones.has(bone) ? 0.8 : 0.45,
         markerBiased: markerBones.has(bone),
       });
@@ -232,7 +409,6 @@ export function getPartInterventions(
   part: SpotlightPart,
   sling: SlingResult,
 ): PartIntervention[] {
-  const slingId = sling.slingId;
   const status = sling.status;
   const isUnderactive = sling.activationScore < 80 || status === 'underperforming';
   const isOverloaded = status === 'overloaded' || sling.activationScore > 120;

@@ -45,6 +45,14 @@ export interface PlanCartItem {
   // Additive — existing items omit these without consequence.
   slingTag?: string;
   slingRole?: 'restore' | 'calm-compensatory' | 'address-driver';
+  // Movement-mode sling spotlight tags (Task #345). Set when an item is added
+  // from the per-part "Treat" action so downstream consumers can group items
+  // by failing sling, by pathway part, and by the movement task that exposed
+  // the dysfunction. Optional — pre-existing call sites omit these.
+  slingId?: string;
+  partId?: string;
+  partKind?: 'muscle' | 'link' | 'attachment';
+  movementTaskId?: string;
 }
 
 interface PlanCartContextValue {

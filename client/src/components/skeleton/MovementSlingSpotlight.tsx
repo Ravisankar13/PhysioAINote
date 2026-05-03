@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { X, Pin, PinOff, Sparkles, Activity, ChevronRight, Check } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Pin, PinOff, Sparkles, Activity, ChevronRight, Check, ExternalLink } from 'lucide-react';
 import type { SlingAnalysisResult, SlingId, SlingResult } from '@/lib/slingEngine';
 import { SLING_ACTIVATION_BASELINE } from '@/lib/slingEngine';
 import {
@@ -8,11 +8,12 @@ import {
   getPartInterventions,
   type SpotlightInputMarker,
   type SpotlightPart,
+  type SpotlightPick,
   type PartIntervention,
 } from '@/lib/movementSlingSpotlight';
-import type { SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
+import type { SlingDrivenRecommendation, DriverModality } from '@/lib/slingDriverAnalysis';
 import { makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
-import type { DriverModality } from '@/lib/slingDriverAnalysis';
+import type { BoneScreenPosition } from '@/components/skeleton/TreatmentOverlay';
 
 const DRIVER_MODALITY_TO_CART: Record<DriverModality, PlanCartModality> = {
   exercise: 'exercise',
@@ -35,10 +36,10 @@ const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; labe
   normal: { bg: 'bg-emerald-500/10', ring: 'ring-emerald-400/40', dot: 'bg-emerald-400', label: 'Within range' },
 };
 
-const PART_KIND_STYLE: Record<SpotlightPart['kind'], { bg: string; text: string; icon: string }> = {
-  muscle: { bg: 'bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-400/40', text: 'text-fuchsia-100', icon: 'M' },
-  link: { bg: 'bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-400/40', text: 'text-cyan-100', icon: 'L' },
-  attachment: { bg: 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/40', text: 'text-amber-100', icon: 'A' },
+const PART_KIND_STYLE: Record<SpotlightPart['kind'], { fill: string; ring: string; text: string; icon: string }> = {
+  muscle: { fill: 'bg-fuchsia-500', ring: 'ring-fuchsia-300', text: 'text-fuchsia-50', icon: 'M' },
+  link: { fill: 'bg-cyan-500', ring: 'ring-cyan-300', text: 'text-cyan-50', icon: 'L' },
+  attachment: { fill: 'bg-amber-500', ring: 'ring-amber-300', text: 'text-amber-50', icon: 'A' },
 };
 
 export interface SlingPartTreatmentRecord {
@@ -53,6 +54,13 @@ export interface SlingPartTreatmentRecord {
   intervention: PartIntervention['intervention'];
   rationale: string;
   dosage: string;
+  /** Activation delta the engine layer applied so undo can reverse it. */
+  appliedActivationDelta: number;
+  /** Optional muscle override patch composed into the engine when applied. */
+  appliedMuscleOverridePatch?: PartIntervention['muscleOverridePatch'];
+  /** Cart item id added when applied so undo can also remove the cart item. */
+  cartItemId?: string;
+  movementTaskId?: string | null;
   appliedAt: number;
 }
 
@@ -64,27 +72,36 @@ interface Props {
   selectedSlingId: SlingId | null;
   onSelectSling: (slingId: SlingId) => void;
   onExpandDetail: (slingId: SlingId) => void;
+  /** Pre-computed pick from PhysioGPT — kept in sync with the 3D
+   *  highlight via slingPathwayVisualization.activeSlingId. */
+  spotlightPick: SpotlightPick;
+  movementTaskId: string | null;
+  primaryPainRegion?: string | null;
   slingActivationOverrides: Partial<Record<SlingId, number>>;
-  onApplySlingActivationDelta: (slingId: SlingId, delta: number) => void;
+  onApplyPartTreatment: (rec: SlingPartTreatmentRecord, cartItem: PlanCartItem) => void;
+  onClearPartTreatment: (partId: string) => void;
   slingDrivenRecommendations: SlingDrivenRecommendation[];
   partTreatments: Record<string, SlingPartTreatmentRecord>;
-  onRecordPartTreatment: (rec: SlingPartTreatmentRecord) => void;
-  onClearPartTreatment: (partId: string) => void;
+  /** Live bone screen positions ref from the 3D viewer. Used to anchor
+   *  per-part hotspot dots over the skeleton. */
+  boneScreenPositionsRef: React.MutableRefObject<BoneScreenPosition[]>;
   onClose: () => void;
 }
 
-function recToCartItem(rec: SlingDrivenRecommendation): PlanCartItem {
+function recToCartItem(rec: SlingDrivenRecommendation, movementTaskId: string | null): PlanCartItem {
   const modality = DRIVER_MODALITY_TO_CART[rec.modality];
   return {
     id: makeCartId(modality, `sling_${rec.slingId}_${rec.name}`),
     modality,
     name: rec.name,
     targetStructure: rec.target,
-    targetFinding: `Sling-driven · ${rec.slingLabel}`,
+    targetFinding: `Sling-driven · ${rec.slingLabel}${movementTaskId ? ` · ${movementTaskId}` : ''}`,
     dosage: rec.dosage,
     rationale: rec.rationale,
     slingTag: rec.slingLabel,
     slingRole: rec.role,
+    slingId: rec.slingId,
+    movementTaskId: movementTaskId ?? undefined,
   };
 }
 
@@ -92,6 +109,7 @@ function partToCartItem(
   part: SpotlightPart,
   intv: PartIntervention,
   sling: SlingResult,
+  movementTaskId: string | null,
 ): PlanCartItem {
   const modality = PART_MODALITY_TO_CART[intv.modality];
   return {
@@ -99,294 +117,399 @@ function partToCartItem(
     modality,
     name: `${intv.label} — ${part.label}`,
     targetStructure: part.label,
-    targetFinding: `Sling spotlight · ${sling.label} · per-part`,
+    targetFinding: `Sling spotlight · ${sling.label} · ${part.kind}${movementTaskId ? ` · ${movementTaskId}` : ''}`,
     dosage: intv.dosage,
     rationale: intv.rationale,
     slingTag: sling.label,
+    slingId: sling.slingId,
+    partId: part.id,
+    partKind: part.kind,
+    movementTaskId: movementTaskId ?? undefined,
   };
 }
 
 export default function MovementSlingSpotlight(props: Props) {
   const {
     analysis,
-    painMarkers,
     pinnedSpotlightSlingId,
     onPin,
     selectedSlingId,
     onSelectSling,
     onExpandDetail,
+    spotlightPick,
+    movementTaskId,
+    primaryPainRegion,
     slingActivationOverrides,
-    onApplySlingActivationDelta,
+    onApplyPartTreatment,
+    onClearPartTreatment,
     slingDrivenRecommendations,
     partTreatments,
-    onRecordPartTreatment,
-    onClearPartTreatment,
+    boneScreenPositionsRef,
     onClose,
   } = props;
-  const { add: addToCart, has: cartHas } = usePlanCart();
-  const addItems = (items: PlanCartItem[]) => { for (const it of items) if (!cartHas(it.id)) addToCart(it); };
+  const { add: addToCart, has: cartHas, remove: removeFromCart } = usePlanCart();
 
-  const pick = useMemo(
-    () => pickSpotlightSling(analysis, painMarkers, pinnedSpotlightSlingId),
-    [analysis, painMarkers, pinnedSpotlightSlingId],
-  );
   const sling = useMemo(
-    () => pick ? analysis.slings.find(s => s.slingId === pick.slingId) ?? null : null,
-    [pick, analysis],
+    () => analysis.slings.find(s => s.slingId === spotlightPick.slingId) ?? null,
+    [spotlightPick, analysis],
   );
 
   const markerBoneSet = useMemo(() => {
     const s = new Set<string>();
-    for (const m of painMarkers) if (m.nearestBone) s.add(m.nearestBone);
+    for (const m of props.painMarkers) if (m.nearestBone) s.add(m.nearestBone);
     return s;
-  }, [painMarkers]);
+  }, [props.painMarkers]);
 
   const parts = useMemo(() => sling ? getSlingParts(sling, markerBoneSet) : [], [sling, markerBoneSet]);
 
   const [openPartId, setOpenPartId] = useState<string | null>(null);
 
-  if (!pick || !sling) return null;
+  // Live screen-position polling for 3D hotspots (60 ms tick — the viewer
+  // emits bone positions every 5 frames, so this is plenty smooth without
+  // re-rendering on every animation frame).
+  const [hotspotPositions, setHotspotPositions] = useState<BoneScreenPosition[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const lastSnapshotRef = useRef<string>('');
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      const incoming = boneScreenPositionsRef.current;
+      const sig = incoming.map(p => `${p.boneName}:${Math.round(p.screenX)}:${Math.round(p.screenY)}:${p.visible ? 1 : 0}`).join('|');
+      if (sig !== lastSnapshotRef.current) {
+        lastSnapshotRef.current = sig;
+        setHotspotPositions(incoming);
+      }
+      rafRef.current = window.setTimeout(tick, 80) as unknown as number;
+    };
+    rafRef.current = window.setTimeout(tick, 80) as unknown as number;
+    return () => {
+      cancelled = true;
+      if (rafRef.current !== null) window.clearTimeout(rafRef.current);
+    };
+  }, [boneScreenPositionsRef]);
+
+  if (!sling) return null;
   const style = STATUS_STYLE[sling.status] ?? STATUS_STYLE.compensating;
   const isPinned = pinnedSpotlightSlingId === sling.slingId;
   const overrideValue = slingActivationOverrides[sling.slingId];
   const baseline = SLING_ACTIVATION_BASELINE;
   const currentActivation = overrideValue !== undefined ? overrideValue : sling.activationScore;
   const wl = sling.weakLinks[0];
+  const isSelected = selectedSlingId === sling.slingId;
 
   const slingRecs = slingDrivenRecommendations.filter(r => r.slingId === sling.slingId);
 
   const handleTreatSling = () => {
     if (slingRecs.length === 0) return;
-    const items = slingRecs.map(recToCartItem);
-    addItems(items);
+    for (const r of slingRecs) {
+      const item = recToCartItem(r, movementTaskId);
+      if (!cartHas(item.id)) addToCart(item);
+    }
   };
 
-  const isSelected = selectedSlingId === sling.slingId;
+  const posByBone = new Map<string, BoneScreenPosition>();
+  for (const p of hotspotPositions) if (p.visible) posByBone.set(p.boneName, p);
+
+  const hotspotForPart = (part: SpotlightPart): { x: number; y: number } | null => {
+    if (part.anchorBones.length === 0) return null;
+    const positions = part.anchorBones.map(b => posByBone.get(b)).filter((p): p is BoneScreenPosition => !!p);
+    if (positions.length === 0) return null;
+    const x = positions.reduce((s, p) => s + p.screenX, 0) / positions.length;
+    const y = positions.reduce((s, p) => s + p.screenY, 0) / positions.length;
+    return { x, y };
+  };
+
+  const applyIntervention = (part: SpotlightPart, intv: PartIntervention) => {
+    const cartItem = partToCartItem(part, intv, sling, movementTaskId);
+    const rec: SlingPartTreatmentRecord = {
+      partId: part.id,
+      partKind: part.kind,
+      partLabel: part.label,
+      ref: part.ref,
+      slingId: sling.slingId,
+      interventionId: intv.id,
+      interventionLabel: intv.label,
+      modality: intv.modality,
+      intervention: intv.intervention,
+      rationale: intv.rationale,
+      dosage: intv.dosage,
+      appliedActivationDelta: intv.slingActivationDelta,
+      appliedMuscleOverridePatch: intv.muscleOverridePatch,
+      cartItemId: cartItem.id,
+      movementTaskId: movementTaskId ?? undefined,
+      appliedAt: Date.now(),
+    };
+    onApplyPartTreatment(rec, cartItem);
+  };
+
+  const clearTreatment = (partId: string) => {
+    const rec = partTreatments[partId];
+    if (rec?.cartItemId) removeFromCart(rec.cartItemId);
+    onClearPartTreatment(partId);
+  };
 
   return (
-    <div
-      className={`absolute bottom-2 right-2 z-30 w-[340px] max-h-[70%] overflow-y-auto rounded-lg border-2 bg-slate-900/96 backdrop-blur-sm shadow-2xl ${style.bg}`}
-      style={{ borderColor: sling.color }}
-      data-testid="movement-sling-spotlight"
-    >
-      <div className="sticky top-0 z-10 flex items-center gap-1.5 px-2.5 py-1.5 border-b border-slate-700/70 bg-slate-900/96">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-        <span className="text-[10px] font-semibold text-slate-200 uppercase tracking-wide">Sling Spotlight</span>
-        <button
-          type="button"
-          onClick={() => onPin(isPinned ? null : sling.slingId)}
-          className={`ml-auto h-6 px-1.5 rounded border text-[9px] flex items-center gap-1 ${
-            isPinned
-              ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
-              : 'border-slate-600/60 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
-          }`}
-          title={isPinned ? 'Unpin spotlight' : 'Pin this sling so the spotlight stays here'}
-          data-testid="spotlight-pin-toggle"
-        >
-          {isPinned ? <Pin className="w-3 h-3" /> : <PinOff className="w-3 h-3" />}
-          {isPinned ? 'Pinned' : 'Pin'}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-6 w-6 rounded hover:bg-slate-800/80 text-slate-400 hover:text-slate-200 flex items-center justify-center"
-          title="Hide spotlight"
-          data-testid="spotlight-close"
-        >
-          <X className="w-3 h-3" />
-        </button>
+    <>
+      {/* ---- 3D hotspot dots anchored to bone screen positions ---- */}
+      <div className="absolute inset-0 z-20 pointer-events-none" data-testid="spotlight-hotspot-layer">
+        {parts.map(p => {
+          const pos = hotspotForPart(p);
+          if (!pos) return null;
+          const ks = PART_KIND_STYLE[p.kind];
+          const treated = !!partTreatments[p.id];
+          const isOpen = openPartId === p.id;
+          const size = 14 + Math.round(p.intensity * 8);
+          return (
+            <button
+              key={`hotspot-${p.id}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenPartId(prev => prev === p.id ? null : p.id);
+              }}
+              className={`absolute rounded-full ${ks.fill} ${ks.text} font-mono text-[8px] font-bold flex items-center justify-center pointer-events-auto shadow-lg ring-2 ring-white/40 hover:ring-white/80 transition-all ${
+                isOpen ? `ring-2 ${ks.ring} scale-110` : ''
+              } ${p.markerBiased ? 'shadow-[0_0_0_2px_rgba(244,63,94,0.7)]' : ''} ${treated ? 'after:content-["✓"] after:absolute after:-bottom-1 after:-right-1 after:w-3 after:h-3 after:rounded-full after:bg-emerald-500 after:text-white after:text-[7px] after:flex after:items-center after:justify-center' : ''}`}
+              style={{
+                left: `${pos.x - size / 2}px`,
+                top: `${pos.y - size / 2}px`,
+                width: `${size}px`,
+                height: `${size}px`,
+                opacity: 0.5 + p.intensity * 0.5,
+              }}
+              title={`${p.label} · ${p.kind}${p.markerBiased ? ' · marker-biased' : ''}`}
+              data-testid={`spotlight-hotspot-${p.id}`}
+            >
+              {ks.icon}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-2.5 space-y-2">
-        <button
-          type="button"
-          onClick={() => { onSelectSling(sling.slingId); onExpandDetail(sling.slingId); }}
-          className="w-full text-left"
-          data-testid="spotlight-header"
-        >
+      {/* ---- Spotlight overlay panel ---- */}
+      <div
+        className={`absolute bottom-2 right-2 z-30 w-[340px] max-h-[75%] overflow-y-auto rounded-lg border-2 bg-slate-900/96 backdrop-blur-sm shadow-2xl ${style.bg}`}
+        style={{ borderColor: sling.color }}
+        data-testid="movement-sling-spotlight"
+      >
+        <div className="sticky top-0 z-10 flex items-center gap-1.5 px-2.5 py-1.5 border-b border-slate-700/70 bg-slate-900/96">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+          <span className="text-[10px] font-semibold text-slate-200 uppercase tracking-wide">Sling Spotlight</span>
+          <span className="text-[8px] text-slate-500" data-testid="spotlight-confidence">
+            · {Math.round(spotlightPick.confidence * 100)}% conf.
+          </span>
+          <button
+            type="button"
+            onClick={() => onPin(isPinned ? null : sling.slingId)}
+            className={`ml-auto h-6 px-1.5 rounded border text-[9px] flex items-center gap-1 ${
+              isPinned
+                ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
+                : 'border-slate-600/60 bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
+            }`}
+            title={isPinned ? 'Unpin spotlight' : 'Pin this sling so the spotlight stays here'}
+            data-testid="spotlight-pin-toggle"
+          >
+            {isPinned ? <Pin className="w-3 h-3" /> : <PinOff className="w-3 h-3" />}
+            {isPinned ? 'Pinned' : 'Pin'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-6 w-6 rounded hover:bg-slate-800/80 text-slate-400 hover:text-slate-200 flex items-center justify-center"
+            title="Hide spotlight"
+            data-testid="spotlight-close"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+
+        <div className="p-2.5 space-y-2">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: sling.color }} />
-            <span className="text-[12px] font-semibold text-slate-100 truncate flex-1">{sling.label}</span>
+            <button
+              type="button"
+              onClick={() => onSelectSling(sling.slingId)}
+              className="text-[12px] font-semibold text-slate-100 truncate flex-1 text-left hover:underline"
+              data-testid="spotlight-header"
+            >
+              {sling.label}
+            </button>
             <span className={`text-[8px] px-1.5 py-0.5 rounded-full uppercase font-bold ${style.bg} ${style.dot.replace('bg-', 'text-')}`}>
               {style.label}
             </span>
           </div>
-          <div className="text-[9px] text-slate-400 mt-0.5 italic">{pick.reasonText}</div>
-        </button>
-
-        <div className={`rounded p-1.5 ring-1 ${style.ring} bg-slate-900/40 space-y-1`}>
-          <div className="flex items-center gap-2 text-[9px] text-slate-300">
-            <Activity className="w-3 h-3 text-slate-400" />
-            <span>Activation</span>
-            <span className="font-mono text-slate-100">{Math.round(currentActivation)}%</span>
-            {overrideValue !== undefined && Math.round(overrideValue) !== Math.round(sling.activationScore) && (
-              <span className="text-[8px] text-cyan-300">(was {Math.round(sling.activationScore)}%)</span>
-            )}
-            <span className="ml-auto text-slate-500">FTQ: <span className="text-slate-200 capitalize">{sling.forceTransferQuality}</span></span>
+          <div className="text-[9px] text-slate-400 italic" data-testid="spotlight-reason">
+            {spotlightPick.reasonText}
           </div>
-          {wl && (
-            <div className="text-[9px] text-slate-300">
-              <span className="text-slate-500 uppercase tracking-wide mr-1">Weak link:</span>
-              <span className="text-orange-300">{wl.muscle}</span>
-              <span className="text-slate-500"> ({Math.round(wl.activationPct)}%)</span>
-            </div>
-          )}
-          {sling.clinicalConsequences[0] && (
-            <div className="text-[9px] text-slate-400 italic leading-snug">{sling.clinicalConsequences[0]}</div>
-          )}
-        </div>
-
-        {slingRecs.length > 0 && (
           <button
             type="button"
-            onClick={handleTreatSling}
-            className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-emerald-500/50 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-100 text-[10px] font-semibold"
-            data-testid="spotlight-treat-sling"
+            onClick={() => { onSelectSling(sling.slingId); onExpandDetail(sling.slingId); }}
+            className="w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded border border-slate-600/60 bg-slate-800/60 hover:bg-slate-700/70 text-slate-200 text-[9px]"
+            data-testid="spotlight-open-full"
           >
-            <Sparkles className="w-3 h-3" />
-            Treat this sling — drop {slingRecs.length} item{slingRecs.length === 1 ? '' : 's'} into Plan Cart
+            <ExternalLink className="w-2.5 h-2.5" />
+            Open full sling analysis
           </button>
-        )}
 
-        <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1.5">
-            <span>Per-part interventions</span>
-            <span className="text-slate-500 normal-case font-normal">· tap a chip to choose</span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {parts.map(p => {
-              const ks = PART_KIND_STYLE[p.kind];
-              const treated = !!partTreatments[p.id];
-              const isOpen = openPartId === p.id;
-              const opacity = isSelected ? Math.max(0.55, p.intensity) : Math.max(0.4, p.intensity * 0.85);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setOpenPartId(prev => prev === p.id ? null : p.id)}
-                  className={`text-[9px] px-1.5 py-0.5 rounded border ${ks.bg} ${ks.text} flex items-center gap-1 transition-all ${
-                    isOpen ? 'ring-2 ring-white/40' : ''
-                  } ${p.markerBiased ? 'shadow-[0_0_0_1px_rgba(244,63,94,0.6)]' : ''}`}
-                  style={{ opacity }}
-                  title={`${p.kind} · click for interventions${p.markerBiased ? ' (marker-biased — engine still chooses weak link)' : ''}`}
-                  data-testid={`spotlight-part-${p.id}`}
-                >
-                  <span className="font-mono opacity-60">{ks.icon}</span>
-                  <span>{p.label}</span>
-                  {treated && <Check className="w-2.5 h-2.5 text-emerald-300" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {openPartId && (() => {
-          const p = parts.find(x => x.id === openPartId);
-          if (!p) return null;
-          const interventions = getPartInterventions(p, sling);
-          const treated = partTreatments[p.id];
-          return (
-            <div className="rounded border border-slate-700/70 bg-slate-950/70 p-1.5 space-y-1.5" data-testid={`spotlight-popover-${p.id}`}>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-200">
-                <ChevronRight className="w-3 h-3 text-slate-500" />
-                <span className="font-medium truncate flex-1">{p.label}</span>
-                <span className="text-[8px] text-slate-500 uppercase">{p.kind}</span>
-                {treated && (
-                  <button
-                    type="button"
-                    onClick={() => onClearPartTreatment(p.id)}
-                    className="text-[8px] text-slate-400 hover:text-slate-100 underline"
-                    data-testid={`spotlight-clear-${p.id}`}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="space-y-1">
-                {interventions.map(intv => {
-                  const isApplied = treated?.interventionId === intv.id;
-                  return (
-                    <div
-                      key={intv.id}
-                      className={`rounded border p-1.5 space-y-0.5 ${
-                        isApplied ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-slate-700/60 bg-slate-900/60'
-                      }`}
-                      data-testid={`spotlight-intv-${intv.id}`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-medium text-slate-100 flex-1">{intv.label}</span>
-                        <span className="text-[8px] px-1 py-px rounded bg-slate-800 text-slate-300 capitalize">{intv.modality.replace('_', ' ')}</span>
-                      </div>
-                      <div className="text-[9px] text-slate-400 leading-snug">{intv.rationale}</div>
-                      <div className="text-[8px] text-slate-500">Dosage: {intv.dosage}</div>
-                      <div className="flex gap-1 pt-0.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onApplySlingActivationDelta(sling.slingId, intv.slingActivationDelta);
-                            onRecordPartTreatment({
-                              partId: p.id,
-                              partKind: p.kind,
-                              partLabel: p.label,
-                              ref: p.ref,
-                              slingId: sling.slingId,
-                              interventionId: intv.id,
-                              interventionLabel: intv.label,
-                              modality: intv.modality,
-                              intervention: intv.intervention,
-                              rationale: intv.rationale,
-                              dosage: intv.dosage,
-                              appliedAt: Date.now(),
-                            });
-                          }}
-                          className={`text-[9px] px-1.5 py-0.5 rounded border ${
-                            isApplied
-                              ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-100'
-                              : 'border-cyan-500/50 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25'
-                          }`}
-                          data-testid={`spotlight-apply-${intv.id}`}
-                        >
-                          {isApplied ? '✓ Applied' : `Apply (${intv.slingActivationDelta >= 0 ? '+' : ''}${intv.slingActivationDelta}%)`}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addItems([partToCartItem(p, intv, sling)])}
-                          className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/50 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20"
-                          data-testid={`spotlight-cart-${intv.id}`}
-                        >
-                          + Plan Cart
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="text-[8px] text-slate-500 italic pt-0.5 border-t border-slate-800">
-                Live re-simulation: applying nudges the sling activation override and re-scores the spotlight immediately.
-                {p.markerBiased && ' Markers biased this chip but the engine still chose the weak link.'}
-              </div>
+          <div className={`rounded p-1.5 ring-1 ${style.ring} bg-slate-900/40 space-y-1`}>
+            <div className="flex items-center gap-2 text-[9px] text-slate-300">
+              <Activity className="w-3 h-3 text-slate-400" />
+              <span>Activation</span>
+              <span className="font-mono text-slate-100">{Math.round(currentActivation)}%</span>
+              {overrideValue !== undefined && Math.round(overrideValue) !== Math.round(sling.activationScore) && (
+                <span className="text-[8px] text-cyan-300">(was {Math.round(sling.activationScore)}%)</span>
+              )}
+              <span className="ml-auto text-slate-500">FTQ: <span className="text-slate-200 capitalize">{sling.forceTransferQuality}</span></span>
             </div>
-          );
-        })()}
+            {wl && (
+              <div className="text-[9px] text-slate-300" data-testid="spotlight-weak-link">
+                <span className="text-slate-500 uppercase tracking-wide mr-1">Weak link:</span>
+                <span className="text-orange-300">{wl.muscle}</span>
+                <span className="text-slate-500"> ({Math.round(wl.activationPct)}%)</span>
+                <span className="text-slate-500 italic ml-1">— engine-detected</span>
+              </div>
+            )}
+            {sling.clinicalConsequences[0] && (
+              <div className="text-[9px] text-slate-400 italic leading-snug">{sling.clinicalConsequences[0]}</div>
+            )}
+            {(movementTaskId || primaryPainRegion) && (
+              <div className="text-[8px] text-slate-500 flex flex-wrap gap-1.5">
+                {movementTaskId && <span>Task: <span className="text-slate-300">{movementTaskId}</span></span>}
+                {primaryPainRegion && <span>Pain: <span className="text-rose-300">{primaryPainRegion}</span></span>}
+              </div>
+            )}
+          </div>
 
-        {Object.keys(partTreatments).length > 0 && (
-          <div className="text-[8px] text-slate-500 border-t border-slate-800 pt-1">
-            {Object.keys(partTreatments).length} per-part treatment{Object.keys(partTreatments).length === 1 ? '' : 's'} active.
+          {slingRecs.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                for (const id of Object.keys(partTreatments)) onClearPartTreatment(id);
-                onApplySlingActivationDelta(sling.slingId, -9999);
-              }}
-              className="ml-1 text-slate-400 hover:text-slate-100 underline"
-              data-testid="spotlight-clear-all"
+              onClick={handleTreatSling}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border border-emerald-500/50 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-100 text-[10px] font-semibold"
+              data-testid="spotlight-treat-sling"
             >
-              Reset
+              <Sparkles className="w-3 h-3" />
+              Treat this sling — drop {slingRecs.length} item{slingRecs.length === 1 ? '' : 's'} into Plan Cart
             </button>
-          </div>
-        )}
+          )}
 
+          <div className="space-y-1">
+            <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1.5">
+              <span>Per-part interventions</span>
+              <span className="text-slate-500 normal-case font-normal">· tap a hotspot or chip</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {parts.map(p => {
+                const ks = PART_KIND_STYLE[p.kind];
+                const treated = !!partTreatments[p.id];
+                const isOpen = openPartId === p.id;
+                const opacity = isSelected ? Math.max(0.55, p.intensity) : Math.max(0.4, p.intensity * 0.85);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setOpenPartId(prev => prev === p.id ? null : p.id)}
+                    className={`text-[9px] px-1.5 py-0.5 rounded border ${ks.fill}/15 ${ks.text} hover:${ks.fill}/25 flex items-center gap-1 transition-all ${
+                      isOpen ? `ring-2 ${ks.ring}` : ''
+                    } ${p.markerBiased ? 'shadow-[0_0_0_1px_rgba(244,63,94,0.6)]' : ''}`}
+                    style={{ opacity }}
+                    title={`${p.kind} · click for interventions${p.markerBiased ? ' (marker-biased — engine still chooses weak link)' : ''}`}
+                    data-testid={`spotlight-part-${p.id}`}
+                  >
+                    <span className="font-mono opacity-60">{ks.icon}</span>
+                    <span>{p.label}</span>
+                    {treated && <Check className="w-2.5 h-2.5 text-emerald-300" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {openPartId && (() => {
+            const p = parts.find(x => x.id === openPartId);
+            if (!p) return null;
+            const interventions = getPartInterventions(p, sling);
+            const treated = partTreatments[p.id];
+            return (
+              <div className="rounded border border-slate-700/70 bg-slate-950/70 p-1.5 space-y-1.5" data-testid={`spotlight-popover-${p.id}`}>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-200">
+                  <ChevronRight className="w-3 h-3 text-slate-500" />
+                  <span className="font-medium truncate flex-1">{p.label}</span>
+                  <span className="text-[8px] text-slate-500 uppercase">{p.kind}</span>
+                  {treated && (
+                    <button
+                      type="button"
+                      onClick={() => clearTreatment(p.id)}
+                      className="text-[8px] text-slate-400 hover:text-slate-100 underline"
+                      data-testid={`spotlight-clear-${p.id}`}
+                    >
+                      Undo
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {interventions.map(intv => {
+                    const isApplied = treated?.interventionId === intv.id;
+                    return (
+                      <div
+                        key={intv.id}
+                        className={`rounded border p-1.5 space-y-0.5 ${
+                          isApplied ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-slate-700/60 bg-slate-900/60'
+                        }`}
+                        data-testid={`spotlight-intv-${intv.id}`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-medium text-slate-100 flex-1">{intv.label}</span>
+                          <span className="text-[8px] px-1 py-px rounded bg-slate-800 text-slate-300 capitalize">{intv.modality.replace('_', ' ')}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 leading-snug">{intv.rationale}</div>
+                        <div className="text-[8px] text-slate-500">Dosage: {intv.dosage}</div>
+                        <div className="flex gap-1 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => isApplied ? clearTreatment(p.id) : applyIntervention(p, intv)}
+                            className={`flex-1 text-[9px] px-1.5 py-1 rounded border font-medium ${
+                              isApplied
+                                ? 'border-emerald-500/60 bg-emerald-500/25 text-emerald-100'
+                                : 'border-emerald-500/50 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/30'
+                            }`}
+                            data-testid={`spotlight-treat-${intv.id}`}
+                          >
+                            {isApplied
+                              ? '✓ Treating — undo'
+                              : `Treat (re-sim ${intv.slingActivationDelta >= 0 ? '+' : ''}${intv.slingActivationDelta}% + add to cart)`}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[8px] text-slate-500 italic pt-0.5 border-t border-slate-800">
+                  Live re-simulation: Treat composes the per-part patch into the engine, re-scores the spotlight, and tags the cart item.
+                  {p.markerBiased && ' Markers biased this chip but the engine still chose the weak link.'}
+                </div>
+              </div>
+            );
+          })()}
+
+          {Object.keys(partTreatments).length > 0 && (
+            <div className="text-[8px] text-slate-500 border-t border-slate-800 pt-1">
+              {Object.keys(partTreatments).length} per-part treatment{Object.keys(partTreatments).length === 1 ? '' : 's'} active.
+              <button
+                type="button"
+                onClick={() => {
+                  for (const id of Object.keys(partTreatments)) clearTreatment(id);
+                }}
+                className="ml-1 text-slate-400 hover:text-slate-100 underline"
+                data-testid="spotlight-clear-all"
+              >
+                Reset all
+              </button>
+            </div>
+          )}
+
+        </div>
       </div>
-    </div>
+    </>
   );
 }

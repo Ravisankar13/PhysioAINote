@@ -8014,10 +8014,12 @@ ${ddxList}`;
 
   const handleMovementSimResult = useCallback((res: MovementSimResult, plan: MovementSimIntervention[]) => {
     if (skeletonModeRef.current !== 'movement') return;
-    const overlay = res.tissueLoadImpact.map(t => {
-      const helpful = t.symptomDirection === 'improve' && t.loadDirection !== 'up';
-      return { tissue: t.tissue, tone: helpful ? 'green' as const : 'amber' as const };
-    });
+    const overlay = res.tissueLoadImpact
+      .filter(t => t.loadDirection === 'down' || t.loadDirection === 'up')
+      .map(t => ({
+        tissue: t.tissue,
+        tone: (t.loadDirection === 'down' ? 'green' : 'amber') as 'green' | 'amber',
+      }));
     setMovementSimTissueOverlay(overlay);
 
     const id = `mfsim-${Date.now()}-${Math.floor(Math.random() * 1000)}`;

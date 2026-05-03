@@ -97,14 +97,38 @@ const MAGNITUDE_VALUES: Record<InterventionKind, Record<Magnitude, { magnitude: 
   other:       { small: { magnitude: 0,  unit: '' },  moderate: { magnitude: 0,  unit: '' },  large: { magnitude: 0,  unit: '' } },
 };
 
-interface Intervention {
+export interface Intervention {
   uid: string;
   kind: InterventionKind;
   target?: string;
   magnitudeBand: Magnitude;
   romDirection?: string;
   slingId?: string;
+  slingDirection?: 'increase' | 'decrease';
   freeText?: string;
+}
+
+export function describeIntervention(i: Intervention): string {
+  const meta = KIND_OPTIONS.find(k => k.id === i.kind);
+  const action = meta?.label ?? i.kind;
+  if (i.kind === 'changeSling') {
+    const sl = SLING_OPTIONS.find(s => s.id === i.slingId)?.label ?? i.slingId ?? 'sling';
+    const dir = i.slingDirection === 'decrease' ? 'decrease' : 'increase';
+    const m = MAGNITUDE_VALUES[i.kind][i.magnitudeBand];
+    return `${dir} ${sl} (${i.magnitudeBand} ±${m.magnitude}${m.unit})`;
+  }
+  if (i.kind === 'restoreROM' || i.kind === 'restrictROM') {
+    const j = JOINT_TARGETS.find(t => t.id === i.target)?.label ?? i.target ?? 'joint';
+    const dir = i.romDirection ? ` ${i.romDirection}` : '';
+    const m = MAGNITUDE_VALUES[i.kind][i.magnitudeBand];
+    return `${action.toLowerCase()}: ${j}${dir} (${i.magnitudeBand} ±${m.magnitude}${m.unit})`;
+  }
+  if (i.kind === 'other') {
+    return (i.freeText || 'free-text').slice(0, 80);
+  }
+  const mu = MUSCLE_TARGETS.find(t => t.id === i.target)?.label ?? i.target ?? 'muscle';
+  const m = MAGNITUDE_VALUES[i.kind][i.magnitudeBand];
+  return `${action.toLowerCase()}: ${mu} (${i.magnitudeBand} ±${m.magnitude}${m.unit})`;
 }
 
 export interface MovementSimResult {
@@ -207,7 +231,10 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     else if (meta.needs === 'joint') {
       patch.target = JOINT_TARGETS[0].id;
       patch.romDirection = ROM_DIRECTIONS_BY_JOINT[JOINT_TARGETS[0].id]?.[0];
-    } else if (meta.needs === 'sling') patch.slingId = SLING_OPTIONS[0].id;
+    } else if (meta.needs === 'sling') {
+      patch.slingId = SLING_OPTIONS[0].id;
+      patch.slingDirection = 'increase';
+    }
     updateIntervention(uid, patch);
   }, [updateIntervention]);
   const onJointChange = useCallback((uid: string, target: string) => {
@@ -239,14 +266,14 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
       interventions: interventions.map(i => {
         const out: Record<string, unknown> = { kind: i.kind };
         const mag = MAGNITUDE_VALUES[i.kind][i.magnitudeBand];
-        if (i.target) {
-          if ((i.kind === 'restoreROM' || i.kind === 'restrictROM') && i.romDirection) {
-            out.target = `${i.target}.${i.romDirection}`;
-          } else {
-            out.target = i.target;
-          }
+        if (i.target) out.target = i.target;
+        if ((i.kind === 'restoreROM' || i.kind === 'restrictROM') && i.romDirection) {
+          out.romDirection = i.romDirection;
         }
         if (i.slingId) out.slingId = i.slingId;
+        if (i.kind === 'changeSling') {
+          out.slingDirection = i.slingDirection ?? 'increase';
+        }
         if (mag.magnitude) out.magnitude = mag.magnitude;
         if (mag.unit)      out.unit = mag.unit;
         if (i.freeText)    out.freeText = i.freeText;
@@ -408,16 +435,41 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
                     )}
 
                     {meta.needs === 'sling' && (
-                      <Select value={iv.slingId} onValueChange={(v) => updateIntervention(iv.uid, { slingId: v })}>
-                        <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50" data-testid={`intervention-sling-${idx}`}>
-                          <SelectValue placeholder="Sling…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SLING_OPTIONS.map(s => (
-                            <SelectItem key={s.id} value={s.id} className="text-[11px]">{s.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1.5">
+                        <Select value={iv.slingId} onValueChange={(v) => updateIntervention(iv.uid, { slingId: v })}>
+                          <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50" data-testid={`intervention-sling-${idx}`}>
+                            <SelectValue placeholder="Sling…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SLING_OPTIONS.map(s => (
+                              <SelectItem key={s.id} value={s.id} className="text-[11px]">{s.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1" role="radiogroup" aria-label="Direction" data-testid={`intervention-sling-direction-${idx}`}>
+                          {(['increase','decrease'] as const).map(d => {
+                            const active = (iv.slingDirection ?? 'increase') === d;
+                            const Icon = d === 'increase' ? ArrowUp : ArrowDown;
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                role="radio"
+                                aria-checked={active}
+                                onClick={() => updateIntervention(iv.uid, { slingDirection: d })}
+                                className={`flex-1 inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-wide rounded border px-1.5 py-1 transition-colors ${
+                                  active
+                                    ? 'bg-indigo-600 border-indigo-400 text-white'
+                                    : 'bg-indigo-950/60 border-indigo-700/50 text-indigo-200 hover:bg-indigo-800/60'
+                                }`}
+                                data-testid={`intervention-sling-direction-${idx}-${d}`}
+                              >
+                                <Icon className="h-3 w-3" /> {d}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
 
                     {meta.needs === 'free' && (

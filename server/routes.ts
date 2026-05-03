@@ -10219,6 +10219,8 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const interventionSchema = z.object({
         kind: z.enum(['strengthen','inhibit','lengthen','shorten','restoreROM','restrictROM','changeSling','other']),
         target: z.string().max(80).optional(),
+        romDirection: z.string().max(40).optional(),
+        slingDirection: z.enum(['increase','decrease']).optional(),
         magnitude: z.number().min(-100).max(100).optional(),
         unit: z.string().max(8).optional(),
         slingId: z.string().max(60).optional(),
@@ -10282,17 +10284,22 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
 
       const safeCondition = deidentify(data.condition);
       const safeCaseSummary = deidentify(data.caseSummary);
+      const safeInterventions = data.interventions.map(i => ({
+        ...i,
+        freeText: i.freeText ? deidentify(i.freeText) : i.freeText,
+      }));
 
-      // Bound interventions to engine-modelled targets. Reject anything that
-      // names a target/sling outside the allowed set so the AI never
-      // predicts on something the engine can't represent.
-      for (const i of data.interventions) {
+      for (const i of safeInterventions) {
         if (i.kind === 'changeSling') {
           if (!i.slingId || !movementSimAllowedSlings.has(i.slingId)) {
             return res.status(400).json({ error: `Unknown sling id: ${i.slingId ?? '(missing)'}` });
           }
+          if (!i.slingDirection) {
+            return res.status(400).json({ error: 'Sling intervention requires direction (increase|decrease).' });
+          }
         } else if (i.kind === 'restoreROM' || i.kind === 'restrictROM') {
-          if (!i.target || !movementSimAllowedJoints.has(i.target)) {
+          const root = i.target ? i.target.split('.')[0] : '';
+          if (!root || !movementSimAllowedJoints.has(root)) {
             return res.status(400).json({ error: `Unknown joint target for ROM intervention: ${i.target ?? '(missing)'}` });
           }
         } else if (i.kind === 'strengthen' || i.kind === 'inhibit' || i.kind === 'lengthen' || i.kind === 'shorten') {
@@ -10311,9 +10318,11 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         c: safeCondition.trim().toLowerCase(),
         s: safeCaseSummary.trim().toLowerCase().slice(0, 800),
         t: [...data.painfulTissues.map(t => t.label.toLowerCase())].sort(),
-        i: data.interventions.map(i => ({
+        i: safeInterventions.map(i => ({
           k: i.kind,
           t: (i.target || '').toLowerCase(),
+          rd: (i.romDirection || '').toLowerCase(),
+          sd: i.slingDirection || '',
           m: typeof i.magnitude === 'number' ? Math.round(i.magnitude) : null,
           u: i.unit || '',
           s: i.slingId || '',
@@ -10336,11 +10345,13 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const tissuesText = data.painfulTissues.length
         ? data.painfulTissues.map(t => `- ${t.label}${typeof t.severity === 'number' ? ` (severity ${t.severity}/10)` : ''}${t.type ? ` [${t.type}]` : ''}`).join('\n')
         : '(none recorded — infer 1–3 primary symptomatic tissues from the diagnosis)';
-      const interventionsText = data.interventions.map((i, idx) => {
+      const interventionsText = safeInterventions.map((i, idx) => {
         const parts = [`${idx + 1}. ${i.kind}`];
         if (i.target) parts.push(`target=${i.target}`);
+        if (i.romDirection) parts.push(`direction=${i.romDirection}`);
         if (typeof i.magnitude === 'number') parts.push(`magnitude=${i.magnitude}${i.unit || ''}`);
         if (i.slingId) parts.push(`sling=${i.slingId}`);
+        if (i.slingDirection) parts.push(`slingDirection=${i.slingDirection}`);
         if (i.freeText) parts.push(`note="${i.freeText}"`);
         return parts.join(' · ');
       }).join('\n');

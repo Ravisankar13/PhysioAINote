@@ -95,7 +95,7 @@ import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, 
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import ActiveCapacitiesPanel from "@/components/skeleton/ActiveCapacitiesPanel";
 import MovementFindingsStream, { type MovementFinding } from "@/components/skeleton/MovementFindingsStream";
-import MovementAiSimulatorPanel, { type MovementSimResult, type MovementSimContext } from "@/components/skeleton/MovementAiSimulatorPanel";
+import MovementAiSimulatorPanel, { describeIntervention, type Intervention as MovementSimIntervention, type MovementSimResult, type MovementSimContext } from "@/components/skeleton/MovementAiSimulatorPanel";
 import { useActiveCapacities } from "@/hooks/useActiveCapacities";
 import type {
   DiagnosisProvocationMovement,
@@ -7948,13 +7948,6 @@ ${ddxList}`;
     }
   }, [lastClinicalParseResult]);
 
-  // ─── Movement-Mode AI Simulator (Task #343) ───────────
-  // Build the de-identified context payload sent to /api/movement-sim/predict.
-  // Painful tissues come from painMarkers (label+severity+symptom-type), the
-  // posture deviations from the engine model-config diff, sling activations
-  // from the sling analysis output, and a compact HUD-force summary line.
-  // The panel mounts only in Movement Mode and only when the sidebar is
-  // closed (lifecycle gating below).
   const movementSimContext = useMemo<MovementSimContext>(() => {
     const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
     const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
@@ -8019,24 +8012,22 @@ ${ddxList}`;
     setMovementSimTissueOverlay([]);
   }, [activeCaseId, skeletonMode]);
 
-  const handleMovementSimResult = useCallback((res: MovementSimResult) => {
+  const handleMovementSimResult = useCallback((res: MovementSimResult, plan: MovementSimIntervention[]) => {
     if (skeletonModeRef.current !== 'movement') return;
-    // Tissue overlay: tag each painful tissue green when symptoms improve and
-    // load is non-increasing, amber otherwise (worsen, neutral-with-overload,
-    // mixed). Bounded to engine-modelled targets implicitly via the input.
     const overlay = res.tissueLoadImpact.map(t => {
       const helpful = t.symptomDirection === 'improve' && t.loadDirection !== 'up';
       return { tissue: t.tissue, tone: helpful ? 'green' as const : 'amber' as const };
     });
     setMovementSimTissueOverlay(overlay);
 
-    // One MovementFinding per simulator run, summarising the verdict so the
-    // findings stream stays the canonical movement-mode log.
     const id = `mfsim-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const verdictText = res.netVerdict.toUpperCase();
+    const planLine = plan.length
+      ? plan.map(p => describeIntervention(p)).join(' + ')
+      : 'no interventions';
     const headline = res.verdictRationale
-      ? `${verdictText}: ${res.verdictRationale}`
-      : `${verdictText} prediction (${res.confidence} confidence).`;
+      ? `${verdictText} (${planLine}): ${res.verdictRationale}`
+      : `${verdictText} (${planLine}) — ${res.confidence} confidence.`;
     const tissueLine = res.tissueLoadImpact.length
       ? ' · ' + res.tissueLoadImpact.slice(0, 3).map(t => `${t.tissue} load ${t.loadDirection}, sx ${t.symptomDirection}`).join('; ')
       : '';
@@ -8053,8 +8044,6 @@ ${ddxList}`;
     }, ...prev].slice(0, 12));
   }, []);
 
-  // Lifecycle: clear simulator overlay on case change AND when leaving
-  // Movement Mode (Posture mode + sidebar-open both gate the panel away).
   useEffect(() => {
     setMovementSimTissueOverlay([]);
   }, [activeCaseId, skeletonMode]);
@@ -16631,15 +16620,6 @@ ${ddxList}`;
           Findings stream renders into the same right-rail slot the
           ClinicalReasoningPanel normally occupies. */}
       {skeletonMode === 'movement' && !sidebarOpen && (
-        // Task #320: drop `h-full` from the wrapper so it sizes to its
-        // collapsed/expanded child Card instead of permanently reserving
-        // the full viewer height. This also lets the rest of the right
-        // edge of the 3D viewer receive pointer events again when the
-        // panel is collapsed.
-        // Task #343: AI Simulator panel sits above the findings stream in
-        // the same right-rail slot. Both are gated by Movement Mode AND
-        // !sidebarOpen so the rail vanishes when the user opens the
-        // sidebar (as the spec requires) instead of stacking under it.
         <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto space-y-2" data-testid="movement-findings-rail">
           <MovementAiSimulatorPanel
             key={`mvsim:${activeCaseId ?? 'none'}:${skeletonMode}`}
@@ -16653,10 +16633,6 @@ ${ddxList}`;
         </div>
       )}
 
-      {/* Task #343: green/amber tissue-overlay legend, anchored to the
-          left edge of the 3D viewer so it visually overlays the skeleton.
-          Same lifecycle gating as the simulator panel — hidden in Posture
-          mode, hidden when the sidebar is open, cleared on case change. */}
       {skeletonMode === 'movement' && !sidebarOpen && movementSimTissueOverlay.length > 0 && (
         <div
           className="absolute top-24 left-3 z-30 w-[200px] pointer-events-none animate-in fade-in duration-200"

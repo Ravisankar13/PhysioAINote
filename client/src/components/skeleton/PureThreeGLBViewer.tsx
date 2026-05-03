@@ -1758,6 +1758,7 @@ interface PureThreeGLBViewerProps {
     healingStage: 'acute' | 'subacute' | 'chronic' | 'degenerative' | 'baseline';
     irritability: 'low' | 'moderate' | 'high';
     isDeep: boolean;
+    colorOverride?: number;
     aggravators?: Array<{
       kind: 'position' | 'movement' | 'load' | 'environment';
       label: string;
@@ -3727,7 +3728,7 @@ export default function PureThreeGLBViewer({
       if (h.isDeep) anyDeep = true;
       const recipe = TISSUE_ANCHOR_CATALOGUE[h.tissueId];
       const palette = paletteForState(h.healingStage, h.irritability, h.severity);
-      const color = palette.color;
+      const color = h.colorOverride ?? palette.color;
       const opacity = palette.opacity;
       const emissive = palette.emissive;
 

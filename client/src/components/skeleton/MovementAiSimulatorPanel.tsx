@@ -1,40 +1,16 @@
-/**
- * Movement-Mode AI Simulator (Task #343)
- *
- * Clinician composes one-or-more interventions on the active patient
- * (strengthen / inhibit / lengthen / shorten muscle, restore / restrict
- * joint ROM, change sling activation, or free-text "other"). The panel
- * POSTs the composed plan + current biomechanical context to
- * `/api/movement-sim/predict` and renders the structured prediction:
- *
- *   - biomechanical changes
- *   - sling re-balancing
- *   - compensation shift
- *   - per-painful-tissue load + symptom direction (one row per recorded
- *     painful tissue — the spec requires "plantar fascia" to surface in
- *     the plantar fasciitis example even when the AI omits it)
- *   - net verdict banner (helpful / mixed / harmful / neutral)
- *   - confidence + caveats
- *
- * Targets are bounded to the engine-modelled MUSCLE_TARGETS / JOINT_TARGETS
- * (mirrored from `client/src/lib/whatIfSimulationEngine`) and the five
- * `SlingId`s. Results are cached server-side by deterministic input hash;
- * the cached flag is surfaced inline.
- *
- * This panel is mounted ONLY in Movement Mode and only when the left
- * sidebar is closed — lifecycle gating is handled by the parent.
- */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  SelectGroup, SelectLabel,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Sparkles, Plus, Trash2, ChevronDown, ChevronUp,
   CheckCircle2, AlertTriangle, XCircle, MinusCircle,
-  ArrowUp, ArrowDown, Equal,
+  ArrowUp, ArrowDown, Equal, RotateCcw, RefreshCw,
 } from 'lucide-react';
 import { MUSCLE_TARGETS, JOINT_TARGETS } from '@/lib/whatIfSimulationEngine';
 
@@ -45,6 +21,53 @@ const SLING_OPTIONS: Array<{ id: string; label: string }> = [
   { id: 'deep_longitudinal', label: 'Deep Longitudinal' },
   { id: 'scapular_shoulder', label: 'Scapular / Shoulder' },
 ];
+
+const ROM_DIRECTIONS_BY_JOINT: Record<string, string[]> = {
+  leftShoulder:  ['flexion', 'abduction', 'externalRotation', 'internalRotation', 'extension'],
+  rightShoulder: ['flexion', 'abduction', 'externalRotation', 'internalRotation', 'extension'],
+  leftElbow:  ['flexion'],
+  rightElbow: ['flexion'],
+  leftWrist:  ['flexion', 'extension'],
+  rightWrist: ['flexion', 'extension'],
+  leftHip:    ['flexion', 'abduction', 'internalRotation', 'extension'],
+  rightHip:   ['flexion', 'abduction', 'internalRotation', 'extension'],
+  leftKnee:   ['flexion'],
+  rightKnee:  ['flexion'],
+  leftAnkle:  ['dorsiflexion', 'plantarflexion', 'inversion'],
+  rightAnkle: ['dorsiflexion', 'plantarflexion', 'inversion'],
+  spine: ['flexion', 'extension', 'rotation', 'lateralFlexion'],
+  neck:  ['flexion', 'extension', 'rotation', 'lateralFlexion'],
+};
+
+type MuscleRegion = 'Lower limb' | 'Upper limb' | 'Trunk / Spine' | 'Neck';
+type JointRegion = 'Lower limb' | 'Upper limb' | 'Spine / Neck';
+
+function muscleRegion(id: string): MuscleRegion {
+  if (/^(glute|quad|hamstring|hip_flexor|adductor|piriformis|calf|peroneal|tib_post|shin)/.test(id)) return 'Lower limb';
+  if (/^(scapula|rotator_cuff|deltoid|bicep|tricep|wrist_flex|wrist_ext|chest)/.test(id)) return 'Upper limb';
+  if (/^(scm|suboccipitals|levator_scapulae|scalenes|neck)/.test(id)) return 'Neck';
+  return 'Trunk / Spine';
+}
+function jointRegion(id: string): JointRegion {
+  if (/Hip|Knee|Ankle/.test(id)) return 'Lower limb';
+  if (/Shoulder|Elbow|Wrist/.test(id)) return 'Upper limb';
+  return 'Spine / Neck';
+}
+
+function groupByRegion<T extends { id: string }>(
+  items: T[], regionFn: (id: string) => string,
+): Array<{ region: string; items: T[] }> {
+  const map = new Map<string, T[]>();
+  for (const it of items) {
+    const r = regionFn(it.id);
+    if (!map.has(r)) map.set(r, []);
+    map.get(r)!.push(it);
+  }
+  return Array.from(map.entries()).map(([region, items]) => ({ region, items }));
+}
+
+const GROUPED_MUSCLES = groupByRegion(MUSCLE_TARGETS, muscleRegion);
+const GROUPED_JOINTS = groupByRegion(JOINT_TARGETS, jointRegion);
 
 type InterventionKind =
   | 'strengthen' | 'inhibit' | 'lengthen' | 'shorten'
@@ -61,12 +84,25 @@ const KIND_OPTIONS: Array<{ id: InterventionKind; label: string; needs: 'muscle'
   { id: 'other',       label: 'Other (free text)',     needs: 'free' },
 ];
 
+type Magnitude = 'small' | 'moderate' | 'large';
+
+const MAGNITUDE_VALUES: Record<InterventionKind, Record<Magnitude, { magnitude: number; unit: string }>> = {
+  strengthen:  { small: { magnitude: 10, unit: '%' }, moderate: { magnitude: 25, unit: '%' }, large: { magnitude: 40, unit: '%' } },
+  inhibit:     { small: { magnitude: 10, unit: '%' }, moderate: { magnitude: 25, unit: '%' }, large: { magnitude: 40, unit: '%' } },
+  lengthen:    { small: { magnitude: 5,  unit: '°' }, moderate: { magnitude: 10, unit: '°' }, large: { magnitude: 20, unit: '°' } },
+  shorten:     { small: { magnitude: 5,  unit: '°' }, moderate: { magnitude: 10, unit: '°' }, large: { magnitude: 20, unit: '°' } },
+  restoreROM:  { small: { magnitude: 5,  unit: '°' }, moderate: { magnitude: 15, unit: '°' }, large: { magnitude: 30, unit: '°' } },
+  restrictROM: { small: { magnitude: 5,  unit: '°' }, moderate: { magnitude: 15, unit: '°' }, large: { magnitude: 30, unit: '°' } },
+  changeSling: { small: { magnitude: 10, unit: '%' }, moderate: { magnitude: 20, unit: '%' }, large: { magnitude: 35, unit: '%' } },
+  other:       { small: { magnitude: 0,  unit: '' },  moderate: { magnitude: 0,  unit: '' },  large: { magnitude: 0,  unit: '' } },
+};
+
 interface Intervention {
   uid: string;
   kind: InterventionKind;
   target?: string;
-  magnitude?: number;
-  unit?: string;
+  magnitudeBand: Magnitude;
+  romDirection?: string;
   slingId?: string;
   freeText?: string;
 }
@@ -91,6 +127,14 @@ export interface MovementSimResult {
   cached: boolean;
 }
 
+export interface ActiveCapacityRowSlim {
+  joint: string;
+  movement: string;
+  activeRom?: [number, number];
+  painfulArc?: [number, number];
+  activeStrengthPct?: number;
+}
+
 export interface MovementSimContext {
   condition: string;
   caseSummary: string;
@@ -98,6 +142,7 @@ export interface MovementSimContext {
   postureDeviations: string[];
   slingActivations: Array<{ slingId: string; activation: number }>;
   hudForceSummary: string;
+  activeCapacityProfile: ActiveCapacityRowSlim[];
 }
 
 export interface MovementAiSimulatorPanelProps {
@@ -107,23 +152,8 @@ export interface MovementAiSimulatorPanelProps {
 }
 
 function newId() { return `iv-${Date.now()}-${Math.floor(Math.random() * 1000)}`; }
-
-function defaultMagnitudeFor(kind: InterventionKind): { magnitude: number; unit: string } | null {
-  switch (kind) {
-    case 'strengthen':
-    case 'inhibit':
-      return { magnitude: 20, unit: '%' };
-    case 'lengthen':
-    case 'shorten':
-      return { magnitude: 10, unit: '°' };
-    case 'restoreROM':
-    case 'restrictROM':
-      return { magnitude: 10, unit: '°' };
-    case 'changeSling':
-      return { magnitude: 15, unit: '%' };
-    default:
-      return null;
-  }
+function defaultIntervention(): Intervention {
+  return { uid: newId(), kind: 'strengthen', target: 'glute_l', magnitudeBand: 'moderate' };
 }
 
 const VERDICT_STYLES: Record<MovementSimResult['netVerdict'], { bg: string; border: string; text: string; Icon: typeof CheckCircle2 }> = {
@@ -145,21 +175,15 @@ const SYMPTOM_TINT: Record<MovementSimResult['tissueLoadImpact'][number]['sympto
   neutral: 'bg-slate-700/40 text-slate-200 border-slate-500/40',
 };
 
+const MAGNITUDE_BANDS: Magnitude[] = ['small', 'moderate', 'large'];
+
 export default function MovementAiSimulatorPanel({ context, onResult, className = '' }: MovementAiSimulatorPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [interventions, setInterventions] = useState<Intervention[]>([
-    { uid: newId(), kind: 'strengthen', target: 'glute_l', magnitude: 20, unit: '%' },
-  ]);
+  const [interventions, setInterventions] = useState<Intervention[]>([defaultIntervention()]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MovementSimResult | null>(null);
-
-  // Reset everything when the case (and therefore context.condition) changes.
-  useEffect(() => {
-    setInterventions([{ uid: newId(), kind: 'strengthen', target: 'glute_l', magnitude: 20, unit: '%' }]);
-    setResult(null);
-    setError(null);
-  }, [context.condition]);
+  const lastBodyRef = useRef<unknown>(null);
 
   const updateIntervention = useCallback((uid: string, patch: Partial<Intervention>) => {
     setInterventions(prev => prev.map(i => i.uid === uid ? { ...i, ...patch } : i));
@@ -168,24 +192,26 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     setInterventions(prev => prev.length <= 1 ? prev : prev.filter(i => i.uid !== uid));
   }, []);
   const addIntervention = useCallback(() => {
-    setInterventions(prev => prev.length >= 6 ? prev : [
-      ...prev,
-      { uid: newId(), kind: 'strengthen', target: 'glute_l', magnitude: 20, unit: '%' },
-    ]);
+    setInterventions(prev => prev.length >= 6 ? prev : [...prev, defaultIntervention()]);
+  }, []);
+  const resetAll = useCallback(() => {
+    setInterventions([defaultIntervention()]);
+    setResult(null);
+    setError(null);
+    lastBodyRef.current = null;
   }, []);
   const onKindChange = useCallback((uid: string, kind: InterventionKind) => {
     const meta = KIND_OPTIONS.find(k => k.id === kind)!;
-    const defaults: Partial<Intervention> = { kind, target: undefined, slingId: undefined, freeText: undefined, magnitude: undefined, unit: undefined };
-    if (meta.needs === 'muscle') {
-      defaults.target = MUSCLE_TARGETS[0].id;
-    } else if (meta.needs === 'joint') {
-      defaults.target = JOINT_TARGETS[0].id;
-    } else if (meta.needs === 'sling') {
-      defaults.slingId = SLING_OPTIONS[0].id;
-    }
-    const m = defaultMagnitudeFor(kind);
-    if (m) { defaults.magnitude = m.magnitude; defaults.unit = m.unit; }
-    updateIntervention(uid, defaults);
+    const patch: Partial<Intervention> = { kind, target: undefined, slingId: undefined, freeText: undefined, romDirection: undefined, magnitudeBand: 'moderate' };
+    if (meta.needs === 'muscle')      patch.target = MUSCLE_TARGETS[0].id;
+    else if (meta.needs === 'joint') {
+      patch.target = JOINT_TARGETS[0].id;
+      patch.romDirection = ROM_DIRECTIONS_BY_JOINT[JOINT_TARGETS[0].id]?.[0];
+    } else if (meta.needs === 'sling') patch.slingId = SLING_OPTIONS[0].id;
+    updateIntervention(uid, patch);
+  }, [updateIntervention]);
+  const onJointChange = useCallback((uid: string, target: string) => {
+    updateIntervention(uid, { target, romDirection: ROM_DIRECTIONS_BY_JOINT[target]?.[0] });
   }, [updateIntervention]);
 
   const canRun = useMemo(() => {
@@ -193,35 +219,49 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     return interventions.every(i => {
       const meta = KIND_OPTIONS.find(k => k.id === i.kind);
       if (!meta) return false;
-      if (meta.needs === 'muscle' || meta.needs === 'joint') return !!i.target;
-      if (meta.needs === 'sling') return !!i.slingId;
-      if (meta.needs === 'free') return !!(i.freeText && i.freeText.trim().length > 0);
+      if (meta.needs === 'muscle') return !!i.target;
+      if (meta.needs === 'joint')  return !!i.target;
+      if (meta.needs === 'sling')  return !!i.slingId;
+      if (meta.needs === 'free')   return !!(i.freeText && i.freeText.trim().length > 0);
       return true;
     });
   }, [interventions]);
 
-  const runSim = useCallback(async () => {
+  const buildBody = useCallback(() => {
+    return {
+      condition: context.condition,
+      caseSummary: context.caseSummary,
+      painfulTissues: context.painfulTissues,
+      postureDeviations: context.postureDeviations,
+      slingActivations: context.slingActivations,
+      hudForceSummary: context.hudForceSummary,
+      activeCapacityProfile: context.activeCapacityProfile,
+      interventions: interventions.map(i => {
+        const out: Record<string, unknown> = { kind: i.kind };
+        const mag = MAGNITUDE_VALUES[i.kind][i.magnitudeBand];
+        if (i.target) {
+          if ((i.kind === 'restoreROM' || i.kind === 'restrictROM') && i.romDirection) {
+            out.target = `${i.target}.${i.romDirection}`;
+          } else {
+            out.target = i.target;
+          }
+        }
+        if (i.slingId) out.slingId = i.slingId;
+        if (mag.magnitude) out.magnitude = mag.magnitude;
+        if (mag.unit)      out.unit = mag.unit;
+        if (i.freeText)    out.freeText = i.freeText;
+        return out;
+      }),
+    };
+  }, [context, interventions]);
+
+  const runSim = useCallback(async (overrideBody?: unknown) => {
     if (!canRun || running) return;
     setRunning(true);
     setError(null);
     try {
-      const body = {
-        condition: context.condition,
-        caseSummary: context.caseSummary,
-        painfulTissues: context.painfulTissues,
-        postureDeviations: context.postureDeviations,
-        slingActivations: context.slingActivations,
-        hudForceSummary: context.hudForceSummary,
-        interventions: interventions.map(i => {
-          const out: Record<string, unknown> = { kind: i.kind };
-          if (i.target) out.target = i.target;
-          if (i.slingId) out.slingId = i.slingId;
-          if (typeof i.magnitude === 'number') out.magnitude = i.magnitude;
-          if (i.unit) out.unit = i.unit;
-          if (i.freeText) out.freeText = i.freeText;
-          return out;
-        }),
-      };
+      const body = overrideBody ?? buildBody();
+      lastBodyRef.current = body;
       const res = await fetch('/api/movement-sim/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -241,7 +281,12 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
     } finally {
       setRunning(false);
     }
-  }, [canRun, running, context, interventions, onResult]);
+  }, [canRun, running, buildBody, onResult, interventions]);
+
+  const rerun = useCallback(() => {
+    if (lastBodyRef.current) runSim(lastBodyRef.current);
+    else runSim();
+  }, [runSim]);
 
   const ChevIcon = collapsed ? ChevronDown : ChevronUp;
 
@@ -277,10 +322,10 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
       {!collapsed && (
         <ScrollArea className="max-h-[60vh]" data-testid="movement-sim-body">
           <div className="p-3 space-y-3">
-            {/* Composer */}
             <div className="space-y-2">
               {interventions.map((iv, idx) => {
                 const meta = KIND_OPTIONS.find(k => k.id === iv.kind)!;
+                const romDirs = iv.target ? ROM_DIRECTIONS_BY_JOINT[iv.target] || [] : [];
                 return (
                   <div
                     key={iv.uid}
@@ -313,72 +358,66 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
                     </div>
 
                     {meta.needs === 'muscle' && (
-                      <div className="flex items-center gap-1.5">
-                        <Select value={iv.target} onValueChange={(v) => updateIntervention(iv.uid, { target: v })}>
-                          <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50 flex-1" data-testid={`intervention-target-${idx}`}>
-                            <SelectValue placeholder="Muscle…" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[260px]">
-                            {MUSCLE_TARGETS.map(m => (
-                              <SelectItem key={m.id} value={m.id} className="text-[11px]">{m.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={iv.magnitude ?? 0}
-                          onChange={(e) => updateIntervention(iv.uid, { magnitude: Number(e.target.value) })}
-                          className="h-7 text-[11px] w-16 bg-indigo-950/70 border-indigo-700/50"
-                          data-testid={`intervention-magnitude-${idx}`}
-                        />
-                        <span className="text-[10px] text-indigo-300 w-3">{iv.unit}</span>
-                      </div>
+                      <Select value={iv.target} onValueChange={(v) => updateIntervention(iv.uid, { target: v })}>
+                        <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50" data-testid={`intervention-target-${idx}`}>
+                          <SelectValue placeholder="Muscle…" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[280px]">
+                          {GROUPED_MUSCLES.map(g => (
+                            <SelectGroup key={g.region}>
+                              <SelectLabel className="text-[10px] uppercase tracking-wider text-indigo-300/80">{g.region}</SelectLabel>
+                              {g.items.map(m => (
+                                <SelectItem key={m.id} value={m.id} className="text-[11px]">{m.label}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
 
                     {meta.needs === 'joint' && (
                       <div className="flex items-center gap-1.5">
-                        <Select value={iv.target} onValueChange={(v) => updateIntervention(iv.uid, { target: v })}>
+                        <Select value={iv.target} onValueChange={(v) => onJointChange(iv.uid, v)}>
                           <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50 flex-1" data-testid={`intervention-target-${idx}`}>
                             <SelectValue placeholder="Joint…" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-[260px]">
-                            {JOINT_TARGETS.map(j => (
-                              <SelectItem key={j.id} value={j.id} className="text-[11px]">{j.label}</SelectItem>
+                          <SelectContent className="max-h-[280px]">
+                            {GROUPED_JOINTS.map(g => (
+                              <SelectGroup key={g.region}>
+                                <SelectLabel className="text-[10px] uppercase tracking-wider text-indigo-300/80">{g.region}</SelectLabel>
+                                {g.items.map(j => (
+                                  <SelectItem key={j.id} value={j.id} className="text-[11px]">{j.label}</SelectItem>
+                                ))}
+                              </SelectGroup>
                             ))}
                           </SelectContent>
                         </Select>
-                        <Input
-                          type="number"
-                          value={iv.magnitude ?? 0}
-                          onChange={(e) => updateIntervention(iv.uid, { magnitude: Number(e.target.value) })}
-                          className="h-7 text-[11px] w-16 bg-indigo-950/70 border-indigo-700/50"
-                          data-testid={`intervention-magnitude-${idx}`}
-                        />
-                        <span className="text-[10px] text-indigo-300 w-3">{iv.unit}</span>
+                        {romDirs.length > 0 && (
+                          <Select value={iv.romDirection} onValueChange={(v) => updateIntervention(iv.uid, { romDirection: v })}>
+                            <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50 w-[120px]" data-testid={`intervention-rom-direction-${idx}`}>
+                              <SelectValue placeholder="Direction…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {romDirs.map(d => (
+                                <SelectItem key={d} value={d} className="text-[11px] capitalize">{d.replace(/([A-Z])/g, ' $1').toLowerCase()}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     )}
 
                     {meta.needs === 'sling' && (
-                      <div className="flex items-center gap-1.5">
-                        <Select value={iv.slingId} onValueChange={(v) => updateIntervention(iv.uid, { slingId: v })}>
-                          <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50 flex-1" data-testid={`intervention-sling-${idx}`}>
-                            <SelectValue placeholder="Sling…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SLING_OPTIONS.map(s => (
-                              <SelectItem key={s.id} value={s.id} className="text-[11px]">{s.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={iv.magnitude ?? 0}
-                          onChange={(e) => updateIntervention(iv.uid, { magnitude: Number(e.target.value) })}
-                          className="h-7 text-[11px] w-16 bg-indigo-950/70 border-indigo-700/50"
-                          data-testid={`intervention-magnitude-${idx}`}
-                        />
-                        <span className="text-[10px] text-indigo-300 w-3">{iv.unit}</span>
-                      </div>
+                      <Select value={iv.slingId} onValueChange={(v) => updateIntervention(iv.uid, { slingId: v })}>
+                        <SelectTrigger className="h-7 text-[11px] bg-indigo-950/70 border-indigo-700/50" data-testid={`intervention-sling-${idx}`}>
+                          <SelectValue placeholder="Sling…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SLING_OPTIONS.map(s => (
+                            <SelectItem key={s.id} value={s.id} className="text-[11px]">{s.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
 
                     {meta.needs === 'free' && (
@@ -390,47 +429,107 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
                         data-testid={`intervention-freetext-${idx}`}
                       />
                     )}
+
+                    {meta.needs !== 'free' && (
+                      <div className="flex items-center gap-1" role="radiogroup" aria-label="Magnitude" data-testid={`intervention-magnitude-${idx}`}>
+                        {MAGNITUDE_BANDS.map(band => {
+                          const active = iv.magnitudeBand === band;
+                          const v = MAGNITUDE_VALUES[iv.kind][band];
+                          return (
+                            <button
+                              key={band}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              onClick={() => updateIntervention(iv.uid, { magnitudeBand: band })}
+                              className={`flex-1 text-[10px] uppercase tracking-wide rounded border px-1.5 py-1 transition-colors ${
+                                active
+                                  ? 'bg-indigo-600 border-indigo-400 text-white'
+                                  : 'bg-indigo-950/60 border-indigo-700/50 text-indigo-200 hover:bg-indigo-800/60'
+                              }`}
+                              data-testid={`intervention-magnitude-${idx}-${band}`}
+                            >
+                              {band}
+                              <span className="ml-1 text-[9px] text-indigo-300/80 normal-case">±{v.magnitude}{v.unit}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
 
-              <div className="flex items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={addIntervention}
-                  disabled={interventions.length >= 6}
-                  className="h-7 text-[11px] text-indigo-200 hover:bg-indigo-800/60"
-                  data-testid="intervention-add"
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Add intervention
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={runSim}
-                  disabled={!canRun || running}
-                  className="h-7 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white"
-                  data-testid="intervention-run"
-                >
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  {running ? 'Predicting…' : 'Predict outcome'}
-                </Button>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button" size="sm" variant="ghost"
+                    onClick={addIntervention}
+                    disabled={interventions.length >= 6}
+                    className="h-7 text-[11px] text-indigo-200 hover:bg-indigo-800/60"
+                    data-testid="intervention-add"
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Add
+                  </Button>
+                  <Button
+                    type="button" size="sm" variant="ghost"
+                    onClick={resetAll}
+                    disabled={running}
+                    className="h-7 text-[11px] text-indigo-200 hover:bg-indigo-800/60"
+                    data-testid="intervention-reset"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" /> Reset
+                  </Button>
+                </div>
+                <div className="flex items-center gap-1">
+                  {result && (
+                    <Button
+                      type="button" size="sm" variant="ghost"
+                      onClick={rerun}
+                      disabled={running}
+                      className="h-7 text-[11px] text-indigo-200 hover:bg-indigo-800/60"
+                      data-testid="intervention-rerun"
+                      title="Re-run with the same inputs"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" /> Re-run
+                    </Button>
+                  )}
+                  <Button
+                    type="button" size="sm"
+                    onClick={() => runSim()}
+                    disabled={!canRun || running}
+                    className="h-7 text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white"
+                    data-testid="intervention-run"
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {running ? 'Predicting…' : 'Predict outcome'}
+                  </Button>
+                </div>
               </div>
             </div>
 
+            {running && !result && <LoadingSkeleton />}
+
             {error && (
-              <div className="rounded border border-rose-500/40 bg-rose-900/30 p-2 text-[11px] text-rose-200" data-testid="movement-sim-error">
-                {error}
+              <div
+                className="rounded border border-rose-500/40 bg-rose-900/30 p-2 text-[11px] text-rose-200 flex items-center justify-between gap-2"
+                data-testid="movement-sim-error"
+              >
+                <span>{error}</span>
+                <Button
+                  type="button" size="sm" variant="ghost"
+                  onClick={() => runSim(lastBodyRef.current ?? undefined)}
+                  className="h-6 text-[10px] text-rose-100 hover:bg-rose-900/60"
+                  data-testid="movement-sim-retry"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                </Button>
               </div>
             )}
 
-            {/* Result */}
             {result && (
               <div className="space-y-2 pt-1 border-t border-indigo-700/40" data-testid="movement-sim-result">
                 <VerdictBanner result={result} />
-
                 <ResultSection title="Biomechanical changes" items={result.biomechanicalChanges} testId="bio-changes" />
 
                 {result.slingRebalancing.length > 0 && (
@@ -511,14 +610,30 @@ export default function MovementAiSimulatorPanel({ context, onResult, className 
   );
 }
 
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-2 pt-1 border-t border-indigo-700/40" data-testid="movement-sim-loading">
+      <div className="h-7 rounded bg-indigo-900/40 border border-indigo-700/40 animate-pulse" />
+      <div className="space-y-1">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="h-5 rounded bg-indigo-900/30 border border-indigo-700/30 animate-pulse" />
+        ))}
+      </div>
+      <div className="h-12 rounded bg-indigo-900/40 border border-indigo-700/40 animate-pulse" />
+      <div className="space-y-1">
+        {[0, 1].map(i => (
+          <div key={i} className="h-9 rounded bg-indigo-900/30 border border-indigo-700/30 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function VerdictBanner({ result }: { result: MovementSimResult }) {
   const v = VERDICT_STYLES[result.netVerdict];
   const Icon = v.Icon;
   return (
-    <div
-      className={`rounded border px-2 py-1.5 ${v.bg} ${v.border} ${v.text}`}
-      data-testid="verdict-banner"
-    >
+    <div className={`rounded border px-2 py-1.5 ${v.bg} ${v.border} ${v.text}`} data-testid="verdict-banner">
       <div className="flex items-center gap-1.5">
         <Icon className="h-3.5 w-3.5" />
         <span className="text-[11px] font-semibold uppercase tracking-wider">{result.netVerdict}</span>
@@ -545,3 +660,4 @@ function ResultSection({ title, items, testId }: { title: string; items: string[
     </div>
   );
 }
+

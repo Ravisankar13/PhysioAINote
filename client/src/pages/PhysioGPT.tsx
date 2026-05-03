@@ -168,7 +168,7 @@ import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
 import { type WhatIfScenario, type WhatIfComparisonResult, type PainfulTissueRegion, computeWhatIfComparison, applyFlareUpPose, tissuePainLoadIndex, FLARE_UP_SCENARIOS } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
-import { tissueIntelligenceToOverlayHighlight, paletteForState } from "@/lib/tissueOverlayCatalogue";
+import { tissueIntelligenceToOverlayHighlight, paletteForState, TISSUE_ANCHOR_CATALOGUE } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
@@ -7995,15 +7995,29 @@ ${ddxList}`;
       });
     const hudForceSummary = topJoints.length ? `Top joint loads: ${topJoints.join('; ')}` : '';
 
-    return { condition, caseSummary, painfulTissues, postureDeviations, slingActivations, hudForceSummary };
+    const capRows = activeCapacityEffective?.rows ?? activeCapacityProfile?.rows ?? [];
+    const activeCapacityProfilePayload = capRows.slice(0, 32).map(r => {
+      const out: { joint: string; movement: string; activeRom?: [number, number]; painfulArc?: [number, number]; activeStrengthPct?: number } = {
+        joint: r.joint, movement: r.movement,
+        activeRom: [Math.round(r.activeRomMin), Math.round(r.activeRomMax)],
+        activeStrengthPct: Math.round(r.activeStrengthPct),
+      };
+      if (r.painfulArc) out.painfulArc = [Math.round(r.painfulArc.start), Math.round(r.painfulArc.end)];
+      return out;
+    });
+
+    return { condition, caseSummary, painfulTissues, postureDeviations, slingActivations, hudForceSummary, activeCapacityProfile: activeCapacityProfilePayload };
   }, [
     lastClinicalParseResult, extractionResult, painMarkers, modelConfig,
     collectModelConfigDeviations, slingAnalysis, hudForceAnalysis,
+    activeCapacityEffective, activeCapacityProfile,
   ]);
 
-  // Tissue overlay (green = symptoms improve, amber = mixed/worsen) — derived
-  // from the latest sim result. Cleared on case change / mode switch.
   const [movementSimTissueOverlay, setMovementSimTissueOverlay] = useState<Array<{ tissue: string; tone: 'green' | 'amber' }>>([]);
+
+  useEffect(() => {
+    setMovementSimTissueOverlay([]);
+  }, [activeCaseId, skeletonMode]);
 
   const handleMovementSimResult = useCallback((res: MovementSimResult) => {
     if (skeletonModeRef.current !== 'movement') return;
@@ -8349,18 +8363,98 @@ ${ddxList}`;
   // renders catalogued tissues as procedural geometry and falls back to a labelled generic
   // ring on the first available bone for tissues without a catalogue recipe.
   const tissueIntelligenceHighlights = useMemo(() => {
-    if (!tissueViewMode || tissueViewMode === 'muscle') return [] as ReturnType<typeof tissueIntelligenceToOverlayHighlight>[];
+    type Highlight = ReturnType<typeof tissueIntelligenceToOverlayHighlight> & { colorOverride?: number };
+    const out: Highlight[] = [];
+
+    const showIntelligence = tissueViewMode && tissueViewMode !== 'muscle';
     const hasClinicalInput =
       painMarkers.length > 0 ||
       compromisedTissues.length > 0 ||
       scarMarkers.length > 0 ||
       adhesionBands.length > 0 ||
       Object.keys(compensatedOverrides || {}).length > 0;
-    if (!hasClinicalInput) return [];
-    return Array.from(inflammationIntelligenceMap.values())
-      .filter(intel => (intel.severity ?? 0) >= 0.25)
-      .map(tissueIntelligenceToOverlayHighlight);
-  }, [inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues, scarMarkers, adhesionBands, compensatedOverrides]);
+    if (showIntelligence && hasClinicalInput) {
+      for (const intel of inflammationIntelligenceMap.values()) {
+        if ((intel.severity ?? 0) < 0.25) continue;
+        out.push(tissueIntelligenceToOverlayHighlight(intel));
+      }
+    }
+
+    if (skeletonMode === 'movement' && movementSimTissueOverlay.length > 0) {
+      const matchTissueIds = (label: string): string[] => {
+        const l = label.toLowerCase();
+        const ids: string[] = [];
+        const add = (id: string) => { if (TISSUE_ANCHOR_CATALOGUE[id] && !ids.includes(id)) ids.push(id); };
+        const sides: Array<'l' | 'r'> = /\bleft|\(l\)/.test(l) ? ['l'] : /\bright|\(r\)/.test(l) ? ['r'] : ['l', 'r'];
+        const map: Array<[RegExp, string]> = [
+          [/plantar fasc/, 'plantar_fascia'],
+          [/achilles/, 'achilles'],
+          [/supraspinat|rotator cuff/, 'supraspinatus'],
+          [/common extensor|lateral epicond|tennis elbow/, 'common_extensor'],
+          [/gluteus med|glute med/, 'gluteus_medius'],
+          [/patellar tendon|patellar/, 'patellar'],
+          [/biceps/, 'biceps_long_head'],
+          [/glenohumeral|gh joint/, 'glenohumeral'],
+          [/hip joint|coxofemoral/, 'hip'],
+          [/tibiofemoral|knee joint/, 'tibiofemoral'],
+          [/talocrural|ankle joint/, 'talocrural'],
+          [/humeroulnar|elbow joint/, 'humeroulnar'],
+          [/sacroiliac|si joint/, 'si'],
+          [/median nerve/, 'median'],
+          [/ulnar nerve/, 'ulnar'],
+          [/radial nerve/, 'radial'],
+          [/sciatic/, 'sciatic'],
+          [/femoral nerve/, 'femoral'],
+          [/peroneal nerve/, 'peroneal'],
+        ];
+        for (const [re, base] of map) {
+          if (re.test(l)) for (const s of sides) add(`${base}_${s}`);
+        }
+        if (/lumbar facet|lumbar spine/.test(l)) add('facet_lumbar');
+        if (/cervical facet|cervical spine/.test(l)) add('facet_cervical');
+        if (/superficial back line|sbl/.test(l)) add('sbl');
+        if (/superficial front line|sfl/.test(l)) add('sfl');
+        if (/deep front line|dfl/.test(l)) add('dfl');
+        if (/lateral line/.test(l)) for (const s of sides) add(`lateral_${s}`);
+        if (/spiral line/.test(l)) add('spiral');
+        if (/front arm line/.test(l)) for (const s of sides) add(`front_arm_${s}`);
+        return ids;
+      };
+      const seen = new Set(out.map(h => h.tissueId));
+      for (const t of movementSimTissueOverlay) {
+        const ids = matchTissueIds(t.tissue);
+        if (ids.length === 0) continue;
+        const colorOverride = t.tone === 'green' ? 0x10b981 : 0xf59e0b;
+        for (const id of ids) {
+          if (seen.has(id)) {
+            const idx = out.findIndex(h => h.tissueId === id);
+            if (idx >= 0) out[idx] = { ...out[idx], colorOverride };
+            continue;
+          }
+          const recipe = TISSUE_ANCHOR_CATALOGUE[id];
+          out.push({
+            tissueId: id,
+            tissueType: 'tendon',
+            label: t.tissue,
+            bones: [],
+            severity: 0.6,
+            healingStage: 'baseline',
+            irritability: 'low',
+            isDeep: !!recipe?.isDeep,
+            hasRecipe: !!recipe,
+            colorOverride,
+          });
+          seen.add(id);
+        }
+      }
+    }
+
+    return out;
+  }, [
+    inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues,
+    scarMarkers, adhesionBands, compensatedOverrides,
+    skeletonMode, movementSimTissueOverlay,
+  ]);
 
   // Task #323 — review-3/4: the BiomechanicsHUD Slings pin is the single
   // source of truth for whether the on-skeleton sling overlay is rendered.
@@ -16548,6 +16642,7 @@ ${ddxList}`;
         // sidebar (as the spec requires) instead of stacking under it.
         <div className="absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 pointer-events-auto space-y-2" data-testid="movement-findings-rail">
           <MovementAiSimulatorPanel
+            key={`mvsim:${activeCaseId ?? 'none'}:${skeletonMode}`}
             context={movementSimContext}
             onResult={handleMovementSimResult}
           />

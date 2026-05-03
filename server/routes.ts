@@ -10239,12 +10239,49 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           activation: z.number(),
         })).max(10).default([]),
         hudForceSummary: z.string().max(1000).default(''),
+        activeCapacityProfile: z.array(z.object({
+          joint: z.string().max(40),
+          movement: z.string().max(40),
+          activeRom: z.tuple([z.number(), z.number()]).optional(),
+          painfulArc: z.tuple([z.number(), z.number()]).optional(),
+          activeStrengthPct: z.number().optional(),
+        })).max(40).default([]),
       });
       const parsed = inputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
       }
       const data = parsed.data;
+
+      const deidentify = (s: string): string => {
+        if (!s) return s;
+        let out = s;
+        out = out.replace(/\b\d{1,3}\s*(?:[-/]\s*\d{1,3})\s*(?:[-/]\s*\d{2,4})\b/g, '[date]');
+        out = out.replace(/\b(?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12]\d|3[01])[\/\-]\d{2,4}\b/g, '[date]');
+        out = out.replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4}\b/gi, '[date]');
+        out = out.replace(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{2,4}\b/gi, '[date]');
+        out = out.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]');
+        out = out.replace(/(?:\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, '[phone]');
+        out = out.replace(/\bMRN[:\s#]*\d+\b/gi, '[mrn]');
+        out = out.replace(/\b(?:patient|pt|client|mr\.?|mrs\.?|ms\.?|miss|dr\.?)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g, (m) => m.split(/\s+/)[0] + ' [name]');
+        out = out.replace(/\bnamed\s+[A-Z][a-z]+\b/g, 'named [name]');
+        out = out.replace(/\b(\d{1,3})\s*(?:y\.?o\.?|years? old|yo)\b/gi, (_m, n) => {
+          const a = parseInt(n, 10);
+          if (Number.isNaN(a)) return '[age]';
+          if (a < 18) return 'under 18';
+          if (a < 30) return '18-29 yo';
+          if (a < 40) return '30-39 yo';
+          if (a < 50) return '40-49 yo';
+          if (a < 60) return '50-59 yo';
+          if (a < 70) return '60-69 yo';
+          return '70+ yo';
+        });
+        out = out.replace(/\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Ln|Lane|Dr|Drive)\.?\b/g, '[address]');
+        return out;
+      };
+
+      const safeCondition = deidentify(data.condition);
+      const safeCaseSummary = deidentify(data.caseSummary);
 
       // Bound interventions to engine-modelled targets. Reject anything that
       // names a target/sling outside the allowed set so the AI never
@@ -10269,11 +10306,10 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         }
       }
 
-      // Deterministic hash for caching.
       const crypto = await import("crypto");
       const normalized = JSON.stringify({
-        c: data.condition.trim().toLowerCase(),
-        s: data.caseSummary.trim().toLowerCase().slice(0, 800),
+        c: safeCondition.trim().toLowerCase(),
+        s: safeCaseSummary.trim().toLowerCase().slice(0, 800),
         t: [...data.painfulTissues.map(t => t.label.toLowerCase())].sort(),
         i: data.interventions.map(i => ({
           k: i.kind,
@@ -10286,6 +10322,7 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
         p: [...data.postureDeviations].sort(),
         sl: data.slingActivations.map(s => `${s.slingId}:${Math.round(s.activation)}`).sort(),
         h: data.hudForceSummary.slice(0, 400),
+        ac: data.activeCapacityProfile.map(r => `${r.joint}.${r.movement}:${r.activeRom?.[0] ?? '_'}/${r.activeRom?.[1] ?? '_'}@${Math.round(r.activeStrengthPct ?? 0)}`).sort(),
       });
       const cacheKey = crypto.createHash('sha256').update(normalized).digest('hex');
       const cached = movementSimCache.get(cacheKey);
@@ -10313,6 +10350,14 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
       const postureText = data.postureDeviations.length
         ? data.postureDeviations.map(p => `- ${p}`).join('\n')
         : '(no posture deviations recorded)';
+      const capacityText = data.activeCapacityProfile.length
+        ? data.activeCapacityProfile.map(r => {
+            const rom = r.activeRom ? `active ROM ${r.activeRom[0]}°…${r.activeRom[1]}°` : 'ROM n/a';
+            const arc = r.painfulArc ? `, painful arc ${r.painfulArc[0]}°…${r.painfulArc[1]}°` : '';
+            const str = typeof r.activeStrengthPct === 'number' ? `, active strength ${Math.round(r.activeStrengthPct)}%` : '';
+            return `- ${r.joint} ${r.movement}: ${rom}${arc}${str}`;
+          }).join('\n')
+        : '(no active capacity profile available)';
 
       const systemPrompt = `You are a senior musculoskeletal physiotherapist running a clinical thought-experiment for ONE specific patient.
 
@@ -10332,10 +10377,10 @@ RULES:
 - If interventions are clinically nonsensical or contraindicated for this pathology, set verdict='harmful' or 'mixed' and explain in caveats.
 - Return ONLY valid JSON matching the requested schema. No prose outside JSON.`;
 
-      const userPrompt = `WORKING DIAGNOSIS: ${data.condition || 'Unspecified'}
+      const userPrompt = `WORKING DIAGNOSIS: ${safeCondition || 'Unspecified'}
 
 CASE SUMMARY (de-identified):
-${data.caseSummary || '(not provided)'}
+${safeCaseSummary || '(not provided)'}
 
 PAINFUL TISSUES:
 ${tissuesText}
@@ -10345,6 +10390,9 @@ ${postureText}
 
 CURRENT SLING ACTIVATION:
 ${slingText}
+
+ACTIVE CAPACITY PROFILE:
+${capacityText}
 
 LIVE FORCE / BIOMECHANICS SUMMARY:
 ${data.hudForceSummary || '(not provided)'}

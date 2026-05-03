@@ -16,24 +16,23 @@ interface Bone {
   parent: string | null;
   len: number;
   baseAngleDeg: number;
-  jointKey?: { joint: string; property: string };
 }
 
 const RIG: Bone[] = [
   { id: 'pelvis', parent: null, len: 0, baseAngleDeg: 0 },
   { id: 'spine', parent: 'pelvis', len: 46, baseAngleDeg: -90 },
-  { id: 'neck', parent: 'spine', len: 14, baseAngleDeg: -90, jointKey: { joint: 'Neck_M', property: 'rotationX' } },
+  { id: 'neck', parent: 'spine', len: 12, baseAngleDeg: -90 },
   { id: 'head', parent: 'neck', len: 16, baseAngleDeg: -90 },
-  { id: 'shoulder_L', parent: 'spine', len: 22, baseAngleDeg: 50, jointKey: { joint: 'Shoulder_L', property: 'rotationX' } },
-  { id: 'elbow_L', parent: 'shoulder_L', len: 18, baseAngleDeg: 0, jointKey: { joint: 'Elbow_L', property: 'rotationX' } },
-  { id: 'shoulder_R', parent: 'spine', len: 22, baseAngleDeg: 130, jointKey: { joint: 'Shoulder_R', property: 'rotationX' } },
-  { id: 'elbow_R', parent: 'shoulder_R', len: 18, baseAngleDeg: 0, jointKey: { joint: 'Elbow_R', property: 'rotationX' } },
-  { id: 'hip_L', parent: 'pelvis', len: 30, baseAngleDeg: 80, jointKey: { joint: 'Hip_L', property: 'rotationX' } },
-  { id: 'knee_L', parent: 'hip_L', len: 28, baseAngleDeg: 0, jointKey: { joint: 'Knee_L', property: 'rotationX' } },
-  { id: 'ankle_L', parent: 'knee_L', len: 12, baseAngleDeg: 90, jointKey: { joint: 'Ankle_L', property: 'rotationX' } },
-  { id: 'hip_R', parent: 'pelvis', len: 30, baseAngleDeg: 100, jointKey: { joint: 'Hip_R', property: 'rotationX' } },
-  { id: 'knee_R', parent: 'hip_R', len: 28, baseAngleDeg: 0, jointKey: { joint: 'Knee_R', property: 'rotationX' } },
-  { id: 'ankle_R', parent: 'knee_R', len: 12, baseAngleDeg: 90, jointKey: { joint: 'Ankle_R', property: 'rotationX' } },
+  { id: 'shoulder_L', parent: 'spine', len: 22, baseAngleDeg: 60 },
+  { id: 'elbow_L', parent: 'shoulder_L', len: 18, baseAngleDeg: 0 },
+  { id: 'shoulder_R', parent: 'spine', len: 22, baseAngleDeg: 120 },
+  { id: 'elbow_R', parent: 'shoulder_R', len: 18, baseAngleDeg: 0 },
+  { id: 'hip_L', parent: 'pelvis', len: 28, baseAngleDeg: 80 },
+  { id: 'knee_L', parent: 'hip_L', len: 26, baseAngleDeg: 0 },
+  { id: 'ankle_L', parent: 'knee_L', len: 12, baseAngleDeg: 90 },
+  { id: 'hip_R', parent: 'pelvis', len: 28, baseAngleDeg: 100 },
+  { id: 'knee_R', parent: 'hip_R', len: 26, baseAngleDeg: 0 },
+  { id: 'ankle_R', parent: 'knee_R', len: 12, baseAngleDeg: 90 },
 ];
 
 function sampleKf(kfs: JointKeyframe[], t: number): number {
@@ -60,16 +59,49 @@ function buildJointMap(seq: MovementSequence, t: number): Record<string, number>
   return out;
 }
 
+function val(jm: Record<string, number>, joint: string, prop: string): number {
+  return jm[`${joint}::${prop}`] ?? 0;
+}
+
 interface Computed { x: number; y: number; angle: number }
 
-function computePose(jointMap: Record<string, number>, originX: number, originY: number): Map<string, Computed> {
+function jointAngleFor(boneId: string, jm: Record<string, number>): number {
+  switch (boneId) {
+    case 'spine': {
+      const flex = val(jm, 'spine', 'flexion') - val(jm, 'spine', 'extension');
+      const lat = val(jm, 'spine', 'lateralFlexion');
+      return -flex + lat;
+    }
+    case 'shoulder_L':  return val(jm, 'leftShoulder', 'flexion');
+    case 'elbow_L':     return val(jm, 'leftElbow', 'flexion');
+    case 'shoulder_R':  return -val(jm, 'rightShoulder', 'flexion');
+    case 'elbow_R':     return -val(jm, 'rightElbow', 'flexion');
+    case 'hip_L': {
+      const flex = val(jm, 'leftHip', 'flexion') - val(jm, 'leftHip', 'extension');
+      const abd = val(jm, 'leftHip', 'abduction');
+      return -flex - abd;
+    }
+    case 'knee_L':  return val(jm, 'leftKnee', 'flexion') + val(jm, 'leftKnee', 'varus');
+    case 'ankle_L': return -val(jm, 'leftAnkle', 'plantarflexion') + val(jm, 'leftAnkle', 'dorsiflexion');
+    case 'hip_R': {
+      const flex = val(jm, 'rightHip', 'flexion') - val(jm, 'rightHip', 'extension');
+      const abd = val(jm, 'rightHip', 'abduction');
+      return -flex + abd;
+    }
+    case 'knee_R':  return val(jm, 'rightKnee', 'flexion') + val(jm, 'rightKnee', 'varus');
+    case 'ankle_R': return -val(jm, 'rightAnkle', 'plantarflexion') + val(jm, 'rightAnkle', 'dorsiflexion');
+    default:        return 0;
+  }
+}
+
+function computePose(jm: Record<string, number>, originX: number, originY: number): Map<string, Computed> {
   const out = new Map<string, Computed>();
-  out.set('pelvis', { x: originX, y: originY, angle: 0 });
+  out.set('pelvis', { x: originX, y: originY, angle: val(jm, 'pelvis', 'drop') });
   for (const bone of RIG) {
     if (!bone.parent) continue;
     const parent = out.get(bone.parent);
     if (!parent) continue;
-    const dynDeg = bone.jointKey ? (jointMap[`${bone.jointKey.joint}::${bone.jointKey.property}`] ?? 0) : 0;
+    const dynDeg = jointAngleFor(bone.id, jm);
     const angleDeg = bone.baseAngleDeg + dynDeg + parent.angle;
     const rad = (angleDeg * Math.PI) / 180;
     const ex = parent.x + Math.cos(rad) * bone.len;
@@ -117,8 +149,12 @@ const BONE_TO_RIG: Record<string, string> = {
   Ankle_L: 'ankle_L', Ankle_R: 'ankle_R',
   Knee_L: 'knee_L', Knee_R: 'knee_R',
   Hip_L: 'hip_L', Hip_R: 'hip_R',
+  HipPart1_L: 'hip_L', HipPart1_R: 'hip_R',
   Shoulder_L: 'shoulder_L', Shoulder_R: 'shoulder_R',
-  Spine1_M: 'spine', Chest_M: 'spine', Neck_M: 'neck',
+  ShoulderPart1_L: 'shoulder_L', ShoulderPart1_R: 'shoulder_R',
+  Spine1_M: 'spine', Spine1Part1_M: 'spine', Spine1Part2_M: 'spine',
+  Chest_M: 'spine', Neck_M: 'neck',
+  RootPart1_M: 'pelvis', RootPart2_M: 'pelvis', Root_M: 'pelvis',
 };
 
 export default function DualGhostStickFigure(props: Props) {

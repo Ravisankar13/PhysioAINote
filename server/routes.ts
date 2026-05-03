@@ -12078,15 +12078,67 @@ Now produce the refined hypothesis JSON.`;
         posterior_oblique:  { id: 'sfv_gait_stance_push_off',  label: 'Gait stance push-off',            failureFrame: 0.65 },
       };
 
+      const REROUTE_BY_SLING: Record<string, { muscle: string; bones: string[] }> = {
+        deep_longitudinal:  { muscle: 'lateral_gastrocnemius / IT band',   bones: ['Knee_L', 'HipPart1_L'] },
+        lateral:            { muscle: 'quadratus_lumborum',                bones: ['Spine1_M', 'RootPart1_M'] },
+        scapular_shoulder:  { muscle: 'upper_trapezius',                   bones: ['Neck_M', 'Shoulder_L'] },
+        anterior_oblique:   { muscle: 'rectus_abdominis / hip flexors',    bones: ['Chest_M', 'Hip_R'] },
+        posterior_oblique:  { muscle: 'lumbar_erector_spinae',             bones: ['Spine1_M', 'RootPart2_M'] },
+      };
+      const DELTA_TEMPLATES: Record<string, Array<{ joint: string; axis: string; deg: number; description: string }>> = {
+        deep_longitudinal: [
+          { joint: 'spine',     axis: 'flexion',         deg:  6, description: 'Trunk hinges forward to compensate for failed posterior chain force transfer' },
+          { joint: 'leftKnee',  axis: 'flexion',         deg:  8, description: 'Knee softens because hamstring drive cannot complete plantarflexion' },
+          { joint: 'leftAnkle', axis: 'plantarflexion',  deg: -10, description: 'Reduced peak plantarflexion height' },
+        ],
+        lateral: [
+          { joint: 'rightHip',  axis: 'abduction',       deg: -8, description: 'Contralateral pelvic drop — Trendelenburg sign' },
+          { joint: 'spine',     axis: 'lateralFlexion',  deg:  6, description: 'Lateral trunk lean over the stance leg' },
+          { joint: 'leftKnee',  axis: 'varus',           deg:  6, description: 'Knee drifts into dynamic valgus during stance' },
+        ],
+        scapular_shoulder: [
+          { joint: 'leftScapula',  axis: 'upwardRotation', deg: -15, description: 'Scapular dyskinesis — insufficient upward rotation' },
+          { joint: 'leftShoulder', axis: 'flexion',        deg: -25, description: 'Loss of overhead reach as scapulothoracic rhythm fails' },
+          { joint: 'spine',        axis: 'extension',      deg:   5, description: 'Lumbar extension compensates for missing shoulder range' },
+        ],
+        anterior_oblique: [
+          { joint: 'spine',     axis: 'thoracicRotation', deg: -8, description: 'Trunk rotation falls short — adductor / oblique chain cannot drive' },
+          { joint: 'rightHip',  axis: 'flexion',          deg: 10, description: 'Hip flexes deeper to compensate for missing rotational power' },
+          { joint: 'rightKnee', axis: 'varus',            deg:  5, description: 'Knee drops medially as adductor sling collapses' },
+        ],
+        posterior_oblique: [
+          { joint: 'spine',         axis: 'thoracicRotation', deg:  6, description: 'Compensatory trunk rotation hunting for posterior chain power' },
+          { joint: 'leftHip',       axis: 'extension',        deg: -7, description: 'Reduced hip extension at push-off — glute max underdrives' },
+          { joint: 'rightShoulder', axis: 'flexion',          deg: -10, description: 'Contralateral arm swing dampens — lat/glute couple disconnected' },
+        ],
+      };
+
       const buildLocalFallback = (): SlingFailureScenarioType[] => {
         return compromised.map(s => {
           const hint = TRIGGER_HINTS[s.slingId] ?? TRIGGER_HINTS.lateral;
           const pathway = Array.isArray(s.bonePathway) ? s.bonePathway : [];
-          const mid = Math.floor(pathway.length / 2);
-          const weakBones = pathway.length > 0 ? pathway.slice(Math.max(0, mid - 1), mid + 2) : [];
           const weakLink = s.weakLinks?.[0];
+          let weakBones: string[] = [];
+          const indices = (weakLink as unknown as { boneSegmentIndices?: number[] } | undefined)?.boneSegmentIndices;
+          if (Array.isArray(indices) && indices.length > 0) {
+            weakBones = indices
+              .map(i => pathway[i])
+              .filter((b): b is string => typeof b === 'string');
+          }
+          if (weakBones.length === 0 && pathway.length > 0) {
+            const mid = Math.floor(pathway.length / 2);
+            weakBones = pathway.slice(Math.max(0, mid - 1), mid + 2);
+          }
+          const reroute = REROUTE_BY_SLING[s.slingId] ?? { muscle: 'compensating synergist', bones: pathway.slice(0, 2) };
+          const templates = DELTA_TEMPLATES[s.slingId] ?? [];
           const severity = Math.max(0.4, Math.min(1.4, (100 - Math.min(s.activationScore, 100)) / 50));
-          const deg = Math.round(8 * severity * 10) / 10;
+          const jointDeltas = templates.map(t => ({
+            joint: t.joint,
+            axis: t.axis,
+            intendedDeg: 0,
+            actualDeg: Math.round(t.deg * severity * 10) / 10,
+            description: t.description,
+          }));
           return {
             slingId: s.slingId,
             slingLabel: s.slingLabel,
@@ -12096,12 +12148,10 @@ Now produce the refined hypothesis JSON.`;
             failureFrame: hint.failureFrame,
             weakSegmentMuscle: weakLink?.muscle ?? 'sling weak link',
             weakSegmentBones: weakBones,
-            rerouteTargetMuscle: 'compensating synergist',
-            rerouteTargetBones: pathway.slice(0, 2),
-            jointDeltas: [
-              { joint: 'spine', axis: 'lateralFlexion', intendedDeg: 0, actualDeg: deg, description: 'Trunk lists toward the weak side' },
-            ],
-            narration: `${hint.label} stalls at ${weakLink?.muscle ?? 'the weakest link'} (${weakLink?.activationPct ?? 0}% activation); force reroutes onto compensating synergists.`,
+            rerouteTargetMuscle: reroute.muscle,
+            rerouteTargetBones: reroute.bones,
+            jointDeltas,
+            narration: `${hint.label}: chain stalls at ${weakLink?.muscle ?? 'the weakest link'} (${weakLink?.activationPct ?? 0}% activation); force reroutes into ${reroute.muscle}.`,
             confidence: 0.55,
             source: 'local' as const,
           };
@@ -12114,6 +12164,7 @@ Now produce the refined hypothesis JSON.`;
         slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
         return res.json({ scenarios: fallback, cached: false, source: 'local' });
       }
+      const openai = new OpenAI({ apiKey });
 
       const prompt = `You are a senior physiotherapist building movement-failure scenarios for a 3D skeleton visualizer.
 For each compromised sling listed below, return a JSON object describing how its failure would look on a movement test.

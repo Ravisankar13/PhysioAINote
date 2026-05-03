@@ -102,7 +102,11 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           slingLabel: s.label,
           status: s.status,
           activationScore: s.activationScore,
-          weakLinks: s.weakLinks.map(w => ({ muscle: w.muscle, activationPct: w.activationPct })),
+          weakLinks: s.weakLinks.map(w => ({
+            muscle: w.muscle,
+            activationPct: w.activationPct,
+            boneSegmentIndices: w.boneSegmentIndices,
+          })),
           bonePathway: getSlingBonePathway(s.slingId),
           forceTransferQuality: s.forceTransferQuality,
         })),

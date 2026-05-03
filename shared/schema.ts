@@ -6426,6 +6426,7 @@ export const slingFailureScenarioRequestSchema = z.object({
     weakLinks: z.array(z.object({
       muscle: z.string().max(80),
       activationPct: z.number(),
+      boneSegmentIndices: z.array(z.number().int().min(0)).max(20).optional(),
     })).max(8),
     bonePathway: z.array(z.string().max(40)).max(20),
     forceTransferQuality: z.enum(['good', 'reduced', 'poor']),

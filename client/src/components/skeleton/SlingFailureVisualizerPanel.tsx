@@ -189,34 +189,17 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     };
   }, []);
 
-  /** Returns the sequence id the player should run for a given scenario,
-   *  honouring the current ghostMode. In compare mode we alternate every
-   *  ~1.4s between intended and actual so the clinician sees the delta
-   *  as a frame-by-frame ghost flicker. */
   const resolveSequenceId = useCallback((scenario: SlingFailureScenario, mode: GhostMode): string => {
     const trigger = getTriggerMovementById(scenario.triggerMovementId);
     if (!trigger) return '';
     if (mode === 'intended') return trigger.sequence.id;
-    // Build & register the per-scenario "actual" sequence with deltas baked in.
     const actual = composeActualSequence(trigger, scenario);
     if (!registeredActualIds.current.has(actual.id)) {
       registerDynamicMovement(actual);
       registeredActualIds.current.add(actual.id);
     }
-    // compare mode: primary skeleton plays the ACTUAL sequence
-    // continuously; the translucent ghost overlay (mounted in PhysioGPT)
-    // plays the intended sequence in lockstep, so the clinician sees
-    // both at once instead of a frame-flip.
     return actual.id;
   }, []);
-
-  // Keep latest animationState in a ref so the compare-mode interval
-  // doesn't tear down on every 60fps progress update.
-  const animationStateRef = useRef(animationState);
-  useEffect(() => { animationStateRef.current = animationState; }, [animationState]);
-
-  // (compare-mode is now driven by the dual-ghost overlay in PhysioGPT,
-  //  so no per-interval frame-flip is needed here.)
 
   const handlePlay = useCallback((scenario: SlingFailureScenario) => {
     const trigger = getTriggerMovementById(scenario.triggerMovementId);

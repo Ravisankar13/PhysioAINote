@@ -2024,6 +2024,9 @@ export default function PhysioGPT() {
         snap.evidenceEngineResult || snap.customExerciseResult || snap.customManualTherapyResult ||
         snap.treatmentDecisionData || snap.treatmentPlanData) return true;
     if (snap.selectedRegion) return true;
+    try {
+      if (snap.modelConfig && JSON.stringify(snap.modelConfig) !== JSON.stringify(DEFAULT_MODEL_CONFIG)) return true;
+    } catch {}
     return false;
   }, []);
 
@@ -2033,8 +2036,11 @@ export default function PhysioGPT() {
 
   const isCaseDirty = useMemo<boolean>(() => {
     if (!currentSnapshotSerialized) return false;
+    if (selectedConversationId == null) {
+      return hasMeaningfulSnapshotContent(currentCaseSnapshot);
+    }
     return currentSnapshotSerialized !== lastSavedSnapshotRef.current;
-  }, [currentSnapshotSerialized, snapshotSaveCounter]);
+  }, [currentSnapshotSerialized, snapshotSaveCounter, selectedConversationId, currentCaseSnapshot, hasMeaningfulSnapshotContent]);
 
   const saveCurrentCase = useCallback(async () => {
     if (isSavingCase) return;
@@ -2060,25 +2066,11 @@ export default function PhysioGPT() {
         queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${selectedConversationId}`] });
         toast({ title: "Case saved" });
       } else {
-        const extraction = snap.extractionResult;
-        const mainComplaint =
-          extraction && typeof extraction === "object"
-            ? (extraction as { mainComplaint?: unknown }).mainComplaint
-            : undefined;
-        const parseResult = snap.lastClinicalParseResult;
-        const originalDescription =
-          parseResult && typeof parseResult === "object"
-            ? (parseResult as { original_description?: unknown }).original_description
-            : undefined;
-        const pick = (v: unknown): string =>
-          typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, 120) : "";
-        const derivedTitle =
-          pick(mainComplaint) || pick(originalDescription) || pick(snap.subjectiveHistoryInput) ||
-          `Case ${new Date().toLocaleString()}`;
+        // Server owns title derivation per task spec; just send the snapshot.
         const created = await apiRequest(
           `/api/physiogpt/conversations`,
           "POST",
-          { caseSnapshot: snap, title: derivedTitle },
+          { caseSnapshot: snap },
         );
         if (created && typeof created.id === "number") {
           hydratedConversationIdRef.current = created.id;

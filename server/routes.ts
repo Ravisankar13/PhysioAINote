@@ -12129,9 +12129,15 @@ Now produce the refined hypothesis JSON.`;
   });
 
   const createConversationBodySchema = z.object({
-    title: z.string().trim().min(1).max(120).optional(),
+    title: z.string().trim().min(1).max(60).optional(),
     caseSnapshot: physioGptCaseSnapshotSchema,
-    initialMessage: z.string().trim().min(1).max(8000).optional(),
+    initialMessage: z
+      .object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(8000),
+      })
+      .nullable()
+      .optional(),
   });
 
   app.post("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
@@ -12151,16 +12157,20 @@ Now produce the refined hypothesis JSON.`;
       const extraction = snap.extractionResult;
       const mainComplaint =
         extraction && typeof extraction === "object" && extraction !== null
-          ? pickString((extraction as { mainComplaint?: unknown }).mainComplaint, 120)
+          ? pickString((extraction as { mainComplaint?: unknown }).mainComplaint, 60)
           : "";
       const parseResult = snap.lastClinicalParseResult;
       const originalDescription =
         parseResult && typeof parseResult === "object" && parseResult !== null
-          ? pickString((parseResult as { original_description?: unknown }).original_description, 120)
+          ? pickString((parseResult as { original_description?: unknown }).original_description, 60)
           : "";
-      const subjectiveTitle = pickString(snap.subjectiveHistoryInput, 120);
+      const subjectiveTitle = pickString(snap.subjectiveHistoryInput, 60);
       const derivedTitle =
-        title || mainComplaint || originalDescription || subjectiveTitle || `Case ${new Date().toLocaleString()}`;
+        (title ? title.slice(0, 60) : "") ||
+        mainComplaint ||
+        originalDescription ||
+        subjectiveTitle ||
+        "Untitled case";
 
       const conversation = await physioGptStorage.createConversation({
         userId: req.user!.id,
@@ -12172,8 +12182,8 @@ Now produce the refined hypothesis JSON.`;
         try {
           await physioGptStorage.addMessage({
             conversationId: conversation.id,
-            role: "user",
-            content: initialMessage,
+            role: initialMessage.role,
+            content: initialMessage.content,
           });
         } catch (msgErr) {
           console.error("Failed to save initial message for conversation:", conversation.id, msgErr);

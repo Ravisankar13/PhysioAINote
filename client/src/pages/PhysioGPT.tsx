@@ -6211,24 +6211,28 @@ ${ddxList}`;
 
   // Task #338 — saved Treatment Hypotheses (persisted)
   const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
-    queryKey: ['/api/treatment-hypotheses', activeCaseId],
+    queryKey: [`/api/treatment-hypotheses/${activeCaseId}`],
     enabled: !!activeCaseId && skeletonMode === 'movement',
   });
   const saveHypothesisMutation = useMutation({
     mutationFn: async (label: string) => {
       if (!activeCaseId) throw new Error('No case context');
+      const cmp = whatIfSimulatedConfig;
       return apiRequest(`/api/treatment-hypotheses/${activeCaseId}`, 'POST', {
         label,
         scenarios: whatIfScenarios,
-        flareUpId: whatIfFlareUpId,
+        flareUpScenarioId: whatIfFlareUpId,
         painfulTissue: whatIfPainfulTissue,
-        painLoadDelta: (whatIfPainfulTissue && whatIfSimulatedConfig)
-          ? tissuePainLoadIndex(whatIfSimulatedConfig, whatIfPainfulTissue).delta
+        painLoadDelta: (whatIfPainfulTissue && cmp)
+          ? tissuePainLoadIndex(cmp, whatIfPainfulTissue).delta
           : null,
+        overallRiskBefore: cmp?.overallRiskBefore ?? null,
+        overallRiskAfter: cmp?.overallRiskAfter ?? null,
+        topImprovements: (cmp?.topImprovements ?? []).slice(0, 5),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/treatment-hypotheses', activeCaseId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/treatment-hypotheses/${activeCaseId}`] });
       toast({ title: 'Treatment Hypothesis saved', description: 'Available from saved hypotheses list.' });
     },
     onError: (err: unknown) => {

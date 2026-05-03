@@ -1082,16 +1082,12 @@ export default function PhysioGPT() {
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
-  // Clinical Notes — lifted from ClinicalReasoningPanel so the top-left toolbar
-  // can open a dedicated panel and trigger generation independently.
   const [clinicalNotesOpen, setClinicalNotesOpen] = useState(false);
   const [clinicalNotes, setClinicalNotes] = useState<import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes | null>(null);
   const [isGeneratingClinicalNotes, setIsGeneratingClinicalNotes] = useState(false);
   const [clinicalNotesError, setClinicalNotesError] = useState<string | null>(null);
   const [copiedNotesSection, setCopiedNotesSection] = useState<string | null>(null);
   const lastClinicalNotesKeyRef = useRef<string>("");
-  // Implementation of the clinical-notes generation/caching helpers lives
-  // further down, after `subjectiveHistoryInput` is declared.
   // `structuredReasoningData` was hoisted above to avoid a TDZ in the
   // patient-factors memos near the top of the component. Do not
   // redeclare here.
@@ -1120,8 +1116,6 @@ export default function PhysioGPT() {
   // component. Do not redeclare here.
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
 
-  // Clinical Notes — has-content / cache-key / generation helpers. Must live
-  // after `subjectiveHistoryInput` so the memos can reference it.
   const hasReasoningContentForNotes = useMemo(() => {
     const d = clinicalReasoningData;
     if (!d) return false;
@@ -1137,15 +1131,20 @@ export default function PhysioGPT() {
   const clinicalNotesReasoningKey = useMemo(() => {
     const d = clinicalReasoningData;
     if (!d) return "";
-    return [
-      d.hypotheses.length,
-      d.findings.length,
-      d.flags.length,
-      d.reasoningChain.length,
-      d.clinicalSummary?.length || 0,
-      d.treatmentPlan ? 1 : 0,
-      (subjectiveHistoryInput || "").length,
-    ].join("|");
+    // Content-based signature so notes refresh whenever any meaningful
+    // field of the reasoning payload changes, not just counts/lengths.
+    const signaturePayload = {
+      hypotheses: d.hypotheses.map(h => ({ id: h.id, condition: h.condition, confidence: h.confidence, status: h.status })),
+      findings: d.findings.map(f => ({ id: f.id, category: f.category, text: f.text })),
+      flags: d.flags.map(f => f),
+      reasoningChain: d.reasoningChain.map(r => r),
+      clinicalSummary: d.clinicalSummary || "",
+      assessmentPriorities: d.assessmentPriorities || [],
+      treatmentPlan: d.treatmentPlan ?? null,
+      posturalAnalysis: d.posturalAnalysis ?? null,
+      subjectiveHistory: subjectiveHistoryInput || "",
+    };
+    return JSON.stringify(signaturePayload);
   }, [clinicalReasoningData, subjectiveHistoryInput]);
 
   useEffect(() => {
@@ -16574,37 +16573,43 @@ ${ddxList}`;
               </div>
             )}
 
-            {clinicalNotes && (
-              <>
-                <p className="text-[9px] text-gray-500 px-1">
-                  Generated {new Date(clinicalNotes.generatedAt).toLocaleTimeString()}
-                </p>
-                {([
-                  { key: 'subjective', label: 'Subjective', bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/15', textClass: 'text-blue-300' },
-                  { key: 'objective', label: 'Objective', bgClass: 'bg-green-500/5', borderClass: 'border-green-500/15', textClass: 'text-green-300' },
-                  { key: 'assessment', label: 'Assessment', bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/15', textClass: 'text-amber-300' },
-                  { key: 'plan', label: 'Plan', bgClass: 'bg-purple-500/5', borderClass: 'border-purple-500/15', textClass: 'text-purple-300' },
-                  ...(clinicalNotes.additionalNotes ? [{ key: 'additionalNotes', label: 'Additional Notes', bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/15', textClass: 'text-rose-300' }] : []),
-                ] as const).map(({ key, label, bgClass, borderClass, textClass }) => (
-                  <div key={key} className={`${bgClass} rounded-lg border ${borderClass} overflow-hidden`} data-testid={`clinical-notes-section-${key}`}>
-                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/[0.02]">
-                      <span className={`text-[10px] font-semibold ${textClass} uppercase tracking-wider`}>{label}</span>
-                      <button
-                        onClick={() => copyClinicalNotesSection(key, (clinicalNotes as any)[key])}
-                        className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors"
-                        title={`Copy ${label}`}
-                        data-testid={`button-copy-clinical-notes-${key}`}
-                      >
-                        {copiedNotesSection === key ? <ClipboardCheck className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
-                      </button>
+            {clinicalNotes && (() => {
+              type NotesKey = keyof import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes;
+              const sections: { key: NotesKey; label: string; text: string; bgClass: string; borderClass: string; textClass: string }[] = [
+                { key: 'subjective', label: 'Subjective', text: clinicalNotes.subjective, bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/15', textClass: 'text-blue-300' },
+                { key: 'objective', label: 'Objective', text: clinicalNotes.objective, bgClass: 'bg-green-500/5', borderClass: 'border-green-500/15', textClass: 'text-green-300' },
+                { key: 'assessment', label: 'Assessment', text: clinicalNotes.assessment, bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/15', textClass: 'text-amber-300' },
+                { key: 'plan', label: 'Plan', text: clinicalNotes.plan, bgClass: 'bg-purple-500/5', borderClass: 'border-purple-500/15', textClass: 'text-purple-300' },
+              ];
+              if (clinicalNotes.additionalNotes) {
+                sections.push({ key: 'additionalNotes', label: 'Additional Notes', text: clinicalNotes.additionalNotes, bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/15', textClass: 'text-rose-300' });
+              }
+              return (
+                <>
+                  <p className="text-[9px] text-gray-500 px-1">
+                    Generated {new Date(clinicalNotes.generatedAt).toLocaleTimeString()}
+                  </p>
+                  {sections.map(({ key, label, text, bgClass, borderClass, textClass }) => (
+                    <div key={key} className={`${bgClass} rounded-lg border ${borderClass} overflow-hidden`} data-testid={`clinical-notes-section-${key}`}>
+                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/[0.02]">
+                        <span className={`text-[10px] font-semibold ${textClass} uppercase tracking-wider`}>{label}</span>
+                        <button
+                          onClick={() => copyClinicalNotesSection(key, text)}
+                          className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors"
+                          title={`Copy ${label}`}
+                          data-testid={`button-copy-clinical-notes-${key}`}
+                        >
+                          {copiedNotesSection === key ? <ClipboardCheck className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
+                        </button>
+                      </div>
+                      <div className="px-2.5 py-2">
+                        <p className="text-[10.5px] text-gray-300 leading-relaxed whitespace-pre-wrap">{text}</p>
+                      </div>
                     </div>
-                    <div className="px-2.5 py-2">
-                      <p className="text-[10.5px] text-gray-300 leading-relaxed whitespace-pre-wrap">{(clinicalNotes as any)[key]}</p>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
+                  ))}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

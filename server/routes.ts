@@ -433,11 +433,13 @@ const slingFailureCache = new Map<string, CachedSlingFailureEntry>();
 const SLING_FAILURE_CACHE_TTL_MS = 1000 * 60 * 60; // 1 h
 function pruneSlingFailureCache(): void {
   const now = Date.now();
-  for (const [k, v] of slingFailureCache.entries()) {
+  const entries = Array.from(slingFailureCache.entries());
+  for (const [k, v] of entries) {
     if (now - v.cachedAt > SLING_FAILURE_CACHE_TTL_MS) slingFailureCache.delete(k);
   }
   if (slingFailureCache.size > 200) {
-    const oldest = [...slingFailureCache.entries()].sort((a, b) => a[1].cachedAt - b[1].cachedAt)[0];
+    const sorted = Array.from(slingFailureCache.entries()).sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+    const oldest = sorted[0];
     if (oldest) slingFailureCache.delete(oldest[0]);
   }
 }

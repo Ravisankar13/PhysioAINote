@@ -1,5 +1,5 @@
 import type { MovementSequence, JointTimeline, JointKeyframe } from './movementSequences';
-import type { SlingResult, SlingId, SlingAnalysisResult } from './slingEngine';
+import { getSlingBonePathway, type SlingResult, type SlingId, type SlingAnalysisResult } from './slingEngine';
 import type { SlingFailureScenario } from '@shared/schema';
 import type { PathologyCompensationResult, PosturalDeviation } from './pathologyCompensationEngine';
 
@@ -194,7 +194,7 @@ export function generateSlingFailureScenarioLocal(
 
   const weakLink = sling.weakLinks[0];
   const weakMuscle = weakLink?.muscle ?? sling.muscleScores?.find(m => m.activation < 50)?.muscle ?? sling.muscleScores?.[0]?.muscle ?? 'sling weak link';
-  const pathway = sling.bonePathway ?? [];
+  const pathway = getSlingBonePathway(sling.slingId);
   let weakBones: string[] = [];
   if (weakLink && weakLink.boneSegmentIndices.length > 0) {
     weakBones = weakLink.boneSegmentIndices

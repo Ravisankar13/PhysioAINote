@@ -12128,28 +12128,58 @@ Now produce the refined hypothesis JSON.`;
     }
   });
 
+  const createConversationBodySchema = z.object({
+    title: z.string().trim().min(1).max(120).optional(),
+    caseSnapshot: physioGptCaseSnapshotSchema,
+    initialMessage: z.string().trim().min(1).max(8000).optional(),
+  });
+
   app.post("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { caseSnapshot, title } = req.body ?? {};
-      const parsed = physioGptCaseSnapshotSchema.safeParse(caseSnapshot);
-      if (!parsed.success) {
-        return res.status(400).json({ error: "Invalid caseSnapshot payload" });
+      const parsedBody = createConversationBodySchema.safeParse(req.body ?? {});
+      if (!parsedBody.success) {
+        return res.status(400).json({ error: "Invalid request body", details: parsedBody.error.flatten() });
       }
+      const { title, caseSnapshot, initialMessage } = parsedBody.data;
+      const snap = caseSnapshot as PhysioGptCaseSnapshot;
 
-      const snap = parsed.data as PhysioGptCaseSnapshot;
-      const explicitTitle = typeof title === "string" && title.trim().length > 0 ? title.trim() : "";
-      const subjective = (snap as any)?.subjectiveHistoryInput;
-      const subjectiveTitle =
-        typeof subjective === "string" && subjective.trim().length > 0
-          ? subjective.trim().slice(0, 80)
+      const pickString = (value: unknown, max: number): string => {
+        if (typeof value !== "string") return "";
+        const trimmed = value.trim();
+        return trimmed.length === 0 ? "" : trimmed.slice(0, max);
+      };
+      const extraction = snap.extractionResult;
+      const mainComplaint =
+        extraction && typeof extraction === "object" && extraction !== null
+          ? pickString((extraction as { mainComplaint?: unknown }).mainComplaint, 120)
           : "";
-      const derivedTitle = explicitTitle || subjectiveTitle || `Case ${new Date().toLocaleString()}`;
+      const parseResult = snap.lastClinicalParseResult;
+      const originalDescription =
+        parseResult && typeof parseResult === "object" && parseResult !== null
+          ? pickString((parseResult as { original_description?: unknown }).original_description, 120)
+          : "";
+      const subjectiveTitle = pickString(snap.subjectiveHistoryInput, 120);
+      const derivedTitle =
+        title || mainComplaint || originalDescription || subjectiveTitle || `Case ${new Date().toLocaleString()}`;
 
       const conversation = await physioGptStorage.createConversation({
         userId: req.user!.id,
         title: derivedTitle,
         caseSnapshot: snap,
       });
+
+      if (initialMessage) {
+        try {
+          await physioGptStorage.addMessage({
+            conversationId: conversation.id,
+            role: "user",
+            content: initialMessage,
+          });
+        } catch (msgErr) {
+          console.error("Failed to save initial message for conversation:", conversation.id, msgErr);
+        }
+      }
+
       res.status(201).json(conversation);
     } catch (error) {
       console.error("Error creating conversation:", error);

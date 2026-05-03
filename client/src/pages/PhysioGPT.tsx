@@ -2001,9 +2001,50 @@ export default function PhysioGPT() {
   const currentCaseSnapshotRef = useRef(currentCaseSnapshot);
   useEffect(() => { currentCaseSnapshotRef.current = currentCaseSnapshot; }, [currentCaseSnapshot]);
 
+  // Detects whether the workspace holds any clinically meaningful content.
+  // Used to gate the New Case confirmation and Cmd/Ctrl+S shortcut so the
+  // user is not nagged when the workspace is effectively empty.
+  const hasMeaningfulSnapshotContent = useCallback((snap: PhysioGptCaseSnapshot): boolean => {
+    const arrayHasItems = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+    const objectHasKeys = (v: unknown): boolean =>
+      v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length > 0;
+    if (typeof snap.subjectiveHistoryInput === "string" && snap.subjectiveHistoryInput.trim().length > 0) return true;
+    if (
+      arrayHasItems(snap.painMarkers) ||
+      arrayHasItems(snap.compromisedTissues) ||
+      arrayHasItems(snap.scarMarkers) ||
+      arrayHasItems(snap.adhesionBands) ||
+      arrayHasItems(snap.romMeasurements) ||
+      arrayHasItems(snap.clinicalHighlights) ||
+      arrayHasItems(snap.movementFindings) ||
+      arrayHasItems(snap.planCartItems)
+    ) return true;
+    if (objectHasKeys(snap.muscleOverrides) || objectHasKeys(snap.slingActivationOverrides)) return true;
+    if (snap.extractionResult || snap.structuredReasoningData || snap.clinicalReasoningData ||
+        snap.evidenceEngineResult || snap.customExerciseResult || snap.customManualTherapyResult ||
+        snap.treatmentDecisionData || snap.treatmentPlanData) return true;
+    if (snap.selectedRegion) return true;
+    return false;
+  }, []);
+
+  const currentSnapshotSerialized = useMemo<string>(() => {
+    try { return JSON.stringify(currentCaseSnapshot); } catch { return ""; }
+  }, [currentCaseSnapshot]);
+
+  const isCaseDirty = useMemo<boolean>(() => {
+    if (!currentSnapshotSerialized) return false;
+    return currentSnapshotSerialized !== lastSavedSnapshotRef.current;
+  }, [currentSnapshotSerialized, snapshotSaveCounter]);
+
   const saveCurrentCase = useCallback(async () => {
     if (isSavingCase) return;
     const snap = currentCaseSnapshotRef.current;
+    let serialized: string;
+    try { serialized = JSON.stringify(snap); } catch { serialized = ""; }
+    if (serialized && serialized === lastSavedSnapshotRef.current) {
+      toast({ title: "Already saved", description: "No changes since last save." });
+      return;
+    }
     setIsSavingCase(true);
     try {
       if (selectedConversationId) {
@@ -2012,16 +2053,28 @@ export default function PhysioGPT() {
           "PATCH",
           { caseSnapshot: snap },
         );
-        try { lastSavedSnapshotRef.current = JSON.stringify(snap); } catch {}
+        lastSavedSnapshotRef.current = serialized;
+        snapshotEligibleRef.current.add(selectedConversationId);
+        setSnapshotSaveCounter(c => c + 1);
         queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
         queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${selectedConversationId}`] });
         toast({ title: "Case saved" });
       } else {
-        const subjective = (snap as any)?.subjectiveHistoryInput;
+        const extraction = snap.extractionResult;
+        const mainComplaint =
+          extraction && typeof extraction === "object"
+            ? (extraction as { mainComplaint?: unknown }).mainComplaint
+            : undefined;
+        const parseResult = snap.lastClinicalParseResult;
+        const originalDescription =
+          parseResult && typeof parseResult === "object"
+            ? (parseResult as { original_description?: unknown }).original_description
+            : undefined;
+        const pick = (v: unknown): string =>
+          typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, 120) : "";
         const derivedTitle =
-          (typeof subjective === "string" && subjective.trim().length > 0
-            ? subjective.trim().slice(0, 80)
-            : "") || `Case ${new Date().toLocaleString()}`;
+          pick(mainComplaint) || pick(originalDescription) || pick(snap.subjectiveHistoryInput) ||
+          `Case ${new Date().toLocaleString()}`;
         const created = await apiRequest(
           `/api/physiogpt/conversations`,
           "POST",
@@ -2030,8 +2083,9 @@ export default function PhysioGPT() {
         if (created && typeof created.id === "number") {
           hydratedConversationIdRef.current = created.id;
           snapshotEligibleRef.current.add(created.id);
-          try { lastSavedSnapshotRef.current = JSON.stringify(snap); } catch {}
+          lastSavedSnapshotRef.current = serialized;
           setSelectedConversationId(created.id);
+          setSnapshotSaveCounter(c => c + 1);
         }
         queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
         toast({ title: "Case saved" });
@@ -2047,20 +2101,24 @@ export default function PhysioGPT() {
     }
   }, [isSavingCase, selectedConversationId, queryClient, toast]);
 
-  // Cmd/Ctrl+S keyboard shortcut to trigger manual save.
+  // Cmd/Ctrl+S keyboard shortcut to trigger manual save. Skips when the
+  // sidebar is open, when focus is in a text field, and when there is
+  // nothing dirty to save.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.key === "s" || e.key === "S")) return;
       if (!(e.metaKey || e.ctrlKey)) return;
+      if (sidebarOpen) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if (!isCaseDirty) return;
       e.preventDefault();
       void saveCurrentCase();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [saveCurrentCase]);
+  }, [saveCurrentCase, isCaseDirty, sidebarOpen]);
   // ───────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -16196,10 +16254,10 @@ ${ddxList}`;
           </button>
           <button
             onClick={() => void saveCurrentCase()}
-            disabled={isSavingCase}
+            disabled={isSavingCase || !isCaseDirty}
             data-testid="button-save-case"
-            title="Save Case (Ctrl/Cmd+S)"
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/90 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+            title={isCaseDirty ? "Save Case (Ctrl/Cmd+S)" : "Nothing to save"}
+            className="relative flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
           >
             {isSavingCase ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -16207,16 +16265,25 @@ ${ddxList}`;
               <Save className="h-3.5 w-3.5" />
             )}
             {isSavingCase ? "Saving…" : "Save Case"}
+            {isCaseDirty && !isSavingCase && (
+              <span
+                aria-label="Unsaved changes"
+                data-testid="indicator-case-dirty"
+                className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 ring-1 ring-black/40"
+              />
+            )}
           </button>
           <button
             onClick={() => {
-              const ok = window.confirm("Start a new case? Unsaved changes will be lost.");
-              if (!ok) return;
+              if (isCaseDirty && hasMeaningfulSnapshotContent(currentCaseSnapshotRef.current)) {
+                const ok = window.confirm("Start a new case? Unsaved changes will be lost.");
+                if (!ok) return;
+              }
               handleNewConversation();
             }}
             data-testid="button-new-case"
             title="New Case"
-            className="flex items-center gap-1.5 px-3 py-2 bg-sky-600/90 hover:bg-sky-600 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+            className="flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
           >
             <FilePlus2 className="h-3.5 w-3.5" />
             New Case

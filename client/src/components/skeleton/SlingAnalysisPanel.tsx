@@ -85,19 +85,9 @@ const CONFIDENCE_COLOR: Record<SlingHypothesis['confidence'], string> = {
   low: 'bg-slate-700/40 text-slate-300 border-slate-600/50',
 };
 
-function recToCartItem(rec: SlingDrivenRecommendation): PlanCartItem {
-  return {
-    id: makeCartId(DRIVER_MODALITY_TO_CART[rec.modality], `sling_${rec.slingId}_${rec.name}`),
-    modality: DRIVER_MODALITY_TO_CART[rec.modality],
-    name: rec.name,
-    targetStructure: rec.target,
-    targetFinding: `Sling-driven · ${rec.slingLabel}`,
-    dosage: rec.dosage,
-    rationale: rec.rationale,
-    slingTag: rec.slingLabel,
-    slingRole: rec.role,
-  };
-}
+// Shared with MovementSlingSpotlight — see `@/lib/slingCartItems`.
+import { slingRecToCartItem } from '@/lib/slingCartItems';
+const recToCartItem = (rec: SlingDrivenRecommendation): PlanCartItem => slingRecToCartItem(rec);
 
 function activationBandLabel(band: SlingActivationBand): string {
   switch (band) {

@@ -7501,6 +7501,54 @@ ${ddxList}`;
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
 
+  // Re-derive the per-part muscle adjustment map from the full set of
+  // active per-part treatments. The engine's `slingActivationOverrides`
+  // is an absolute activation level (peaked at 100, lower OR higher
+  // hurts force-transfer), so it is the wrong knob for "treatment
+  // boosts the sling". Instead every per-part treatment is mapped to
+  // muscle-level patches that the engine consumes via `muscleOverrides`:
+  //   - muscle parts → patch the targeted muscle directly
+  //   - link / attachment parts → propagate ~60% of the intended delta
+  //     to every weak-link muscle in that sling, so the engine's
+  //     weak-link detector recomputes status / severity / weak-link
+  //     selection downstream of the treatment.
+  const deriveSlingPartMuscleAdj = useCallback(
+    (treatments: Record<string, SlingPartTreatmentRecord>) => {
+      const out: Record<string, { tension?: number; pathology?: PathologyType }> = {};
+      const accum = new Map<string, { tensionDelta: number; pathology?: PathologyType }>();
+      for (const rec of Object.values(treatments)) {
+        const sling = slingAnalysis?.slings.find(s => s.slingId === rec.slingId) ?? null;
+        let muscles: string[];
+        if (rec.partKind === 'muscle') {
+          muscles = [rec.ref];
+        } else if (sling) {
+          muscles = sling.weakLinks.map(w => w.muscle);
+          if (muscles.length === 0) muscles = (sling.muscleScores ?? []).map(m => m.muscle);
+        } else {
+          muscles = [];
+        }
+        const patch = rec.appliedMuscleOverridePatch;
+        const muscleTensionDelta = rec.partKind === 'muscle' && patch
+          ? (patch.tensionOffset ?? 0) + (patch.activationOffset ?? 0) * 0.5 - (patch.inhibition ?? 0)
+          : rec.appliedActivationDelta * 0.6;
+        for (const m of muscles) {
+          const cur = accum.get(m) ?? { tensionDelta: 0 };
+          cur.tensionDelta += muscleTensionDelta;
+          if (rec.partKind === 'muscle' && patch?.pathology) cur.pathology = patch.pathology;
+          accum.set(m, cur);
+        }
+      }
+      for (const [muscle, { tensionDelta, pathology }] of accum) {
+        out[muscle] = {
+          tension: Math.max(0, Math.min(100, 50 + tensionDelta)),
+          pathology,
+        };
+      }
+      return out;
+    },
+    [slingAnalysis],
+  );
+
   // Reverse-reasoning sling driver analysis (Task #235). Pure deterministic;
   // shared between SlingAnalysisPanel and the engine tabs so both see the same
   // hypotheses + sling-driven recommendations.
@@ -10587,74 +10635,29 @@ ${ddxList}`;
                     partTreatments={slingPartTreatments}
                     onApplyPartTreatment={(rec, cartItem) => {
                       const prior = slingPartTreatments[rec.partId];
-                      let activationDelta = rec.appliedActivationDelta;
-                      let priorMuscleRef: string | null = null;
-                      if (prior) {
-                        activationDelta = activationDelta - prior.appliedActivationDelta;
-                        if (prior.cartItemId) {
-                          planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== prior.cartItemId));
-                        }
-                        if (prior.partKind === 'muscle') priorMuscleRef = prior.ref;
+                      if (prior?.cartItemId) {
+                        planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== prior.cartItemId));
                       }
-                      setSlingActivationOverrides(prev => {
-                        // Engine reads override as an activation level centered on
-                        // SLING_ACTIVATION_BASELINE (100). Seed at 100 so a +delta
-                        // truly boosts the score; revert to 100 (no change) drops
-                        // the override entirely.
-                        const current = prev[rec.slingId] ?? SLING_ACTIVATION_BASELINE;
-                        const next = Math.max(0, Math.min(200, current + activationDelta));
-                        if (Math.abs(next - SLING_ACTIVATION_BASELINE) < 0.5) {
-                          const { [rec.slingId]: _omit, ...rest } = prev;
-                          return rest;
-                        }
-                        return { ...prev, [rec.slingId]: next };
-                      });
-                      setSlingPartMuscleAdjustments(prev => {
-                        const next = { ...prev };
-                        if (priorMuscleRef && priorMuscleRef !== rec.ref) delete next[priorMuscleRef];
-                        const patch = rec.appliedMuscleOverridePatch;
-                        if (patch && rec.partKind === 'muscle') {
-                          const tension = patch.tensionOffset !== undefined || patch.activationOffset !== undefined || patch.inhibition !== undefined
-                            ? Math.max(0, Math.min(100, 50 + (patch.tensionOffset ?? 0) + (patch.activationOffset ?? 0) * 0.5 - (patch.inhibition ?? 0)))
-                            : undefined;
-                          next[rec.ref] = { tension, pathology: patch.pathology };
-                        } else if (rec.partKind === 'muscle' && next[rec.ref]) {
-                          delete next[rec.ref];
-                        }
-                        return next;
-                      });
+                      const nextTreatments = { ...slingPartTreatments, [rec.partId]: rec };
+                      setSlingPartTreatments(nextTreatments);
+                      // Re-derive muscle adjustments from the full updated set
+                      // so multi-part contributions to the same weak-link
+                      // muscle accumulate (and undoing one part subtracts only
+                      // its own contribution).
+                      setSlingPartMuscleAdjustments(deriveSlingPartMuscleAdj(nextTreatments));
                       planCartReplaceAllRef.current?.([
                         ...(planCartItemsState ?? []).filter(it => it.id !== cartItem.id && (!prior?.cartItemId || it.id !== prior.cartItemId)),
                         cartItem,
                       ]);
-                      setSlingPartTreatments(prev => ({ ...prev, [rec.partId]: rec }));
                     }}
                     onClearPartTreatment={(partId) => {
                       const rec = slingPartTreatments[partId];
-                      if (rec) {
-                        setSlingActivationOverrides(prev => {
-                          const current = prev[rec.slingId] ?? SLING_ACTIVATION_BASELINE;
-                          const reverted = Math.max(0, Math.min(200, current - rec.appliedActivationDelta));
-                          if (Math.abs(reverted - SLING_ACTIVATION_BASELINE) < 0.5) {
-                            const { [rec.slingId]: _omit, ...rest } = prev;
-                            return rest;
-                          }
-                          return { ...prev, [rec.slingId]: reverted };
-                        });
-                        if (rec.partKind === 'muscle') {
-                          setSlingPartMuscleAdjustments(prev => {
-                            const { [rec.ref]: _omit, ...rest } = prev;
-                            return rest;
-                          });
-                        }
-                        if (rec.cartItemId) {
-                          planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== rec.cartItemId));
-                        }
+                      const { [partId]: _omit, ...nextTreatments } = slingPartTreatments;
+                      setSlingPartTreatments(nextTreatments);
+                      setSlingPartMuscleAdjustments(deriveSlingPartMuscleAdj(nextTreatments));
+                      if (rec?.cartItemId) {
+                        planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== rec.cartItemId));
                       }
-                      setSlingPartTreatments(prev => {
-                        const { [partId]: _omit, ...rest } = prev;
-                        return rest;
-                      });
                     }}
                     onClose={() => setMovementSpotlightEnabled(false)}
                   />

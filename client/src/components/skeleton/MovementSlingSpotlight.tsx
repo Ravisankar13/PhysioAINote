@@ -12,22 +12,9 @@ import {
   type PartIntervention,
 } from '@/lib/movementSlingSpotlight';
 import type { SlingDrivenRecommendation, DriverModality } from '@/lib/slingDriverAnalysis';
-import { makeCartId, usePlanCart, type PlanCartItem, type PlanCartModality } from '@/lib/planCart';
+import { usePlanCart, type PlanCartItem } from '@/lib/planCart';
+import { slingRecToCartItem, slingPartToCartItem } from '@/lib/slingCartItems';
 import type { BoneScreenPosition } from '@/components/skeleton/TreatmentOverlay';
-
-const DRIVER_MODALITY_TO_CART: Record<DriverModality, PlanCartModality> = {
-  exercise: 'exercise',
-  manual_therapy: 'manual_therapy',
-  electrophysical: 'electrophysical',
-  lifestyle: 'lifestyle',
-};
-
-const PART_MODALITY_TO_CART: Record<PartIntervention['modality'], PlanCartModality> = {
-  exercise: 'exercise',
-  manual_therapy: 'manual_therapy',
-  electrophysical: 'electrophysical',
-  lifestyle: 'lifestyle',
-};
 
 const STATUS_STYLE: Record<string, { bg: string; ring: string; dot: string; label: string }> = {
   underperforming: { bg: 'bg-orange-500/15', ring: 'ring-orange-400/60', dot: 'bg-orange-400', label: 'Underperforming' },
@@ -91,45 +78,11 @@ interface Props {
   onClose: () => void;
 }
 
-function recToCartItem(rec: SlingDrivenRecommendation, movementTaskId: string | null): PlanCartItem {
-  const modality = DRIVER_MODALITY_TO_CART[rec.modality];
-  return {
-    id: makeCartId(modality, `sling_${rec.slingId}_${rec.name}`),
-    modality,
-    name: rec.name,
-    targetStructure: rec.target,
-    targetFinding: `Sling-driven · ${rec.slingLabel}${movementTaskId ? ` · ${movementTaskId}` : ''}`,
-    dosage: rec.dosage,
-    rationale: rec.rationale,
-    slingTag: rec.slingLabel,
-    slingRole: rec.role,
-    slingId: rec.slingId,
-    movementTaskId: movementTaskId ?? undefined,
-  };
-}
-
-function partToCartItem(
-  part: SpotlightPart,
-  intv: PartIntervention,
-  sling: SlingResult,
-  movementTaskId: string | null,
-): PlanCartItem {
-  const modality = PART_MODALITY_TO_CART[intv.modality];
-  return {
-    id: makeCartId(modality, `sling_part_${sling.slingId}_${intv.id}`),
-    modality,
-    name: `${intv.label} — ${part.label}`,
-    targetStructure: part.label,
-    targetFinding: `Sling spotlight · ${sling.label} · ${part.kind}${movementTaskId ? ` · ${movementTaskId}` : ''}`,
-    dosage: intv.dosage,
-    rationale: intv.rationale,
-    slingTag: sling.label,
-    slingId: sling.slingId,
-    partId: part.id,
-    partKind: part.kind,
-    movementTaskId: movementTaskId ?? undefined,
-  };
-}
+// Shared sling-to-cart helpers live in `@/lib/slingCartItems` so the
+// movement spotlight and the full Sling Analysis panel produce identical
+// cart entries (same id, same metadata).
+const recToCartItem = slingRecToCartItem;
+const partToCartItem = slingPartToCartItem;
 
 export default function MovementSlingSpotlight(props: Props) {
   const {

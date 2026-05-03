@@ -1646,6 +1646,15 @@ interface PureThreeGLBViewerProps {
     intensity: number;
     glowSize?: number;
   }>;
+  /** When true, pain marker meshes whose nearestBone is in failureBoneSet
+   *  pulse (oscillating scale) — used by the Sling Failure Movement
+   *  Visualizer to flash symptom markers in lockstep with the failure
+   *  frame. */
+  pulseAtFailureBeat?: boolean;
+  /** Bones the active sling failure scenario considers part of the
+   *  weak-link / reroute neighbourhood. Empty/undefined => pulse all
+   *  pain markers when pulseAtFailureBeat is true. */
+  failureBoneSet?: Set<string>;
   painMarkers?: PainMarker[];
   onPainMarkerAdd?: (marker: PainMarker) => void;
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
@@ -2716,6 +2725,8 @@ export default function PureThreeGLBViewer({
   muscleStates,
   highlightRegions,
   highlightBoneNames,
+  pulseAtFailureBeat,
+  failureBoneSet,
   painMarkers = [],
   onPainMarkerAdd,
   onPainMarkerMove,
@@ -5615,6 +5626,59 @@ export default function PureThreeGLBViewer({
       applyPainMarkerSeverity(newMeshes, marker, markerType);
     }
   }, [painMarkers]);
+
+  // Failure-beat pulse — when the Sling Failure Movement Visualizer is
+  // showing the failure frame, oscillate scale + opacity of the outer
+  // halo of pain markers anchored on bones in failureBoneSet so the
+  // clinician sees the symptom flash on the same beat as the failure.
+  useEffect(() => {
+    if (!pulseAtFailureBeat || painMarkers.length === 0) return;
+    let raf = 0;
+    const start = performance.now();
+    const baseScales = new Map<string, { inner: THREE.Vector3; outer: THREE.Vector3; outerOpacity: number }>();
+    painMarkerMeshesRef.current.forEach((meshes, id) => {
+      baseScales.set(id, {
+        inner: meshes.inner.scale.clone(),
+        outer: meshes.outer.scale.clone(),
+        outerOpacity: (meshes.outer.material as THREE.MeshBasicMaterial).opacity ?? 0.4,
+      });
+    });
+    const matchesBone = (markerBone: string | undefined) => {
+      if (!failureBoneSet || failureBoneSet.size === 0) return true;
+      return !!markerBone && failureBoneSet.has(markerBone);
+    };
+    const loop = () => {
+      const t = (performance.now() - start) / 1000;
+      const beat = 0.5 + 0.5 * Math.sin(t * 6.28); // 1 Hz
+      painMarkerMeshesRef.current.forEach((meshes, id) => {
+        const marker = painMarkers.find(m => m.id === id);
+        const base = baseScales.get(id);
+        if (!base) return;
+        if (matchesBone(marker?.nearestBone)) {
+          const k = 1 + 0.45 * beat;
+          meshes.outer.scale.set(base.outer.x * k, base.outer.y * k, base.outer.z * k);
+          meshes.inner.scale.set(base.inner.x * (1 + 0.12 * beat), base.inner.y * (1 + 0.12 * beat), base.inner.z * (1 + 0.12 * beat));
+          const mat = meshes.outer.material as THREE.MeshBasicMaterial;
+          mat.opacity = Math.min(1, base.outerOpacity + 0.45 * beat);
+          mat.needsUpdate = true;
+        }
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      painMarkerMeshesRef.current.forEach((meshes, id) => {
+        const base = baseScales.get(id);
+        if (!base) return;
+        meshes.inner.scale.copy(base.inner);
+        meshes.outer.scale.copy(base.outer);
+        const mat = meshes.outer.material as THREE.MeshBasicMaterial;
+        mat.opacity = base.outerOpacity;
+        mat.needsUpdate = true;
+      });
+    };
+  }, [pulseAtFailureBeat, failureBoneSet, painMarkers]);
 
   useEffect(() => {
     return () => {

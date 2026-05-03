@@ -695,6 +695,11 @@ export default function PhysioGPT() {
     speed: 1,
   });
   const [animationConstraints, setAnimationConstraints] = useState<AnimationConstraint[]>([]);
+  // Hoisted to avoid TDZ on activeFailureSel reference (declared above).
+  // SFV at-beat: pulses 3D pain markers + 2D spotlight hotspots whenever
+  // the scrubber is within ±0.06 of the active scenario's failure frame.
+  // Computed inline (not a useEffect) so the boolean stays in lockstep
+  // with the same render frame the rest of the viewer reads.
   const handleAnimationProgress = useCallback((progress: number) => {
     const rounded = Math.round(progress * 1000) / 1000;
     setAnimationState(prev => prev.progress === rounded ? prev : { ...prev, progress: rounded });
@@ -1068,6 +1073,20 @@ export default function PhysioGPT() {
   // Sling Failure Movement Visualizer: which sling+scenario
   // is currently being played (drives the SVG overlay over the 3D viewer).
   const [activeFailureSel, setActiveFailureSel] = useState<SlingFailureVisualizerSelection | null>(null);
+  const sfvFailureBoneSet = useMemo(() => {
+    if (!activeFailureSel) return undefined as Set<string> | undefined;
+    const scen = activeFailureSel.scenario;
+    return new Set<string>([
+      ...(scen.weakSegmentBones ?? []),
+      ...(scen.rerouteTargetBones ?? []),
+    ]);
+  }, [activeFailureSel]);
+  const sfvAtBeat = useMemo(() => {
+    if (!activeFailureSel) return false;
+    const ff = activeFailureSel.scenario.failureFrame;
+    if (typeof ff !== 'number') return false;
+    return Math.abs(animationState.progress - ff) < 0.06;
+  }, [activeFailureSel, animationState.progress]);
   const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
   // Last bone the clinician interacted with via Pose / Auto-pose. Drives
   // a "focus bonus" in the spotlight selector so dragging a bone that
@@ -10448,6 +10467,8 @@ ${ddxList}`;
               tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
+              pulseAtFailureBeat={sfvAtBeat}
+              failureBoneSet={sfvFailureBoneSet}
               painMarkers={painMarkers}
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
@@ -10674,6 +10695,8 @@ ${ddxList}`;
                         planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== rec.cartItemId));
                       }
                     }}
+                    pulseAtFailureBeat={sfvAtBeat}
+                    failureBoneSet={sfvFailureBoneSet}
                     onClose={() => setMovementSpotlightEnabled(false)}
                   />
                 )}
@@ -10690,6 +10713,34 @@ ${ddxList}`;
                     isPlaying={!!animationState.isPlaying}
                     ghostMode={activeFailureSel.ghostMode}
                   />
+                )}
+                {/* Dual-ghost overlay — in compare mode the primary
+                    skeleton plays the ACTUAL (compensated) sequence and
+                    this translucent emerald ghost plays the INTENDED
+                    trigger sequence in lockstep on the same GLB rig, so
+                    the clinician sees both poses side-by-side at every
+                    frame instead of a 1.4s frame-flip. Pointer events
+                    are disabled so all interaction stays on the primary. */}
+                {skeletonMode === 'movement'
+                  && activeFailureSel
+                  && activeFailureSel.ghostMode === 'compare' && (
+                  <div
+                    className="absolute inset-0 z-10 pointer-events-none mix-blend-screen"
+                    style={{ opacity: 0.42 }}
+                    data-testid="sfv-dual-ghost-overlay"
+                  >
+                    <PureThreeGLBViewer
+                      modelPath="/models/skeleton_character.glb"
+                      modelConfig={finalModelConfig as any}
+                      className="w-full h-full"
+                      animationState={{
+                        ...animationState,
+                        currentMovement: activeFailureSel.scenario.triggerMovementId,
+                      }}
+                      environmentPreset={environmentPreset}
+                      showMuscles={false}
+                    />
+                  </div>
                 )}
                 {/* Reopen pill — visible only in Movement Mode when the
                     panel has been closed and there is sling analysis to

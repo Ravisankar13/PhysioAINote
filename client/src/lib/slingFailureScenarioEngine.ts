@@ -359,11 +359,12 @@ function sampleKeyframes(keyframes: JointKeyframe[], t: number): number {
 }
 
 /* ----------------------------------------------------------------------
- * mergeWithPathologyCompensation — augments a scenario's joint deltas
- * with posturalDeviations from the pathology compensation engine. Each
- * deviation that targets a joint we don't already have a delta for is
- * added as an "actual" deviation; matching ones are blended (averaged)
- * so the skeleton respects pathology priors as well as sling priors.
+ * mergeWithPathologyCompensation — pathology compensation is the PRIMARY
+ * source of "actual" deviations. For any joint/axis the pathology engine
+ * reports, its deviationDegrees overwrites the template-derived delta
+ * (the templates are deterministic fallbacks for the case where the
+ * pathology engine has nothing to say about that joint). Joints the
+ * pathology engine knows about but the template doesn't are appended.
  * -------------------------------------------------------------------- */
 export function mergeWithPathologyCompensation(
   scenario: SlingFailureScenario,
@@ -372,24 +373,36 @@ export function mergeWithPathologyCompensation(
   if (!comp || !Array.isArray(comp.posturalDeviations) || comp.posturalDeviations.length === 0) {
     return scenario;
   }
-  const have = new Map(scenario.jointDeltas.map(d => [`${d.joint}::${d.axis}`, d]));
-  const merged = [...scenario.jointDeltas];
+  const pathologyByKey = new Map<string, { deg: number; reason: string }>();
   for (const dev of comp.posturalDeviations) {
-    const key = `${dev.joint}::${dev.parameter}`;
-    const existing = have.get(key);
-    if (existing) {
-      const blended = (existing.actualDeg + dev.deviationDegrees) / 2;
-      const idx = merged.findIndex(d => d === existing);
-      merged[idx] = { ...existing, actualDeg: blended, description: existing.description ?? dev.reason };
-    } else {
+    pathologyByKey.set(`${dev.joint}::${dev.parameter}`, { deg: dev.deviationDegrees, reason: dev.reason });
+  }
+  const seen = new Set<string>();
+  const merged: SlingFailureScenario['jointDeltas'] = [];
+  for (const d of scenario.jointDeltas) {
+    const key = `${d.joint}::${d.axis}`;
+    seen.add(key);
+    const path = pathologyByKey.get(key);
+    if (path) {
       merged.push({
-        joint: dev.joint,
-        axis: dev.parameter,
-        intendedDeg: 0,
-        actualDeg: dev.deviationDegrees,
-        description: `Pathology compensation: ${dev.reason}`,
+        ...d,
+        actualDeg: path.deg,
+        description: `Pathology compensation: ${path.reason}`,
       });
+    } else {
+      merged.push(d);
     }
+  }
+  for (const [key, path] of Array.from(pathologyByKey.entries())) {
+    if (seen.has(key)) continue;
+    const [joint, axis] = key.split('::');
+    merged.push({
+      joint,
+      axis,
+      intendedDeg: 0,
+      actualDeg: path.deg,
+      description: `Pathology compensation: ${path.reason}`,
+    });
   }
   return { ...scenario, jointDeltas: merged.slice(0, 12) };
 }

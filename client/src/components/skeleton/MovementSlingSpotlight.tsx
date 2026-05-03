@@ -75,6 +75,11 @@ interface Props {
   /** Switches the right side panel to the Sling Analysis tab so the
    *  clinician can dive into the full breakdown. */
   onJumpToSlingTab?: () => void;
+  /** True when the active sling failure scenario is at its failure
+   *  frame — hotspots whose anchor bone is in failureBoneSet pulse to
+   *  flag the symptom-cause beat link. */
+  pulseAtFailureBeat?: boolean;
+  failureBoneSet?: Set<string>;
   onClose: () => void;
 }
 
@@ -99,6 +104,8 @@ export default function MovementSlingSpotlight(props: Props) {
     partTreatments,
     boneScreenPositionsRef,
     onJumpToSlingTab,
+    pulseAtFailureBeat,
+    failureBoneSet,
     onClose,
   } = props;
   const { add: addToCart, has: cartHas, remove: removeFromCart } = usePlanCart();
@@ -224,6 +231,10 @@ export default function MovementSlingSpotlight(props: Props) {
           const treated = !!partTreatments[partKey(p.id)];
           const isOpen = openPartId === p.id;
           const size = 14 + Math.round(p.intensity * 8);
+          const pulsing = !!pulseAtFailureBeat && (
+            !failureBoneSet || failureBoneSet.size === 0 ||
+            p.anchorBones.some(b => failureBoneSet.has(b))
+          );
           return (
             <button
               key={`hotspot-${p.id}`}
@@ -232,9 +243,10 @@ export default function MovementSlingSpotlight(props: Props) {
                 e.stopPropagation();
                 setOpenPartId(prev => prev === p.id ? null : p.id);
               }}
+              data-pulsing={pulsing ? 'true' : 'false'}
               className={`absolute rounded-full ${ks.fill} ${ks.text} font-mono text-[8px] font-bold flex items-center justify-center pointer-events-auto shadow-lg ring-2 ring-white/40 hover:ring-white/80 transition-all ${
                 isOpen ? `ring-2 ${ks.ring} scale-110` : ''
-              } ${p.markerBiased ? 'shadow-[0_0_0_2px_rgba(244,63,94,0.7)]' : ''} ${treated ? 'after:content-["✓"] after:absolute after:-bottom-1 after:-right-1 after:w-3 after:h-3 after:rounded-full after:bg-emerald-500 after:text-white after:text-[7px] after:flex after:items-center after:justify-center' : ''}`}
+              } ${p.markerBiased ? 'shadow-[0_0_0_2px_rgba(244,63,94,0.7)]' : ''} ${treated ? 'after:content-["✓"] after:absolute after:-bottom-1 after:-right-1 after:w-3 after:h-3 after:rounded-full after:bg-emerald-500 after:text-white after:text-[7px] after:flex after:items-center after:justify-center' : ''} ${pulsing ? 'animate-pulse ring-rose-400 shadow-[0_0_14px_4px_rgba(244,63,94,0.55)]' : ''}`}
               style={{
                 left: `${pos.x - size / 2}px`,
                 top: `${pos.y - size / 2}px`,

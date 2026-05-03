@@ -64,8 +64,6 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   const [ghostMode, setGhostMode] = useState<GhostMode>('compare');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aiAttempted, setAiAttempted] = useState(false);
-  const compareTickRef = useRef<number>(0);
-  const [, forceTick] = useState(0);
 
   const compromised = useMemo(
     () => (analysis?.slings ?? []).filter(s => s.status !== 'normal'),
@@ -205,10 +203,11 @@ export default function SlingFailureVisualizerPanel(props: Props) {
       registerDynamicMovement(actual);
       registeredActualIds.current.add(actual.id);
     }
-    if (mode === 'actual') return actual.id;
-    // compare → flip every 1.4s between intended/actual
-    const flipped = (compareTickRef.current % 2) === 1;
-    return flipped ? trigger.sequence.id : actual.id;
+    // compare mode: primary skeleton plays the ACTUAL sequence
+    // continuously; the translucent ghost overlay (mounted in PhysioGPT)
+    // plays the intended sequence in lockstep, so the clinician sees
+    // both at once instead of a frame-flip.
+    return actual.id;
   }, []);
 
   // Keep latest animationState in a ref so the compare-mode interval
@@ -216,22 +215,8 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   const animationStateRef = useRef(animationState);
   useEffect(() => { animationStateRef.current = animationState; }, [animationState]);
 
-  // Drive the compare-mode flicker — alternates currentMovement between
-  // intended and actual every ~1.4s so the clinician sees the deviation
-  // as a ghost-frame flicker on the live skeleton.
-  useEffect(() => {
-    if (ghostMode !== 'compare' || !animationState.isPlaying || !activeScenario) return;
-    const id = window.setInterval(() => {
-      compareTickRef.current = (compareTickRef.current + 1) % 1000;
-      const seqId = resolveSequenceId(activeScenario, 'compare');
-      onAnimationStateChange({
-        ...animationStateRef.current,
-        currentMovement: seqId,
-      });
-      forceTick(c => (c + 1) % 1000);
-    }, 1400);
-    return () => window.clearInterval(id);
-  }, [ghostMode, animationState.isPlaying, activeScenario, resolveSequenceId, onAnimationStateChange]);
+  // (compare-mode is now driven by the dual-ghost overlay in PhysioGPT,
+  //  so no per-interval frame-flip is needed here.)
 
   const handlePlay = useCallback((scenario: SlingFailureScenario) => {
     const trigger = getTriggerMovementById(scenario.triggerMovementId);

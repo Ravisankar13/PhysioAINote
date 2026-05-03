@@ -177,6 +177,8 @@ export interface MovementAiSimulatorPanelProps {
   onResult: (result: MovementSimResult, plan: Intervention[]) => void;
   onReset?: () => void;
   className?: string;
+  /** Increment to request the panel expand and scroll into view. */
+  expandSignal?: number;
 }
 
 function newId() { return `iv-${Date.now()}-${Math.floor(Math.random() * 1000)}`; }
@@ -205,8 +207,17 @@ const SYMPTOM_TINT: Record<MovementSimResult['tissueLoadImpact'][number]['sympto
 
 const MAGNITUDE_BANDS: Magnitude[] = ['small', 'moderate', 'large'];
 
-export default function MovementAiSimulatorPanel({ context, onResult, onReset, className = '' }: MovementAiSimulatorPanelProps) {
+export default function MovementAiSimulatorPanel({ context, onResult, onReset, className = '', expandSignal }: MovementAiSimulatorPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const lastExpandSignalRef = useRef<number | undefined>(expandSignal);
+  useEffect(() => {
+    if (expandSignal === undefined) return;
+    if (lastExpandSignalRef.current === expandSignal) return;
+    lastExpandSignalRef.current = expandSignal;
+    setCollapsed(false);
+    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [expandSignal]);
   const [interventions, setInterventions] = useState<Intervention[]>([defaultIntervention()]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -332,6 +343,7 @@ export default function MovementAiSimulatorPanel({ context, onResult, onReset, c
 
   return (
     <Card
+      ref={rootRef}
       className={`bg-indigo-950/55 border-indigo-700/50 text-indigo-50 ${className}`}
       data-testid="movement-ai-simulator-panel"
     >

@@ -1076,6 +1076,7 @@ export default function PhysioGPT() {
   const [isPoseDragging, setIsPoseDragging] = useState(false);
   const hudMuscleAnalysisRef = useRef<ReturnType<typeof applyOverridesToAnalysis> | null>(null);
   const hudWeightDistributionRef = useRef<ReturnType<typeof computeWeightDistribution> | null>(null);
+  const [movementSimExpandSignal, setMovementSimExpandSignal] = useState(0);
 
   const [evidenceEngineResult, setEvidenceEngineResult] = useState<{
     options: Array<{
@@ -13576,14 +13577,7 @@ ${ddxList}`;
                     size="sm"
                     className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
                     onClick={() => {
-                      const rail = document.querySelector('[data-testid="movement-findings-rail"]');
-                      if (rail) {
-                        rail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        const toggle = rail.querySelector<HTMLElement>('[data-testid="movement-sim-toggle"]');
-                        if (toggle && toggle.getAttribute('aria-expanded') === 'false') {
-                          toggle.click();
-                        }
-                      }
+                      setMovementSimExpandSignal(s => s + 1);
                     }}
                     data-testid="movement-toolbar-open-ai-sim"
                     title="Open the Movement AI Simulator panel."
@@ -13773,7 +13767,6 @@ ${ddxList}`;
                   const next = !showRecoverySim;
                   setShowRecoverySim(next);
                   if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
-                  if (next && skeletonMode === 'movement') setSkeletonMode('posture');
                 }}
               >
                 <Activity className="h-3 w-3 mr-1" />
@@ -13787,7 +13780,6 @@ ${ddxList}`;
                   const next = !showMechanicsAnalyser;
                   setShowMechanicsAnalyser(next);
                   if (next && showRecoverySim) setShowRecoverySim(false);
-                  if (next && skeletonMode === 'movement') setSkeletonMode('posture');
                 }}
                 data-testid="toggle-mechanics-analyser"
               >
@@ -13833,6 +13825,8 @@ ${ddxList}`;
                 <Activity className="h-3 w-3 mr-1" />
                 {skeletonMode === 'movement' ? 'Movement Mode' : 'Posture Mode'}
               </Button>
+              {skeletonMode !== 'movement' && (
+              <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -14072,6 +14066,8 @@ ${ddxList}`;
                 <Scan className="h-3 w-3 mr-1" />
                 Analyze Skeleton
               </Button>
+              </>
+              )}
               </div>
             </div>
 
@@ -16900,6 +16896,7 @@ ${ddxList}`;
             context={movementSimContext}
             onResult={handleMovementSimResult}
             onReset={handleMovementSimReset}
+            expandSignal={movementSimExpandSignal}
           />
           <MovementFindingsStream
             findings={movementFindings}

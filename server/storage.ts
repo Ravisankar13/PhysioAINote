@@ -176,6 +176,9 @@ import {
   caseResearchSyntheses,
   type CaseResearchSynthesis,
   type InsertCaseResearchSynthesis,
+  treatmentHypotheses,
+  type TreatmentHypothesis,
+  type InsertTreatmentHypothesis,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -805,6 +808,11 @@ export interface IStorage {
   // Case-Aware Research Engine (Task #281)
   getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined>;
   upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis>;
+
+  // Task #338 — Movement Mode "What-If" Treatment Hypotheses
+  createTreatmentHypothesis(hypothesis: InsertTreatmentHypothesis): Promise<TreatmentHypothesis>;
+  listTreatmentHypotheses(userId: number, caseId: string): Promise<TreatmentHypothesis[]>;
+  deleteTreatmentHypothesis(userId: number, id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5143,6 +5151,37 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  // ==========================================================
+  // Task #338 — Movement Mode "What-If" Treatment Hypotheses
+  // ==========================================================
+  async createTreatmentHypothesis(hypothesis: InsertTreatmentHypothesis): Promise<TreatmentHypothesis> {
+    const [row] = await db
+      .insert(treatmentHypotheses)
+      .values(hypothesis)
+      .returning();
+    return row;
+  }
+
+  async listTreatmentHypotheses(userId: number, caseId: string): Promise<TreatmentHypothesis[]> {
+    return db
+      .select()
+      .from(treatmentHypotheses)
+      .where(and(
+        eq(treatmentHypotheses.userId, userId),
+        eq(treatmentHypotheses.caseId, caseId),
+      ))
+      .orderBy(desc(treatmentHypotheses.createdAt));
+  }
+
+  async deleteTreatmentHypothesis(userId: number, id: number): Promise<void> {
+    await db
+      .delete(treatmentHypotheses)
+      .where(and(
+        eq(treatmentHypotheses.userId, userId),
+        eq(treatmentHypotheses.id, id),
+      ));
   }
 }
 

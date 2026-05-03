@@ -11,6 +11,7 @@ import {
   pgEnum,
   numeric,
   uniqueIndex,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -6340,4 +6341,36 @@ export const caseResearchRequestSchema = z.object({
   caseContext: caseResearchContextSchema.optional(),
 });
 export type CaseResearchRequest = z.infer<typeof caseResearchRequestSchema>;
+
+// ==========================================================
+// Task #338 — Movement Mode "What-If" Treatment Hypotheses
+// Persists clinician-saved What-If scenario sets so they can be
+// re-loaded as a starting point for treatment planning.
+// ==========================================================
+export const treatmentHypotheses = pgTable("treatment_hypotheses", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  caseId: text("case_id").notNull(),
+  label: text("label").notNull(),
+  flareUpScenarioId: text("flare_up_scenario_id"),
+  painfulTissue: text("painful_tissue"),
+  scenarios: json("scenarios").$type<unknown[]>().default([]).notNull(),
+  painLoadDelta: doublePrecision("pain_load_delta"),
+  overallRiskBefore: doublePrecision("overall_risk_before"),
+  overallRiskAfter: doublePrecision("overall_risk_after"),
+  topImprovements: json("top_improvements").$type<string[]>().default([]).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTreatmentHypothesisSchema = createInsertSchema(treatmentHypotheses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTreatmentHypothesis = z.infer<typeof insertTreatmentHypothesisSchema>;
+export type TreatmentHypothesis = typeof treatmentHypotheses.$inferSelect;
+
 

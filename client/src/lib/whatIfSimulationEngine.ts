@@ -1411,3 +1411,287 @@ export function computeWhatIfComparison(
     forceMultiplier,
   };
 }
+
+// ==========================================================
+// Task #338 — Movement Mode "What-If" extensions
+// Flare-up pose scenarios, painful-tissue pain-load index, and
+// deterministic top-contributor ranking. All math is local; no LLM.
+// ==========================================================
+
+export type PainfulTissueRegion =
+  | 'lumbar' | 'cervical' | 'thoracic'
+  | 'left_hip' | 'right_hip' | 'left_knee' | 'right_knee'
+  | 'left_ankle' | 'right_ankle'
+  | 'left_shoulder' | 'right_shoulder';
+
+export interface PainfulTissueOption {
+  id: PainfulTissueRegion;
+  label: string;
+  // Region keys produced by `flattenRisks` above. Used to filter
+  // riskDeltas / forceDeltas keyed off the region for this tissue.
+  riskRegion: string;
+  // Joint id substrings used to match `forceDeltas[].jointId`.
+  jointIdPatterns: string[];
+  // Muscle id substrings used to match `muscleDeltas[].muscleId`.
+  muscleIdPatterns: string[];
+}
+
+export const PAINFUL_TISSUES: PainfulTissueOption[] = [
+  { id: 'lumbar', label: 'Lumbar spine', riskRegion: 'lumbarSpine', jointIdPatterns: ['l5', 'lumbar', 'l4', 'l3'], muscleIdPatterns: ['erector_spinae_lumbar', 'multifidus', 'quadratus_lumborum'] },
+  { id: 'cervical', label: 'Cervical spine', riskRegion: 'shoulder', jointIdPatterns: ['cervical', 'c5', 'c6', 'c7'], muscleIdPatterns: ['scm', 'upper_trap', 'levator_scapulae', 'suboccipitals', 'scalenes', 'deep_neck_flexors'] },
+  { id: 'thoracic', label: 'Thoracic spine', riskRegion: 'lumbarSpine', jointIdPatterns: ['thoracic', 't6', 't7', 't8'], muscleIdPatterns: ['erector_spinae_thoracic', 'rhomboids', 'lower_trap'] },
+  { id: 'left_hip', label: 'Left hip', riskRegion: 'hip', jointIdPatterns: ['l_hip', 'left_hip'], muscleIdPatterns: ['l_glut', 'l_hip_flexor', 'l_piriformis', 'l_adductors'] },
+  { id: 'right_hip', label: 'Right hip', riskRegion: 'hip', jointIdPatterns: ['r_hip', 'right_hip'], muscleIdPatterns: ['r_glut', 'r_hip_flexor', 'r_piriformis', 'r_adductors'] },
+  { id: 'left_knee', label: 'Left knee', riskRegion: 'knee', jointIdPatterns: ['l_knee', 'left_knee'], muscleIdPatterns: ['l_quad', 'l_vast', 'l_rect_fem', 'l_hamstrings'] },
+  { id: 'right_knee', label: 'Right knee', riskRegion: 'knee', jointIdPatterns: ['r_knee', 'right_knee'], muscleIdPatterns: ['r_quad', 'r_vast', 'r_rect_fem', 'r_hamstrings'] },
+  { id: 'left_ankle', label: 'Left ankle', riskRegion: 'ankle', jointIdPatterns: ['l_ankle', 'left_ankle'], muscleIdPatterns: ['l_gastroc', 'l_soleus', 'l_tib', 'l_peroneals'] },
+  { id: 'right_ankle', label: 'Right ankle', riskRegion: 'ankle', jointIdPatterns: ['r_ankle', 'right_ankle'], muscleIdPatterns: ['r_gastroc', 'r_soleus', 'r_tib', 'r_peroneals'] },
+  { id: 'left_shoulder', label: 'Left shoulder', riskRegion: 'shoulder', jointIdPatterns: ['l_shoulder', 'l_gh', 'left_shoulder'], muscleIdPatterns: ['l_supraspinatus', 'l_infraspinatus', 'l_deltoid', 'l_pec', 'l_lower_trap', 'l_serratus'] },
+  { id: 'right_shoulder', label: 'Right shoulder', riskRegion: 'shoulder', jointIdPatterns: ['r_shoulder', 'r_gh', 'right_shoulder'], muscleIdPatterns: ['r_supraspinatus', 'r_infraspinatus', 'r_deltoid', 'r_pec', 'r_lower_trap', 'r_serratus'] },
+];
+
+export interface TissuePainLoadResult {
+  tissue: PainfulTissueOption;
+  baseline: number;          // 0–100 composite pain-load index BEFORE
+  after: number;             // 0–100 composite pain-load index AFTER
+  delta: number;             // after - baseline (negative = pain reduced)
+  deltaPercent: number;      // % change vs baseline (clamped)
+  contributors: Array<{ source: 'risk' | 'force' | 'muscle'; label: string; weight: number }>;
+}
+
+/**
+ * Deterministic tissue-specific pain-load index. Weighted blend of:
+ *  • regional risk score (50%)  — from comparison.riskDeltas / overallRisk
+ *  • mechanical loading on related joints (35%)  — from forceDeltas
+ *  • muscle activation/tightness mismatch (15%)  — from muscleDeltas
+ * Returns a 0–100 index where higher = more pain-load on the chosen tissue.
+ */
+export function tissuePainLoadIndex(
+  comparison: WhatIfComparisonResult | null,
+  tissueId: PainfulTissueRegion,
+): TissuePainLoadResult | null {
+  if (!comparison) return null;
+  const tissue = PAINFUL_TISSUES.find(t => t.id === tissueId);
+  if (!tissue) return null;
+
+  const matchAny = (s: string, patterns: string[]) => {
+    const lc = s.toLowerCase();
+    return patterns.some(p => lc.includes(p.toLowerCase()));
+  };
+
+  // Regional risk component (0–100). Average of all risks whose region
+  // matches the tissue's risk region; falls back to overall risk if none.
+  const regionRisks = comparison.riskDeltas.filter(rd => rd.region === tissue.riskRegion);
+  const riskBefore = regionRisks.length > 0
+    ? regionRisks.reduce((s, r) => s + r.before, 0) / regionRisks.length
+    : comparison.overallRiskBefore;
+  const riskAfter = regionRisks.length > 0
+    ? regionRisks.reduce((s, r) => s + r.after, 0) / regionRisks.length
+    : comparison.overallRiskAfter;
+
+  // Force component (0–100). Average normalised force across related joints.
+  const fForces = comparison.forceDeltas.filter(fd => matchAny(fd.jointId, tissue.jointIdPatterns));
+  const normaliseForce = (f: number) => Math.min(100, (f / 4) * 100); // ~4 BW caps at 100
+  const forceBefore = fForces.length > 0
+    ? fForces.reduce((s, f) => s + normaliseForce(f.before), 0) / fForces.length
+    : 0;
+  const forceAfter = fForces.length > 0
+    ? fForces.reduce((s, f) => s + normaliseForce(f.after), 0) / fForces.length
+    : 0;
+
+  // Muscle component (0–100). Inhibition + tightness penalise the tissue.
+  const fMuscles = comparison.muscleDeltas.filter(md => matchAny(md.muscleId, tissue.muscleIdPatterns));
+  const muscleStress = (act: number, tight: number) => {
+    const inhib = Math.max(0, 100 - act);   // 0 strong, 100 fully inhibited
+    return Math.min(100, inhib * 0.6 + tight * 0.6);
+  };
+  const muscleBefore = fMuscles.length > 0
+    ? fMuscles.reduce((s, m) => s + muscleStress(m.activationBefore, m.tightnessBefore), 0) / fMuscles.length
+    : 0;
+  const muscleAfter = fMuscles.length > 0
+    ? fMuscles.reduce((s, m) => s + muscleStress(m.activationAfter, m.tightnessAfter), 0) / fMuscles.length
+    : 0;
+
+  // Use available components with renormalised weights when some are empty.
+  const wRisk = 0.5;
+  const wForce = fForces.length > 0 ? 0.35 : 0;
+  const wMuscle = fMuscles.length > 0 ? 0.15 : 0;
+  const wSum = wRisk + wForce + wMuscle;
+  const baseline = ((riskBefore * wRisk) + (forceBefore * wForce) + (muscleBefore * wMuscle)) / wSum;
+  const after = ((riskAfter * wRisk) + (forceAfter * wForce) + (muscleAfter * wMuscle)) / wSum;
+  const delta = after - baseline;
+  const deltaPercent = baseline > 0.01 ? (delta / baseline) * 100 : 0;
+
+  // Top 3 contributors ranked by absolute weighted change.
+  const contribs: Array<{ source: 'risk' | 'force' | 'muscle'; label: string; weight: number }> = [];
+  for (const r of regionRisks) {
+    const w = (r.after - r.before) * (wRisk / Math.max(1, regionRisks.length));
+    if (Math.abs(w) > 0.05) contribs.push({ source: 'risk', label: r.label, weight: w });
+  }
+  for (const f of fForces) {
+    const w = (normaliseForce(f.after) - normaliseForce(f.before)) * (wForce / Math.max(1, fForces.length));
+    if (Math.abs(w) > 0.05) contribs.push({ source: 'force', label: f.jointLabel, weight: w });
+  }
+  for (const m of fMuscles) {
+    const w = (muscleStress(m.activationAfter, m.tightnessAfter) - muscleStress(m.activationBefore, m.tightnessBefore))
+      * (wMuscle / Math.max(1, fMuscles.length));
+    if (Math.abs(w) > 0.05) contribs.push({ source: 'muscle', label: m.label, weight: w });
+  }
+  contribs.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
+
+  return {
+    tissue,
+    baseline: Math.max(0, Math.min(100, baseline)),
+    after: Math.max(0, Math.min(100, after)),
+    delta,
+    deltaPercent: Math.max(-100, Math.min(100, deltaPercent)),
+    contributors: contribs.slice(0, 3),
+  };
+}
+
+// ----------------------------------------------------------
+// Flare-up pose library: each scenario drives the skeleton into
+// a position that reproduces the clinical complaint, so the clinician
+// can vary parameters (via existing scenarios) and watch the painful
+// tissue load Δ change. `poseDelta` is added on top of the patient's
+// current modelConfig; `defaultPainfulTissue` pre-selects the most
+// commonly aggravated tissue for the pose.
+// ----------------------------------------------------------
+export interface FlareUpScenario {
+  id: string;
+  label: string;
+  description: string;
+  icon: 'stand' | 'squat' | 'reach' | 'sit' | 'lunge' | 'lift';
+  poseDelta: Record<string, Record<string, number>>;
+  defaultPainfulTissue: PainfulTissueRegion;
+  recommendedScenarios?: string[]; // PRESET_SCENARIOS ids to suggest
+}
+
+export const FLARE_UP_SCENARIOS: FlareUpScenario[] = [
+  {
+    id: 'single_leg_stance_l',
+    label: 'Single-leg stance (L)',
+    description: 'Standing on the left leg — Trendelenburg / hip abductor demand',
+    icon: 'stand',
+    poseDelta: {
+      pelvis: { obliquity: -8, drop: 2 },
+      leftHip: { abduction: -3 },
+      rightHip: { flexion: 25, abduction: 5 },
+      rightKnee: { flexion: 30 },
+    },
+    defaultPainfulTissue: 'left_hip',
+    recommendedScenarios: ['glute_strengthen_20', 'core_strengthen_30'],
+  },
+  {
+    id: 'single_leg_stance_r',
+    label: 'Single-leg stance (R)',
+    description: 'Standing on the right leg — mirror of left SLS',
+    icon: 'stand',
+    poseDelta: {
+      pelvis: { obliquity: 8, drop: -2 },
+      rightHip: { abduction: -3 },
+      leftHip: { flexion: 25, abduction: 5 },
+      leftKnee: { flexion: 30 },
+    },
+    defaultPainfulTissue: 'right_hip',
+    recommendedScenarios: ['glute_strengthen_20', 'core_strengthen_30'],
+  },
+  {
+    id: 'deep_squat',
+    label: 'Deep squat',
+    description: 'Bilateral deep squat — hip flexion, knee flexion, ankle DF',
+    icon: 'squat',
+    poseDelta: {
+      leftHip: { flexion: 100 },
+      rightHip: { flexion: 100 },
+      leftKnee: { flexion: 110 },
+      rightKnee: { flexion: 110 },
+      leftAnkle: { dorsiflexion: 25 },
+      rightAnkle: { dorsiflexion: 25 },
+      spine: { lumbarLordosis: -8, thoracicKyphosis: 6 },
+    },
+    defaultPainfulTissue: 'lumbar',
+    recommendedScenarios: ['ankle_df_10', 'hip_flexor_stretch'],
+  },
+  {
+    id: 'overhead_reach',
+    label: 'Overhead reach',
+    description: 'Bilateral shoulder flexion to 170° — overhead loading',
+    icon: 'reach',
+    poseDelta: {
+      leftShoulder: { flexion: 170, abduction: 15 },
+      rightShoulder: { flexion: 170, abduction: 15 },
+      leftScapula: { upwardRotation: 50 },
+      rightScapula: { upwardRotation: 50 },
+      spine: { thoracicKyphosis: -6, lumbarLordosis: 8 },
+    },
+    defaultPainfulTissue: 'left_shoulder',
+    recommendedScenarios: ['thoracic_mob'],
+  },
+  {
+    id: 'sit_to_stand',
+    label: 'Sit-to-stand',
+    description: 'Forward lean from seated — hip and knee extensor demand',
+    icon: 'sit',
+    poseDelta: {
+      leftHip: { flexion: 60 },
+      rightHip: { flexion: 60 },
+      leftKnee: { flexion: 75 },
+      rightKnee: { flexion: 75 },
+      spine: { lumbarLordosis: -4, flexion: 25 },
+      pelvis: { tilt: -8 },
+    },
+    defaultPainfulTissue: 'left_knee',
+    recommendedScenarios: ['glute_strengthen_20'],
+  },
+  {
+    id: 'forward_lunge_r',
+    label: 'Forward lunge (R)',
+    description: 'Right leg forward lunge — knee/hip eccentric load',
+    icon: 'lunge',
+    poseDelta: {
+      rightHip: { flexion: 70 },
+      rightKnee: { flexion: 90 },
+      rightAnkle: { dorsiflexion: 18 },
+      leftHip: { extension: 20 },
+      leftKnee: { flexion: 15 },
+      pelvis: { tilt: 5 },
+    },
+    defaultPainfulTissue: 'right_knee',
+    recommendedScenarios: ['ankle_df_10', 'glute_strengthen_20'],
+  },
+  {
+    id: 'lift_from_floor',
+    label: 'Lift from floor',
+    description: 'Stoop-lift posture — lumbar flexion under load',
+    icon: 'lift',
+    poseDelta: {
+      leftHip: { flexion: 70 },
+      rightHip: { flexion: 70 },
+      leftKnee: { flexion: 30 },
+      rightKnee: { flexion: 30 },
+      spine: { flexion: 40, lumbarLordosis: -12, thoracicKyphosis: 12 },
+      pelvis: { tilt: -10 },
+    },
+    defaultPainfulTissue: 'lumbar',
+    recommendedScenarios: ['core_strengthen_30', 'hip_flexor_stretch'],
+  },
+];
+
+/** Returns a new modelConfig with the flare-up pose deltas added on top
+ *  of the supplied baseline. Pure function — does not mutate input. */
+export function applyFlareUpPose(
+  baseModelConfig: Record<string, Record<string, number>>,
+  scenarioId: string,
+): Record<string, Record<string, number>> {
+  const next: Record<string, Record<string, number>> = JSON.parse(JSON.stringify(baseModelConfig));
+  const scenario = FLARE_UP_SCENARIOS.find(s => s.id === scenarioId);
+  if (!scenario) return next;
+  for (const [joint, params] of Object.entries(scenario.poseDelta)) {
+    if (!next[joint]) next[joint] = {};
+    for (const [param, value] of Object.entries(params)) {
+      next[joint][param] = (next[joint][param] || 0) + value;
+    }
+  }
+  return next;
+}

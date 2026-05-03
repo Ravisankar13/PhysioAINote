@@ -162,7 +162,7 @@ import { PatientContextStatusBadge } from "@/components/skeleton/PatientContextS
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
-import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
+import { type WhatIfScenario, type WhatIfComparisonResult, type PainfulTissueRegion, computeWhatIfComparison, applyFlareUpPose, tissuePainLoadIndex, FLARE_UP_SCENARIOS } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
 import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
 import { tissueIntelligenceToOverlayHighlight, paletteForState } from "@/lib/tissueOverlayCatalogue";
@@ -985,6 +985,10 @@ export default function PhysioGPT() {
 
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
+  // Task #338 — Movement Mode "What-If" extras
+  const [whatIfFlareUpId, setWhatIfFlareUpId] = useState<string | null>(null);
+  const [whatIfFlareUpBaseline, setWhatIfFlareUpBaseline] = useState<Record<string, Record<string, number>> | null>(null);
+  const [whatIfPainfulTissue, setWhatIfPainfulTissue] = useState<PainfulTissueRegion | null>(null);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
     if (!showInjuryMechanism || mechanismBoneIds.length === 0) return [];
@@ -6185,6 +6189,52 @@ ${ddxList}`;
   const handleClearWhatIfScenarios = useCallback(() => {
     setWhatIfScenarios([]);
   }, []);
+
+  // Task #338 — flare-up pose application (snapshot baseline so we can reset)
+  const handleApplyFlareUp = useCallback((flareUpId: string) => {
+    setModelConfig(prev => {
+      const baseline = whatIfFlareUpBaseline ?? JSON.parse(JSON.stringify(prev));
+      if (!whatIfFlareUpBaseline) setWhatIfFlareUpBaseline(baseline);
+      const next = applyFlareUpPose(baseline, flareUpId);
+      return next;
+    });
+    setWhatIfFlareUpId(flareUpId);
+  }, [whatIfFlareUpBaseline]);
+
+  const handleClearFlareUp = useCallback(() => {
+    if (whatIfFlareUpBaseline) {
+      setModelConfig(JSON.parse(JSON.stringify(whatIfFlareUpBaseline)));
+    }
+    setWhatIfFlareUpBaseline(null);
+    setWhatIfFlareUpId(null);
+  }, [whatIfFlareUpBaseline]);
+
+  // Task #338 — saved Treatment Hypotheses (persisted)
+  const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
+    queryKey: ['/api/treatment-hypotheses', activeCaseId],
+    enabled: !!activeCaseId && skeletonMode === 'movement',
+  });
+  const saveHypothesisMutation = useMutation({
+    mutationFn: async (label: string) => {
+      if (!activeCaseId) throw new Error('No case context');
+      return apiRequest(`/api/treatment-hypotheses/${activeCaseId}`, 'POST', {
+        label,
+        scenarios: whatIfScenarios,
+        flareUpId: whatIfFlareUpId,
+        painfulTissue: whatIfPainfulTissue,
+        painLoadDelta: (whatIfPainfulTissue && whatIfSimulatedConfig)
+          ? tissuePainLoadIndex(whatIfSimulatedConfig, whatIfPainfulTissue).delta
+          : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/treatment-hypotheses', activeCaseId] });
+      toast({ title: 'Treatment Hypothesis saved', description: 'Available from saved hypotheses list.' });
+    },
+    onError: (err: unknown) => {
+      toast({ title: 'Save failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+    },
+  });
 
   const handleApplyWhatIfToSkeleton = useCallback(() => {
     if (!whatIfSimulatedConfig) return;
@@ -13848,6 +13898,14 @@ ${ddxList}`;
                       onRemoveScenario={handleRemoveWhatIfScenario}
                       onClearAll={handleClearWhatIfScenarios}
                       onApplyToSkeleton={handleApplyWhatIfToSkeleton}
+                      selectedFlareUpId={whatIfFlareUpId}
+                      onApplyFlareUp={handleApplyFlareUp}
+                      onClearFlareUp={handleClearFlareUp}
+                      painfulTissue={whatIfPainfulTissue}
+                      onSelectPainfulTissue={setWhatIfPainfulTissue}
+                      onSaveHypothesis={(label) => saveHypothesisMutation.mutate(label)}
+                      isSavingHypothesis={saveHypothesisMutation.isPending}
+                      savedHypothesesCount={Array.isArray(savedHypothesesQuery.data) ? savedHypothesesQuery.data.length : 0}
                       treatmentDecisionData={treatmentDecisionData ? {
                         primary: treatmentDecisionData.primary.map(i => ({
                           id: i.id, name: i.name, category: i.category,

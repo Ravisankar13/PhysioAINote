@@ -34,11 +34,17 @@ import {
   type SlingCompensationDelta,
   type TimelinePoint,
   type PainPredictionDelta,
+  type PainfulTissueRegion,
+  type TissuePainLoadResult,
   PRESET_SCENARIOS,
   MUSCLE_TARGETS,
   JOINT_TARGETS,
+  PAINFUL_TISSUES,
+  FLARE_UP_SCENARIOS,
+  tissuePainLoadIndex,
   generateScenariosFromDecisionEngine,
 } from "@/lib/whatIfSimulationEngine";
+import { Save, Bookmark, Footprints } from "lucide-react";
 
 interface WhatIfSimulationPanelProps {
   comparison: WhatIfComparisonResult | null;
@@ -51,6 +57,15 @@ interface WhatIfSimulationPanelProps {
   comparisonB?: WhatIfComparisonResult | null;
   onSetComparisonB?: (scenarios: WhatIfScenario[]) => void;
   painMarkers?: Array<{ id: string; label: string; severity?: number }>;
+  // Task #338 — flare-up pose + painful-tissue + save-hypothesis
+  selectedFlareUpId?: string | null;
+  onApplyFlareUp?: (flareUpId: string) => void;
+  onClearFlareUp?: () => void;
+  painfulTissue?: PainfulTissueRegion | null;
+  onSelectPainfulTissue?: (tissue: PainfulTissueRegion | null) => void;
+  onSaveHypothesis?: (label: string) => void;
+  isSavingHypothesis?: boolean;
+  savedHypothesesCount?: number;
 }
 
 const INTERVENTION_ICONS: Record<InterventionType, typeof Dumbbell> = {
@@ -80,7 +95,22 @@ export default function WhatIfSimulationPanel({
   comparisonB,
   onSetComparisonB,
   painMarkers,
+  selectedFlareUpId,
+  onApplyFlareUp,
+  onClearFlareUp,
+  painfulTissue,
+  onSelectPainfulTissue,
+  onSaveHypothesis,
+  isSavingHypothesis,
+  savedHypothesesCount,
 }: WhatIfSimulationPanelProps) {
+  const [hypothesisLabel, setHypothesisLabel] = useState('');
+  const [showSavePanel, setShowSavePanel] = useState(false);
+
+  const painLoad: TissuePainLoadResult | null = useMemo(() => {
+    if (!comparison || !painfulTissue) return null;
+    return tissuePainLoadIndex(comparison, painfulTissue);
+  }, [comparison, painfulTissue]);
   const [showCustom, setShowCustom] = useState(false);
   const [customTarget, setCustomTarget] = useState(MUSCLE_TARGETS[0].id);
   const [customTargetType, setCustomTargetType] = useState<'muscle' | 'joint'>('muscle');
@@ -155,6 +185,158 @@ export default function WhatIfSimulationPanel({
 
   return (
     <div className="space-y-2">
+      {/* Task #338 — Flare-up scenario picker (drives skeleton into pose) */}
+      {onApplyFlareUp && (
+        <div className="bg-gray-800/60 rounded-md p-2 border border-gray-700/40 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Footprints className="h-3 w-3 text-cyan-400" />
+              <span className="text-[10px] font-semibold text-gray-200">Flare-up scenario</span>
+            </div>
+            {selectedFlareUpId && onClearFlareUp && (
+              <button onClick={onClearFlareUp} className="text-[9px] text-gray-500 hover:text-red-400" data-testid="button-clear-flare-up">
+                Reset to patient
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            {FLARE_UP_SCENARIOS.map(fu => {
+              const isActive = selectedFlareUpId === fu.id;
+              return (
+                <button
+                  key={fu.id}
+                  onClick={() => onApplyFlareUp(fu.id)}
+                  className={`text-[9px] py-1 px-1.5 rounded border transition-colors text-left ${
+                    isActive
+                      ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-300'
+                      : 'border-gray-600/40 bg-gray-900/40 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                  }`}
+                  title={fu.description}
+                  data-testid={`button-flare-up-${fu.id}`}
+                >
+                  {fu.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Task #338 — Painful tissue selector + Pain Load Δ headline */}
+      {onSelectPainfulTissue && (
+        <div className="bg-gray-800/60 rounded-md p-2 border border-gray-700/40 space-y-1.5">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-semibold text-gray-200">Painful tissue</span>
+            <select
+              value={painfulTissue ?? ''}
+              onChange={e => onSelectPainfulTissue((e.target.value || null) as PainfulTissueRegion | null)}
+              className="text-[10px] bg-gray-900/60 border border-gray-600/40 rounded px-1.5 py-0.5 text-gray-200"
+              data-testid="select-painful-tissue"
+            >
+              <option value="">— pick —</option>
+              {PAINFUL_TISSUES.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          {painLoad && (
+            <div className="space-y-1" data-testid="pain-load-headline">
+              <div className="flex items-center justify-between text-[9px] text-gray-400">
+                <span>{painLoad.tissue.label} pain load</span>
+                <span className="font-mono text-gray-300">
+                  {painLoad.baseline.toFixed(0)} → {painLoad.after.toFixed(0)}
+                </span>
+              </div>
+              <div className={`flex items-center gap-1 text-[14px] font-mono font-bold ${
+                painLoad.delta < -0.5 ? 'text-green-400'
+                : painLoad.delta > 0.5 ? 'text-red-400'
+                : 'text-gray-300'
+              }`}>
+                {painLoad.delta < -0.5 ? <TrendingDown className="h-4 w-4" /> : painLoad.delta > 0.5 ? <TrendingUp className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                {painLoad.delta > 0 ? '+' : ''}{painLoad.delta.toFixed(1)} pts
+                <span className="text-[10px] text-gray-500 font-normal ml-1">
+                  ({painLoad.deltaPercent > 0 ? '+' : ''}{painLoad.deltaPercent.toFixed(0)}%)
+                </span>
+              </div>
+              {painLoad.contributors.length > 0 && (
+                <div className="space-y-0.5 pt-0.5 border-t border-gray-700/40">
+                  <div className="text-[8px] text-gray-500 uppercase tracking-wider">Top contributors</div>
+                  {painLoad.contributors.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between text-[9px]">
+                      <span className="text-gray-400 truncate">
+                        <span className="text-gray-600 mr-1">[{c.source}]</span>{c.label}
+                      </span>
+                      <span className={`font-mono ${c.weight < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {c.weight > 0 ? '+' : ''}{c.weight.toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {!painLoad && painfulTissue && comparison && (
+            <div className="text-[9px] text-gray-500 italic">No measurable load change for this tissue from current scenarios.</div>
+          )}
+        </div>
+      )}
+
+      {/* Task #338 — Save as Treatment Hypothesis */}
+      {onSaveHypothesis && activeScenarios.length > 0 && (
+        <div className="space-y-1">
+          {!showSavePanel ? (
+            <button
+              onClick={() => { setHypothesisLabel(`Hypothesis ${(savedHypothesesCount ?? 0) + 1}`); setShowSavePanel(true); }}
+              className="w-full flex items-center justify-center gap-1 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              data-testid="button-open-save-hypothesis"
+            >
+              <Bookmark className="h-3 w-3" />
+              Save as Treatment Hypothesis
+              {savedHypothesesCount !== undefined && savedHypothesesCount > 0 && (
+                <span className="text-[8px] text-emerald-400/70">({savedHypothesesCount} saved)</span>
+              )}
+            </button>
+          ) : (
+            <div className="bg-gray-800/60 rounded-md p-2 border border-emerald-500/30 space-y-1.5">
+              <input
+                type="text"
+                value={hypothesisLabel}
+                onChange={e => setHypothesisLabel(e.target.value)}
+                placeholder="Hypothesis label"
+                className="w-full text-[10px] bg-gray-900/60 border border-gray-600/40 rounded px-1.5 py-1 text-gray-200"
+                data-testid="input-hypothesis-label"
+                maxLength={120}
+              />
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const lbl = hypothesisLabel.trim();
+                    if (!lbl) return;
+                    onSaveHypothesis(lbl);
+                    setShowSavePanel(false);
+                  }}
+                  disabled={isSavingHypothesis || !hypothesisLabel.trim()}
+                  className="flex-1 h-6 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white"
+                  data-testid="button-confirm-save-hypothesis"
+                >
+                  <Save className="h-3 w-3 mr-1" />
+                  {isSavingHypothesis ? 'Saving…' : 'Save'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowSavePanel(false)}
+                  className="h-6 text-[10px]"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {recommendedScenarios.length > 0 && (
         <>
           <button

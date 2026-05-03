@@ -9887,6 +9887,57 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ─── Task #338 — Movement Mode "What-If" Treatment Hypotheses ──────
+  // Persists clinician-saved What-If scenario sets so they can be
+  // re-loaded as starting points for treatment planning. Read-only
+  // list + create + delete; all scoped to the authenticated user +
+  // the per-case caseId derived in the client.
+  app.get("/api/treatment-hypotheses/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const rows = await storage.listTreatmentHypotheses(req.user!.id, caseId);
+      res.json(rows);
+    } catch (error: unknown) {
+      console.error("List treatment hypotheses error:", error);
+      res.status(500).json({ error: "Failed to list treatment hypotheses" });
+    }
+  });
+
+  app.post("/api/treatment-hypotheses/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { insertTreatmentHypothesisSchema } = await import("@shared/schema");
+      const parsed = insertTreatmentHypothesisSchema.safeParse({
+        ...req.body,
+        userId: req.user!.id,
+        caseId,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid hypothesis payload", details: parsed.error.flatten() });
+      }
+      const saved = await storage.createTreatmentHypothesis(parsed.data);
+      res.json(saved);
+    } catch (error: unknown) {
+      console.error("Create treatment hypothesis error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to save hypothesis", details: message });
+    }
+  });
+
+  app.delete("/api/treatment-hypotheses/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+      await storage.deleteTreatmentHypothesis(req.user!.id, id);
+      res.json({ ok: true });
+    } catch (error: unknown) {
+      console.error("Delete treatment hypothesis error:", error);
+      res.status(500).json({ error: "Failed to delete hypothesis" });
+    }
+  });
+
   // ─── Active Movement Mode capacities (Task #301) ───────────────────
   // POST generates / refreshes the per-joint active-capacity profile
   // for a case using the literature priors + GPT-4o synthesis. PATCH

@@ -1079,6 +1079,10 @@ export default function PhysioGPT() {
   // Flipped back to false on drag-release, which forces one fresh memo
   // recompute against the post-drag pose.
   const [isPoseDragging, setIsPoseDragging] = useState(false);
+  // Task #349 — review-3: cached snapshots of the heavy hud memos so we
+  // can short-circuit them while a Movement Mode pose drag is in flight.
+  const hudMuscleAnalysisRef = useRef<ReturnType<typeof applyOverridesToAnalysis> | null>(null);
+  const hudWeightDistributionRef = useRef<ReturnType<typeof computeWeightDistribution> | null>(null);
 
   const [evidenceEngineResult, setEvidenceEngineResult] = useState<{
     options: Array<{
@@ -7442,15 +7446,32 @@ ${ddxList}`;
   const hudWeightDistribution = useMemo(() => {
     if (computeStage < 2) return null;
     if (forceMode && weightDistribution) return weightDistribution;
-    return computeWeightDistribution(finalModelConfig, bodyWeightKg);
-  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution, computeStage]);
+    // Task #349 — review-3 fix: avoid re-running computeWeightDistribution
+    // on every drag tick; the value is keyed off finalModelConfig which
+    // changes ~30 Hz during a Movement Mode drag.
+    if (isPoseDragging && hudWeightDistributionRef.current) {
+      return hudWeightDistributionRef.current;
+    }
+    const result = computeWeightDistribution(finalModelConfig, bodyWeightKg);
+    hudWeightDistributionRef.current = result;
+    return result;
+  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution, computeStage, isPoseDragging]);
 
   const hudMuscleAnalysis = useMemo(() => {
     if (computeStage < 2) return null;
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
+    // Task #349 — review-3 fix: computeFullMuscleAnalysis +
+    // applyOverridesToAnalysis is one of the heaviest finalModelConfig-
+    // keyed memos on the page. Freeze it during Movement Mode drags and
+    // refresh once on release alongside the sling/biomechanics memos.
+    if (isPoseDragging && hudMuscleAnalysisRef.current) {
+      return hudMuscleAnalysisRef.current;
+    }
     const base = computeFullMuscleAnalysis(finalModelConfig);
-    return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
-  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computeStage]);
+    const result = applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
+    hudMuscleAnalysisRef.current = result;
+    return result;
+  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computeStage, isPoseDragging]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
     if (computeStage < 3) return null;

@@ -7878,11 +7878,20 @@ export default function PureThreeGLBViewer({
               const occluder = hits.find(h => h.distance < jointDist - 0.04);
               lastJointOccluded = !!occluder;
             }
-            selectedJointAnchorRef.current = (offscreen || lastJointOccluded)
-              ? null
-              : { x: sx, y: sy };
+            // Task #349 — review-3 fix: skip the anchor write if the
+            // projected position drifted by less than ~1px. The slider
+            // HUD reads this ref on its own RAF loop, so a sub-pixel
+            // jitter still triggers HUD layout work. Visibility flips
+            // (occlusion / off-screen → on-screen) always pass through.
+            const next = (offscreen || lastJointOccluded) ? null : { x: sx, y: sy };
+            const prev = selectedJointAnchorRef.current;
+            if (next === null) {
+              if (prev !== null) selectedJointAnchorRef.current = null;
+            } else if (!prev || Math.abs(prev.x - next.x) >= 1 || Math.abs(prev.y - next.y) >= 1) {
+              selectedJointAnchorRef.current = next;
+            }
           } else {
-            selectedJointAnchorRef.current = null;
+            if (selectedJointAnchorRef.current !== null) selectedJointAnchorRef.current = null;
           }
         }
       } else if (selectedGlow && selectedBoneSegmentId) {

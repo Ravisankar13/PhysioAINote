@@ -2946,6 +2946,11 @@ export default function PureThreeGLBViewer({
   // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
   // event rate. Re-using a ref avoids a re-render every cap check.
   const lastMovementOverlayPushRef = useRef<number>(0);
+  // Task #349 — review-2: cheap activation-chip cadence kept at 33 ms so
+  // the on-body chip still feels live, while the heavy
+  // computeFullMuscleAnalysis / JRF block runs at 100 ms via
+  // lastMovementOverlayPushRef above.
+  const lastMovementActivationPushRef = useRef<number>(0);
   const bodyWeightKgRef = useRef<number>(70);
   // Task #323 — review-2 fix: snapshot of every DOF value taken when the
   // clinician enters Movement Mode. Both the muscle-activation legend and
@@ -6708,22 +6713,16 @@ export default function PureThreeGLBViewer({
       if (exceededActiveLimit) drag.attemptedExceeded = true;
       if (inPainfulArc) drag.lastPainfulArc = true;
       if (skeletonModeRef.current === 'movement' && row) {
-        // Task #323: throttle muscle/force overlay state updates to ~30Hz so
-        // a fast drag doesn't push 200+ React state updates per second. The
-        // compute itself is cheap; the bottleneck is React re-rendering the
-        // overlay legend + force chip on every mouse-move tick.
         const now = performance.now();
-        // Task #349: lift the heavy overlay throttle from ~30Hz to ~10Hz.
-        // computeFullMuscleAnalysis + setState fan-out into PhysioGPT is
-        // the dominant cost per drag tick; 10Hz still feels live while
-        // letting the React tree breathe between updates.
-        if (now - lastMovementOverlayPushRef.current >= 100) {
-          lastMovementOverlayPushRef.current = now;
-          // Task #323 — review-2 fix: diff against the Movement-Mode entry
-          // baseline (snapshot in the skeletonMode useEffect above), not the
-          // drag-start value. Falls back to drag.startValue for safety if the
-          // baseline map is empty (e.g., DOF was added after entry).
-          const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
+        // Task #349 — review-2 fix: split the overlay pipeline into two
+        // cadences. The cheap activation-chip compute keeps the original
+        // 33 ms (~30 Hz) cadence so the on-body chip still feels live;
+        // the heavy computeFullMuscleAnalysis + JRF + multi-setState
+        // fan-out into PhysioGPT runs at 100 ms (~10 Hz) so the React
+        // tree gets time to breathe between drag ticks.
+        const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
+        if (now - lastMovementActivationPushRef.current >= 33) {
+          lastMovementActivationPushRef.current = now;
           const activation = computeMovementMuscleActivation(
             drag.configKey,
             baselineValue,
@@ -6737,6 +6736,9 @@ export default function PureThreeGLBViewer({
           // mapping) so the prior highlight doesn't persist visibly until
           // drag-release.
           setMovementMuscleActivation(activation ?? null);
+        }
+        if (now - lastMovementOverlayPushRef.current >= 100) {
+          lastMovementOverlayPushRef.current = now;
           // Per-muscle delta vs baseline drives the full-body overlay.
           // Group averages are misleading because the engine bundles
           // antagonists into the same meshGroup, so we surface the
@@ -6939,6 +6941,7 @@ export default function PureThreeGLBViewer({
       // chip — both are drag-only readouts.
       setMovementTopMovers(null);
       lastMovementOverlayPushRef.current = 0;
+      lastMovementActivationPushRef.current = 0;
     };
 
     // Task #321: imperative API for the slider HUD. Mounted onto a ref so
@@ -7009,9 +7012,13 @@ export default function PureThreeGLBViewer({
             };
           }
         }
-        // Task #349: signal drag-start so the host page can freeze
-        // expensive sling re-analysis until release.
-        onPoseDragChangeRef.current?.(true);
+        // Task #349 — review-2 fix: only Movement Mode drags should
+        // freeze the host page's sling/biomechanics memos. Posture Mode
+        // drags must continue to update live so the existing posture
+        // analysis pipeline keeps working.
+        if (skeletonModeRef.current === 'movement') {
+          onPoseDragChangeRef.current?.(true);
+        }
         poseDragRef.current = {
           configKey,
           startX: 0,
@@ -7571,8 +7578,11 @@ export default function PureThreeGLBViewer({
           // Cancel any in-flight spring-back so a new drag on the same
           // joint takes precedence cleanly.
           cancelSpringBack();
-          // Task #349: signal drag-start so host can freeze sling memo.
-          onPoseDragChangeRef.current?.(true);
+          // Task #349 — review-2 fix: scope the freeze signal to Movement
+          // Mode only so Posture Mode arrow drags still update live.
+          if (skeletonModeRef.current === 'movement') {
+            onPoseDragChangeRef.current?.(true);
+          }
           poseDragRef.current = {
             configKey: a.def.configKey,
             startX: e.clientX,
@@ -7707,8 +7717,12 @@ export default function PureThreeGLBViewer({
               pendingMovementAttemptRef.current = null;
             }
             cancelSpringBack();
-            // Task #349: signal drag-start so host can freeze sling memo.
-            onPoseDragChangeRef.current?.(true);
+            // Task #349 — review-2 fix: scope the freeze signal to
+            // Movement Mode only so Posture Mode segment drags still
+            // update the host's posture analysis live.
+            if (skeletonModeRef.current === 'movement') {
+              onPoseDragChangeRef.current?.(true);
+            }
             poseDragRef.current = {
               configKey: primaryArrow.def.configKey,
               startX: e.clientX,

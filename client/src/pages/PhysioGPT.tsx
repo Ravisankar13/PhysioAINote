@@ -7454,6 +7454,15 @@ ${ddxList}`;
 
   const unifiedBiomechanicsOutput = useMemo(() => {
     if (computeStage < 3) return null;
+    // Task #349 — review-2 fix: while a Movement Mode pose drag is in
+    // flight, return the last cached biomechanics snapshot instead of
+    // re-running the full unified-biomechanics pipeline on every drag
+    // tick. This is the dominant CPU cost upstream of the sling engine
+    // and several other per-tick memos. The snapshot refreshes the
+    // moment isPoseDragging flips back to false on drag-release.
+    if (isPoseDragging && cachedBiomechanicsOutput) {
+      return cachedBiomechanicsOutput;
+    }
     return computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
@@ -7464,7 +7473,7 @@ ${ddxList}`;
       faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
       previousOutput: previousBiomechanicsOutput,
     });
-  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, computeStage]);
+  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, computeStage, isPoseDragging, cachedBiomechanicsOutput]);
 
   useEffect(() => {
     if (unifiedBiomechanicsOutput) {

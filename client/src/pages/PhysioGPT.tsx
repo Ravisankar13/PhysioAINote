@@ -6322,6 +6322,23 @@ ${ddxList}`;
     setWhatIfFlareUpId(null);
   }, [whatIfFlareUpBaseline]);
 
+  // Stable per-case ID from the same FNV hash used by the CaseResearchPanel
+  // below, so the active-capacity profile and saved hypotheses live on the
+  // same case row. Declared here (before its first use) to avoid TDZ.
+  const activeCaseId = useMemo(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    if (!desc) return null;
+    const fnv32 = (s: string) => {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16).padStart(8, '0');
+    };
+    return `case-${fnv32(desc)}`;
+  }, [lastClinicalParseResult]);
+
   const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
     queryKey: [`/api/treatment-hypotheses/${activeCaseId}`],
     enabled: !!activeCaseId && skeletonMode === 'movement',
@@ -7773,23 +7790,8 @@ ${ddxList}`;
   patientContextSigRef.current = patientContextSig;
 
   // ─── Active Movement Mode wiring ──────────────────────
-  // Compute a stable per-case ID from the same FNV hash used by the
-  // CaseResearchPanel below, so the active-capacity profile lives on
-  // the same case row.
-  const activeCaseId = useMemo(() => {
-    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
-    if (!desc) return null;
-    const fnv32 = (s: string) => {
-      let h = 0x811c9dc5;
-      for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-      }
-      return h.toString(16).padStart(8, '0');
-    };
-    return `case-${fnv32(desc)}`;
-  }, [lastClinicalParseResult]);
-
+  // (`activeCaseId` is declared earlier — before the savedHypothesesQuery
+  // that references it — to avoid a TDZ ReferenceError on render.)
   const activeCapacitiesEnabled = skeletonMode === 'movement' && !!activeCaseId;
   const {
     profile: activeCapacityProfile,

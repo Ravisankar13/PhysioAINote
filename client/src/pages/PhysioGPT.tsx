@@ -1156,8 +1156,17 @@ export default function PhysioGPT() {
       lastClinicalNotesKeyRef.current !== clinicalNotesReasoningKey
     ) {
       setClinicalNotes(null);
+      setClinicalNotesError(null);
     }
   }, [clinicalNotesReasoningKey]);
+
+  // Drop a lingering error if the reasoning content is now insufficient
+  // to generate notes (so the panel returns to its empty state cleanly).
+  useEffect(() => {
+    if (!hasReasoningContentForNotes && clinicalNotesError) {
+      setClinicalNotesError(null);
+    }
+  }, [hasReasoningContentForNotes, clinicalNotesError]);
 
   // Kept current on every render so async response handlers can compare
   // their captured request key against the latest reasoning signature.
@@ -16499,6 +16508,7 @@ ${ddxList}`;
         }}
         externalIsGeneratingNotes={isGeneratingClinicalNotes}
         onExternalIsGeneratingNotesChange={setIsGeneratingClinicalNotes}
+        onExternalGenerateClinicalNotes={generateClinicalNotesFromToolbar}
       />
       )}
 

@@ -282,6 +282,11 @@ interface ClinicalReasoningPanelProps {
   onExternalClinicalNotesChange?: (notes: ClinicalNotes | null) => void;
   externalIsGeneratingNotes?: boolean;
   onExternalIsGeneratingNotesChange?: (isGenerating: boolean) => void;
+  // When provided, the in-panel "Generate Clinical Notes" button delegates
+  // to this generator (which lives in the parent and carries the
+  // keyed/stale-response-safe guard). Otherwise the legacy local
+  // generator below is used.
+  onExternalGenerateClinicalNotes?: () => void | Promise<void>;
 }
 
 export interface ClinicalNotes {
@@ -521,6 +526,7 @@ export default function ClinicalReasoningPanel({
   onExternalClinicalNotesChange,
   externalIsGeneratingNotes,
   onExternalIsGeneratingNotesChange,
+  onExternalGenerateClinicalNotes,
 }: ClinicalReasoningPanelProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
 
@@ -683,6 +689,11 @@ export default function ClinicalReasoningPanel({
   }, [onVisualizationRequest, activeVisualizationId, extractRegionsFromText, extractMuscleHints]);
 
   const generateClinicalNotes = useCallback(async () => {
+    // Prefer the parent's stale-response-safe generator when wired in.
+    if (onExternalGenerateClinicalNotes) {
+      await onExternalGenerateClinicalNotes();
+      return;
+    }
     if (!hasContent || isGeneratingNotes) return;
     setIsGeneratingNotes(true);
     try {
@@ -696,7 +707,7 @@ export default function ClinicalReasoningPanel({
     } finally {
       setIsGeneratingNotes(false);
     }
-  }, [d, subjectiveHistory, hasContent, isGeneratingNotes]);
+  }, [onExternalGenerateClinicalNotes, d, subjectiveHistory, hasContent, isGeneratingNotes, setClinicalNotes, setIsGeneratingNotes]);
 
   const copySection = useCallback((sectionName: string, text: string) => {
     navigator.clipboard.writeText(text).then(() => {

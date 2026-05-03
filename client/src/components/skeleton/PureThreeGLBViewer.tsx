@@ -1689,10 +1689,11 @@ interface PureThreeGLBViewerProps {
     exceededActiveLimit: boolean;
     compensationsTriggered: string[];
   }) => void;
-  /** Task #349: fired when a pose drag begins (true) and ends (false).
-   *  Used by the host page to freeze expensive downstream re-computations
-   *  (e.g. sling analysis) while the clinician is mid-drag, then run a
-   *  single fresh recompute on release. */
+  /** Fired when a Movement Mode pose drag begins (true) and ends (false),
+   *  so the host can freeze expensive downstream re-computations (sling
+   *  analysis, unified biomechanics, hud muscle analysis) while the
+   *  clinician is mid-drag and refresh them once on release. Posture
+   *  Mode drags do not fire this. */
   onPoseDragChange?: (active: boolean) => void;
   /** Fired the moment a movement-mode drag enters a painful arc, so
    *  the predicted-pain layer can register a transient flare on the
@@ -2946,11 +2947,16 @@ export default function PureThreeGLBViewer({
   // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
   // event rate. Re-using a ref avoids a re-render every cap check.
   const lastMovementOverlayPushRef = useRef<number>(0);
-  // Task #349 — review-2: cheap activation-chip cadence kept at 33 ms so
-  // the on-body chip still feels live, while the heavy
-  // computeFullMuscleAnalysis / JRF block runs at 100 ms via
-  // lastMovementOverlayPushRef above.
+  // Cheap activation-chip cadence (~30 Hz). The heavy muscle/JRF block
+  // above runs at ~10 Hz via lastMovementOverlayPushRef.
   const lastMovementActivationPushRef = useRef<number>(0);
+  // Throttled propagation of pose-drag values to the host page. Bones
+  // are repositioned visually via THREE.js every frame; the host's
+  // modelConfig state only needs the post-drag value plus a coarse
+  // intermediate sync so dependent panels remain interactive without
+  // taking a parent re-render storm at mouse-move cadence.
+  const lastConfigSyncPushRef = useRef<number>(0);
+  const pendingConfigSyncRef = useRef<{ key: string; value: number } | null>(null);
   const bodyWeightKgRef = useRef<number>(70);
   // Task #323 — review-2 fix: snapshot of every DOF value taken when the
   // clinician enters Movement Mode. Both the muscle-activation legend and
@@ -3040,8 +3046,6 @@ export default function PureThreeGLBViewer({
   onActiveMovementAttemptRef.current = onActiveMovementAttempt;
   const onPainfulArcFlareRef = useRef(onPainfulArcFlare);
   onPainfulArcFlareRef.current = onPainfulArcFlare;
-  // Task #349: latest onPoseDragChange callback held in a ref so the THREE
-  // mouse handlers can fire it without forcing the host effect to re-run.
   const onPoseDragChangeRef = useRef(onPoseDragChange);
   onPoseDragChangeRef.current = onPoseDragChange;
   const movementSettleTimerRef = useRef<number | null>(null);
@@ -6714,12 +6718,9 @@ export default function PureThreeGLBViewer({
       if (inPainfulArc) drag.lastPainfulArc = true;
       if (skeletonModeRef.current === 'movement' && row) {
         const now = performance.now();
-        // Task #349 — review-2 fix: split the overlay pipeline into two
-        // cadences. The cheap activation-chip compute keeps the original
-        // 33 ms (~30 Hz) cadence so the on-body chip still feels live;
-        // the heavy computeFullMuscleAnalysis + JRF + multi-setState
-        // fan-out into PhysioGPT runs at 100 ms (~10 Hz) so the React
-        // tree gets time to breathe between drag ticks.
+        // Two-tier overlay cadence: the cheap activation chip runs at
+        // ~30 Hz so the on-body badge feels live, while the heavy
+        // muscle/JRF block runs at ~10 Hz so the React tree can breathe.
         const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
         if (now - lastMovementActivationPushRef.current >= 33) {
           lastMovementActivationPushRef.current = now;
@@ -6856,7 +6857,21 @@ export default function PureThreeGLBViewer({
         setLivePainfulArc(null);
       }
       lastPainfulArcStateRef.current = inPainfulArc;
-      onModelConfigChangeRef.current?.(drag.configKey, newValue);
+      // Throttle the host-page state write during Movement Mode drags so
+      // the page-level memos that key off finalModelConfig don't take a
+      // re-render every mouse-move tick. Posture Mode keeps the original
+      // per-tick sync because its live analysis pipeline depends on it.
+      if (skeletonModeRef.current === 'movement') {
+        pendingConfigSyncRef.current = { key: drag.configKey, value: newValue };
+        const tNow = performance.now();
+        if (tNow - lastConfigSyncPushRef.current >= 100) {
+          lastConfigSyncPushRef.current = tNow;
+          pendingConfigSyncRef.current = null;
+          onModelConfigChangeRef.current?.(drag.configKey, newValue);
+        }
+      } else {
+        onModelConfigChangeRef.current?.(drag.configKey, newValue);
+      }
 
       if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
         const [j, m] = drag.configKey.split('.');
@@ -6921,8 +6936,16 @@ export default function PureThreeGLBViewer({
         startSpringBack(drag.springBackValues);
       }
       poseDragRef.current = null;
-      // Task #349: drop the drag-active flag so the host page can run a
-      // fresh sling re-analysis once with the post-drag pose.
+      // Flush any throttled pose value so the host's modelConfig matches
+      // the released pose exactly before sling/biomechanics re-analyse.
+      if (pendingConfigSyncRef.current) {
+        const p = pendingConfigSyncRef.current;
+        pendingConfigSyncRef.current = null;
+        onModelConfigChangeRef.current?.(p.key, p.value);
+      }
+      lastConfigSyncPushRef.current = 0;
+      // Drop the drag-active flag so the host page runs a fresh sling
+      // re-analysis once against the post-drag pose.
       onPoseDragChangeRef.current?.(false);
       controls.enabled = true;
       domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
@@ -6966,6 +6989,12 @@ export default function PureThreeGLBViewer({
         // precedence on its own mouseDown.
         if (poseDragRef.current) {
           poseDragRef.current = null;
+          if (pendingConfigSyncRef.current) {
+            const p = pendingConfigSyncRef.current;
+            pendingConfigSyncRef.current = null;
+            onModelConfigChangeRef.current?.(p.key, p.value);
+          }
+          lastConfigSyncPushRef.current = 0;
           onPoseDragChangeRef.current?.(false);
           setMovementMuscleActivation(null);
           setMovementMuscleStatesOverlay(null);
@@ -7012,10 +7041,6 @@ export default function PureThreeGLBViewer({
             };
           }
         }
-        // Task #349 — review-2 fix: only Movement Mode drags should
-        // freeze the host page's sling/biomechanics memos. Posture Mode
-        // drags must continue to update live so the existing posture
-        // analysis pipeline keeps working.
         if (skeletonModeRef.current === 'movement') {
           onPoseDragChangeRef.current?.(true);
         }
@@ -7578,8 +7603,6 @@ export default function PureThreeGLBViewer({
           // Cancel any in-flight spring-back so a new drag on the same
           // joint takes precedence cleanly.
           cancelSpringBack();
-          // Task #349 — review-2 fix: scope the freeze signal to Movement
-          // Mode only so Posture Mode arrow drags still update live.
           if (skeletonModeRef.current === 'movement') {
             onPoseDragChangeRef.current?.(true);
           }
@@ -7717,9 +7740,6 @@ export default function PureThreeGLBViewer({
               pendingMovementAttemptRef.current = null;
             }
             cancelSpringBack();
-            // Task #349 — review-2 fix: scope the freeze signal to
-            // Movement Mode only so Posture Mode segment drags still
-            // update the host's posture analysis live.
             if (skeletonModeRef.current === 'movement') {
               onPoseDragChangeRef.current?.(true);
             }
@@ -7878,11 +7898,9 @@ export default function PureThreeGLBViewer({
               const occluder = hits.find(h => h.distance < jointDist - 0.04);
               lastJointOccluded = !!occluder;
             }
-            // Task #349 — review-3 fix: skip the anchor write if the
-            // projected position drifted by less than ~1px. The slider
-            // HUD reads this ref on its own RAF loop, so a sub-pixel
-            // jitter still triggers HUD layout work. Visibility flips
-            // (occlusion / off-screen → on-screen) always pass through.
+            // Skip the anchor write when the projected position moved
+            // less than ~1 px so the HUD's RAF loop doesn't churn on
+            // sub-pixel jitter. Visibility flips always pass through.
             const next = (offscreen || lastJointOccluded) ? null : { x: sx, y: sy };
             const prev = selectedJointAnchorRef.current;
             if (next === null) {
@@ -7960,6 +7978,12 @@ export default function PureThreeGLBViewer({
       poseHighlightMeshRef.current = null;
       if (poseDragRef.current) {
         poseDragRef.current = null;
+        if (pendingConfigSyncRef.current) {
+          const p = pendingConfigSyncRef.current;
+          pendingConfigSyncRef.current = null;
+          onModelConfigChangeRef.current?.(p.key, p.value);
+        }
+        lastConfigSyncPushRef.current = 0;
         onPoseDragChangeRef.current?.(false);
       }
       controls.enabled = true;

@@ -1073,14 +1073,10 @@ export default function PhysioGPT() {
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
   const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
   const [cachedBiomechanicsOutput, setCachedBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
-  // Task #349: latched true while the clinician is mid-drag in Movement
-  // Mode. While true, the heavy slingAnalysis memo returns its cached
-  // result instead of re-running computeSlingAnalysis on every drag tick.
-  // Flipped back to false on drag-release, which forces one fresh memo
-  // recompute against the post-drag pose.
+  // True while a Movement Mode pose drag is in flight. Heavy memos
+  // below short-circuit to their cached value while this is true and
+  // refresh once on drag release.
   const [isPoseDragging, setIsPoseDragging] = useState(false);
-  // Task #349 — review-3: cached snapshots of the heavy hud memos so we
-  // can short-circuit them while a Movement Mode pose drag is in flight.
   const hudMuscleAnalysisRef = useRef<ReturnType<typeof applyOverridesToAnalysis> | null>(null);
   const hudWeightDistributionRef = useRef<ReturnType<typeof computeWeightDistribution> | null>(null);
 
@@ -7446,9 +7442,6 @@ ${ddxList}`;
   const hudWeightDistribution = useMemo(() => {
     if (computeStage < 2) return null;
     if (forceMode && weightDistribution) return weightDistribution;
-    // Task #349 — review-3 fix: avoid re-running computeWeightDistribution
-    // on every drag tick; the value is keyed off finalModelConfig which
-    // changes ~30 Hz during a Movement Mode drag.
     if (isPoseDragging && hudWeightDistributionRef.current) {
       return hudWeightDistributionRef.current;
     }
@@ -7460,10 +7453,6 @@ ${ddxList}`;
   const hudMuscleAnalysis = useMemo(() => {
     if (computeStage < 2) return null;
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
-    // Task #349 — review-3 fix: computeFullMuscleAnalysis +
-    // applyOverridesToAnalysis is one of the heaviest finalModelConfig-
-    // keyed memos on the page. Freeze it during Movement Mode drags and
-    // refresh once on release alongside the sling/biomechanics memos.
     if (isPoseDragging && hudMuscleAnalysisRef.current) {
       return hudMuscleAnalysisRef.current;
     }
@@ -7475,12 +7464,6 @@ ${ddxList}`;
 
   const unifiedBiomechanicsOutput = useMemo(() => {
     if (computeStage < 3) return null;
-    // Task #349 — review-2 fix: while a Movement Mode pose drag is in
-    // flight, return the last cached biomechanics snapshot instead of
-    // re-running the full unified-biomechanics pipeline on every drag
-    // tick. This is the dominant CPU cost upstream of the sling engine
-    // and several other per-tick memos. The snapshot refreshes the
-    // moment isPoseDragging flips back to false on drag-release.
     if (isPoseDragging && cachedBiomechanicsOutput) {
       return cachedBiomechanicsOutput;
     }
@@ -7504,10 +7487,6 @@ ${ddxList}`;
 
   const slingAnalysis = useMemo(() => {
     if (computeStage < 3) return null;
-    // Task #349: while a pose drag is in flight, return the last computed
-    // sling analysis so we don't re-run the engine ~30 times per second
-    // during the drag. The dependency on isPoseDragging guarantees a
-    // fresh recompute the moment the clinician releases the drag.
     if (isPoseDragging && slingAnalysisRef.current) {
       return slingAnalysisRef.current;
     }

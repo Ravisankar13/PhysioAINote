@@ -173,7 +173,7 @@ import { aggregateTissueIntelligence, filterInflammationIntelligence, type Tissu
 import { tissueIntelligenceToOverlayHighlight, paletteForState, TISSUE_ANCHOR_CATALOGUE } from "@/lib/tissueOverlayCatalogue";
 import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
 import MovementSlingSpotlight, { type SlingPartTreatmentRecord } from "@/components/skeleton/MovementSlingSpotlight";
-import { pickSpotlightSling, type SpotlightPick } from "@/lib/movementSlingSpotlight";
+import { pickSpotlightSling, type SpotlightPick, type SpotlightInputMarker } from "@/lib/movementSlingSpotlight";
 import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
@@ -1055,6 +1055,10 @@ export default function PhysioGPT() {
   const [slingsOverlayPinned, setSlingsOverlayPinned] = useState(false);
   const [pinnedSpotlightSlingId, setPinnedSpotlightSlingId] = useState<SlingId | null>(null);
   const [slingPartTreatments, setSlingPartTreatments] = useState<Record<string, SlingPartTreatmentRecord>>({});
+  // Per-part muscle adjustments fed into the sling engine so per-part
+  // treatments actually re-simulate weak links / status. The engine
+  // consumes the duck-typed `{ tension?: number; pathology? }` shape.
+  const [slingPartMuscleAdjustments, setSlingPartMuscleAdjustments] = useState<Record<string, { tension?: number; pathology?: PathologyType }>>({});
   // Movement-mode sling spotlight is ON by default in Movement Mode and can
   // be toggled from the toolbar pill or dismissed via the panel X. Persists
   // in the case snapshot.
@@ -1671,6 +1675,7 @@ export default function PhysioGPT() {
     slingActivationOverrides,
     pinnedSpotlightSlingId,
     slingPartTreatments,
+    slingPartMuscleAdjustments,
     movementSpotlightEnabled,
     bodyWeightKg,
     clinicalHighlights,
@@ -1733,6 +1738,7 @@ export default function PhysioGPT() {
     slingActivationOverrides,
     pinnedSpotlightSlingId,
     slingPartTreatments,
+    slingPartMuscleAdjustments,
     movementSpotlightEnabled,
     bodyWeightKg,
     clinicalHighlights,
@@ -1814,6 +1820,7 @@ export default function PhysioGPT() {
     setSlingActivationOverrides({});
     setPinnedSpotlightSlingId(null);
     setSlingPartTreatments({});
+    setSlingPartMuscleAdjustments({});
     setMovementSpotlightEnabled(true);
     setBodyWeightKg(70);
     setClinicalHighlights([]);
@@ -1874,6 +1881,9 @@ export default function PhysioGPT() {
       }
       if (snap.slingPartTreatments && typeof snap.slingPartTreatments === 'object') {
         setSlingPartTreatments(snap.slingPartTreatments as Record<string, SlingPartTreatmentRecord>);
+      }
+      if (snap.slingPartMuscleAdjustments && typeof snap.slingPartMuscleAdjustments === 'object') {
+        setSlingPartMuscleAdjustments(snap.slingPartMuscleAdjustments as Record<string, { tension?: number; pathology?: PathologyType }>);
       }
       if (typeof snap.movementSpotlightEnabled === 'boolean') {
         setMovementSpotlightEnabled(snap.movementSpotlightEnabled);
@@ -4909,6 +4919,7 @@ ${ddxList}`;
     setSlingActivationOverrides({});
     setPinnedSpotlightSlingId(null);
     setSlingPartTreatments({});
+    setSlingPartMuscleAdjustments({});
     setMovementSpotlightEnabled(true);
     setLastInteractedBone(null);
     // Clinical text / voice state — must be wiped so the new case looks
@@ -7458,16 +7469,35 @@ ${ddxList}`;
   const slingAnalysis = useMemo(() => {
     if (computeStage < 3) return null;
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    // Merge per-part spotlight adjustments into the engine's duck-typed
+    // override shape so per-part treatments actually re-score weak links.
+    const merged: Record<string, { tension?: number; pathology?: string }> = {};
+    for (const [k, v] of Object.entries(muscleOverrides)) {
+      const tension = 50 + (v.tensionOffset ?? 0) + (v.activationOffset ?? 0) * 0.5 - (v.inhibition ?? 0);
+      merged[k] = {
+        tension: Math.max(0, Math.min(100, tension)),
+        pathology: v.pathology !== 'none' ? v.pathology : undefined,
+      };
+    }
+    for (const [k, patch] of Object.entries(slingPartMuscleAdjustments)) {
+      const existing = merged[k] ?? {};
+      merged[k] = {
+        tension: patch.tension !== undefined
+          ? Math.max(0, Math.min(100, (existing.tension ?? 50) + (patch.tension - 50)))
+          : existing.tension,
+        pathology: patch.pathology ?? existing.pathology,
+      };
+    }
     const slingInput: SlingAnalysisInput = {
       biomechanicsOutput: bioSrc,
-      muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
+      muscleOverrides: Object.keys(merged).length > 0 ? merged : undefined,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
       slingActivationOverrides,
     };
     const result = computeSlingAnalysis(slingInput);
     slingAnalysisRef.current = result;
     return result;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, slingPartMuscleAdjustments, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
 
@@ -7488,11 +7518,6 @@ ${ddxList}`;
   }, [painMarkers, slingAnalysis]);
   const slingDrivenRecommendations = slingDriverAnalysisResult.recommendations;
 
-  // Movement-mode spotlight pick — drives BOTH the on-skeleton highlight
-  // (via slingPathwayVisualization.activeSlingId) and the spotlight panel
-  // so the 3D ribbon and the overlay always agree on which sling is in
-  // focus. Hysteresis (previousSpotlightId) prevents the pick from
-  // flipping between two near-equal slings frame-to-frame.
   const previousSpotlightIdRef = useRef<SlingId | null>(null);
   const primaryPainRegion = useMemo<string | null>(() => {
     if (painMarkers.length === 0) return null;
@@ -7500,27 +7525,37 @@ ${ddxList}`;
     const top = sorted[0];
     return top.anatomicalLabel || top.nearestBone || null;
   }, [painMarkers]);
+  // Combined marker bias source: pain markers + scar/adhesion bones so
+  // the spotlight selector can lean toward slings whose pathway the
+  // clinician has already flagged with any kind of marker. Engine-detected
+  // weak links still dominate.
+  const spotlightBiasMarkers = useMemo(() => {
+    const out: SpotlightInputMarker[] = painMarkers.map(pm => ({
+      id: pm.id,
+      nearestBone: pm.nearestBone,
+      anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+      severity: pm.severity,
+    }));
+    for (const sc of scarMarkers) {
+      out.push({ id: `scar:${sc.id}`, nearestBone: sc.nearestBone, anatomicalLabel: sc.anatomicalLabel, severity: 0.6 });
+    }
+    for (const ab of adhesionBands) {
+      out.push({ id: `adh:${ab.id}:s`, nearestBone: ab.startBone, severity: 0.5 });
+      out.push({ id: `adh:${ab.id}:e`, nearestBone: ab.endBone, severity: 0.5 });
+    }
+    return out;
+  }, [painMarkers, scarMarkers, adhesionBands]);
   const spotlightPick = useMemo<SpotlightPick | null>(() => {
     if (skeletonMode !== 'movement') return null;
     if (!slingAnalysis) return null;
-    const pick = pickSpotlightSling(
-      slingAnalysis,
-      painMarkers.map(pm => ({
-        id: pm.id,
-        nearestBone: pm.nearestBone,
-        anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
-        severity: pm.severity,
-      })),
-      {
-        pinnedSlingId: pinnedSpotlightSlingId,
-        movementTaskId: unifiedBiomechanicsMovementTask ?? null,
-        lastInteractedBone,
-        previousSpotlightId: previousSpotlightIdRef.current,
-        primaryPainRegion,
-      },
-    );
-    return pick;
-  }, [skeletonMode, slingAnalysis, painMarkers, pinnedSpotlightSlingId, unifiedBiomechanicsMovementTask, lastInteractedBone, primaryPainRegion]);
+    return pickSpotlightSling(slingAnalysis, spotlightBiasMarkers, {
+      pinnedSlingId: pinnedSpotlightSlingId,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? null,
+      lastInteractedBone,
+      previousSpotlightId: previousSpotlightIdRef.current,
+      primaryPainRegion,
+    });
+  }, [skeletonMode, slingAnalysis, spotlightBiasMarkers, pinnedSpotlightSlingId, unifiedBiomechanicsMovementTask, lastInteractedBone, primaryPainRegion]);
   useEffect(() => {
     if (spotlightPick) previousSpotlightIdRef.current = spotlightPick.slingId;
   }, [spotlightPick?.slingId]);
@@ -10416,13 +10451,14 @@ ${ddxList}`;
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
               onModelLoadError={handleModelLoadError}
-              slingPathwayVisualization={slingsOverlayPinned && slingAnalysis ? {
+              slingPathwayVisualization={(slingsOverlayPinned || (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)) && slingAnalysis ? {
                 enabled: true,
                 // In Movement Mode the spotlight pick drives the on-skeleton
-                // highlight so the 3D ribbon and the spotlight panel always
-                // agree on which sling is in focus. Falls back to the
-                // explicitly selected sling everywhere else.
-                activeSlingId: (skeletonMode === 'movement' && spotlightPick) ? spotlightPick.slingId : selectedSlingId,
+                // highlight only when the spotlight is enabled — otherwise
+                // the legacy Sling Analysis selection wins.
+                activeSlingId: (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)
+                  ? spotlightPick.slingId
+                  : selectedSlingId,
                 slings: slingAnalysis.slings.map(s => ({
                   id: s.slingId,
                   label: s.label,
@@ -10529,12 +10565,7 @@ ${ddxList}`;
                 {skeletonMode === 'movement' && slingAnalysis && movementSpotlightEnabled && spotlightPick && (
                   <MovementSlingSpotlight
                     analysis={slingAnalysis}
-                    painMarkers={painMarkers.map(pm => ({
-                      id: pm.id,
-                      nearestBone: pm.nearestBone,
-                      anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
-                      severity: pm.severity,
-                    }))}
+                    painMarkers={spotlightBiasMarkers}
                     pinnedSpotlightSlingId={pinnedSpotlightSlingId}
                     onPin={(slingId) => setPinnedSpotlightSlingId(slingId)}
                     selectedSlingId={selectedSlingId}
@@ -10542,6 +10573,10 @@ ${ddxList}`;
                     onExpandDetail={(slingId) => {
                       setSelectedSlingId(slingId);
                       setExpandedSlingDetailId(prev => prev === slingId ? null : slingId);
+                    }}
+                    onJumpToSlingTab={() => {
+                      setRightPanelTab('slings');
+                      setChatPanelOpen(true);
                     }}
                     spotlightPick={spotlightPick}
                     movementTaskId={unifiedBiomechanicsMovementTask ?? null}
@@ -10551,48 +10586,46 @@ ${ddxList}`;
                     slingDrivenRecommendations={slingDrivenRecommendations}
                     partTreatments={slingPartTreatments}
                     onApplyPartTreatment={(rec, cartItem) => {
-                      // Atomic per-part treatment: compose into the engine
-                      // (sling activation + optional muscle override patch),
-                      // drop the tagged cart item, and record the patch so
-                      // Undo can reverse all three.
+                      const prior = slingPartTreatments[rec.partId];
+                      // Reverse any prior treatment on this part first so deltas
+                      // don't stack and the old cart item is dropped before the
+                      // new one is added.
+                      let activationDelta = rec.appliedActivationDelta;
+                      let priorMuscleRef: string | null = null;
+                      if (prior) {
+                        activationDelta = activationDelta - prior.appliedActivationDelta;
+                        if (prior.cartItemId) {
+                          planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== prior.cartItemId));
+                        }
+                        if (prior.partKind === 'muscle') priorMuscleRef = prior.ref;
+                      }
                       setSlingActivationOverrides(prev => {
                         const baseSling = slingAnalysis.slings.find(s => s.slingId === rec.slingId);
                         const baseScore = baseSling?.activationScore ?? SLING_ACTIVATION_BASELINE;
                         const current = prev[rec.slingId] ?? baseScore;
-                        const next = Math.max(0, Math.min(200, current + rec.appliedActivationDelta));
+                        const next = Math.max(0, Math.min(200, current + activationDelta));
+                        if (Math.abs(next - baseScore) < 0.5) {
+                          const { [rec.slingId]: _omit, ...rest } = prev;
+                          return rest;
+                        }
                         return { ...prev, [rec.slingId]: next };
                       });
-                      const patch = rec.appliedMuscleOverridePatch;
-                      if (patch && rec.partKind === 'muscle') {
-                        setMuscleOverrides(prev => {
-                          const existing: MuscleOverride = prev[rec.ref] ?? {
-                            tensionOffset: 0,
-                            activationOffset: 0,
-                            lengthOverride: 'normal',
-                            inhibition: 0,
-                            pathology: 'none',
-                            isManual: false,
-                          };
-                          return {
-                            ...prev,
-                            [rec.ref]: {
-                              ...existing,
-                              tensionOffset: typeof patch.tensionOffset === 'number'
-                                ? existing.tensionOffset + patch.tensionOffset
-                                : existing.tensionOffset,
-                              activationOffset: typeof patch.activationOffset === 'number'
-                                ? existing.activationOffset + patch.activationOffset
-                                : existing.activationOffset,
-                              inhibition: typeof patch.inhibition === 'number'
-                                ? Math.max(0, existing.inhibition + patch.inhibition)
-                                : existing.inhibition,
-                              pathology: patch.pathology ?? existing.pathology,
-                            },
-                          };
-                        });
-                      }
+                      setSlingPartMuscleAdjustments(prev => {
+                        const next = { ...prev };
+                        if (priorMuscleRef && priorMuscleRef !== rec.ref) delete next[priorMuscleRef];
+                        const patch = rec.appliedMuscleOverridePatch;
+                        if (patch && rec.partKind === 'muscle') {
+                          const tension = patch.tensionOffset !== undefined || patch.activationOffset !== undefined || patch.inhibition !== undefined
+                            ? Math.max(0, Math.min(100, 50 + (patch.tensionOffset ?? 0) + (patch.activationOffset ?? 0) * 0.5 - (patch.inhibition ?? 0)))
+                            : undefined;
+                          next[rec.ref] = { tension, pathology: patch.pathology };
+                        } else if (rec.partKind === 'muscle' && next[rec.ref]) {
+                          delete next[rec.ref];
+                        }
+                        return next;
+                      });
                       planCartReplaceAllRef.current?.([
-                        ...(planCartItemsState ?? []).filter(it => it.id !== cartItem.id),
+                        ...(planCartItemsState ?? []).filter(it => it.id !== cartItem.id && (!prior?.cartItemId || it.id !== prior.cartItemId)),
                         cartItem,
                       ]);
                       setSlingPartTreatments(prev => ({ ...prev, [rec.partId]: rec }));
@@ -10600,51 +10633,25 @@ ${ddxList}`;
                     onClearPartTreatment={(partId) => {
                       const rec = slingPartTreatments[partId];
                       if (rec) {
-                        // Reverse activation delta
                         setSlingActivationOverrides(prev => {
                           const baseSling = slingAnalysis.slings.find(s => s.slingId === rec.slingId);
                           const baseScore = baseSling?.activationScore ?? SLING_ACTIVATION_BASELINE;
                           const current = prev[rec.slingId] ?? baseScore;
                           const reverted = Math.max(0, Math.min(200, current - rec.appliedActivationDelta));
-                          // If we land back at baseline (within 0.5%), drop the override entirely.
                           if (Math.abs(reverted - baseScore) < 0.5) {
                             const { [rec.slingId]: _omit, ...rest } = prev;
                             return rest;
                           }
                           return { ...prev, [rec.slingId]: reverted };
                         });
-                        // Reverse muscle override patch
-                        const patch = rec.appliedMuscleOverridePatch;
-                        if (patch && rec.partKind === 'muscle') {
-                          setMuscleOverrides(prev => {
-                            const existing = prev[rec.ref];
-                            if (!existing) return prev;
-                            const reverted: MuscleOverride = {
-                              ...existing,
-                              tensionOffset: typeof patch.tensionOffset === 'number'
-                                ? existing.tensionOffset - patch.tensionOffset
-                                : existing.tensionOffset,
-                              activationOffset: typeof patch.activationOffset === 'number'
-                                ? existing.activationOffset - patch.activationOffset
-                                : existing.activationOffset,
-                              inhibition: typeof patch.inhibition === 'number'
-                                ? Math.max(0, existing.inhibition - patch.inhibition)
-                                : existing.inhibition,
-                              pathology: patch.pathology && existing.pathology === patch.pathology ? 'none' : existing.pathology,
-                            };
-                            // If everything cleared back to defaults and the row
-                            // wasn't manually set elsewhere, drop it entirely.
-                            const isEmpty = reverted.tensionOffset === 0
-                              && reverted.activationOffset === 0
-                              && reverted.inhibition === 0
-                              && reverted.pathology === 'none'
-                              && !reverted.isManual;
-                            if (isEmpty) {
-                              const { [rec.ref]: _omit, ...rest } = prev;
-                              return rest;
-                            }
-                            return { ...prev, [rec.ref]: reverted };
+                        if (rec.partKind === 'muscle') {
+                          setSlingPartMuscleAdjustments(prev => {
+                            const { [rec.ref]: _omit, ...rest } = prev;
+                            return rest;
                           });
+                        }
+                        if (rec.cartItemId) {
+                          planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== rec.cartItemId));
                         }
                       }
                       setSlingPartTreatments(prev => {
@@ -10655,11 +10662,8 @@ ${ddxList}`;
                     onClose={() => setMovementSpotlightEnabled(false)}
                   />
                 )}
-                {false && skeletonMode === 'movement' && false && slingAnalysis && (() => {
-                  // Legacy "Poor Slings" callout — superseded by the
-                  // movement-mode sling spotlight above. Kept disabled
-                  // pending decommission so we can lift any clinical
-                  // copy that the spotlight still needs to surface.
+                {/* Legacy "Poor Slings" callout removed — replaced by MovementSlingSpotlight above. */}
+                {false && (() => {
                   const _analysis = slingAnalysis!;
                   const poor = _analysis.slings.filter(s => s.status !== 'normal');
                   if (poor.length === 0) return null;

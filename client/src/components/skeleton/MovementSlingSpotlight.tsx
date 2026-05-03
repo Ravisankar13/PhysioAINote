@@ -85,6 +85,9 @@ interface Props {
   /** Live bone screen positions ref from the 3D viewer. Used to anchor
    *  per-part hotspot dots over the skeleton. */
   boneScreenPositionsRef: React.MutableRefObject<BoneScreenPosition[]>;
+  /** Switches the right side panel to the Sling Analysis tab so the
+   *  clinician can dive into the full breakdown. */
+  onJumpToSlingTab?: () => void;
   onClose: () => void;
 }
 
@@ -145,6 +148,7 @@ export default function MovementSlingSpotlight(props: Props) {
     slingDrivenRecommendations,
     partTreatments,
     boneScreenPositionsRef,
+    onJumpToSlingTab,
     onClose,
   } = props;
   const { add: addToCart, has: cartHas, remove: removeFromCart } = usePlanCart();
@@ -278,7 +282,7 @@ export default function MovementSlingSpotlight(props: Props) {
                 height: `${size}px`,
                 opacity: 0.5 + p.intensity * 0.5,
               }}
-              title={`${p.label} · ${p.kind}${p.markerBiased ? ' · marker-biased' : ''}`}
+              title={`${p.label} · ${p.kind} · ${treated ? 'treated — click to review' : (p.intensity > 0.5 ? 'needs work' : 'looks ok')}${p.markerBiased ? ' · marker-biased' : ''}`}
               data-testid={`spotlight-hotspot-${p.id}`}
             >
               {ks.icon}
@@ -344,7 +348,11 @@ export default function MovementSlingSpotlight(props: Props) {
           </div>
           <button
             type="button"
-            onClick={() => { onSelectSling(sling.slingId); onExpandDetail(sling.slingId); }}
+            onClick={() => {
+              onSelectSling(sling.slingId);
+              onExpandDetail(sling.slingId);
+              onJumpToSlingTab?.();
+            }}
             className="w-full flex items-center justify-center gap-1 px-1.5 py-1 rounded border border-slate-600/60 bg-slate-800/60 hover:bg-slate-700/70 text-slate-200 text-[9px]"
             data-testid="spotlight-open-full"
           >
@@ -413,7 +421,7 @@ export default function MovementSlingSpotlight(props: Props) {
                       isOpen ? `ring-2 ${ks.ring}` : ''
                     } ${p.markerBiased ? 'shadow-[0_0_0_1px_rgba(244,63,94,0.6)]' : ''}`}
                     style={{ opacity }}
-                    title={`${p.kind} · click for interventions${p.markerBiased ? ' (marker-biased — engine still chooses weak link)' : ''}`}
+                    title={`${p.kind} · ${treated ? 'treated — click to review' : (p.intensity > 0.5 ? 'needs work' : 'looks ok')} · click for interventions${p.markerBiased ? ' (marker-biased — engine still chooses weak link)' : ''}`}
                     data-testid={`spotlight-part-${p.id}`}
                   >
                     <span className="font-mono opacity-60">{ks.icon}</span>
@@ -493,18 +501,47 @@ export default function MovementSlingSpotlight(props: Props) {
           })()}
 
           {Object.keys(partTreatments).length > 0 && (
-            <div className="text-[8px] text-slate-500 border-t border-slate-800 pt-1">
-              {Object.keys(partTreatments).length} per-part treatment{Object.keys(partTreatments).length === 1 ? '' : 's'} active.
-              <button
-                type="button"
-                onClick={() => {
-                  for (const id of Object.keys(partTreatments)) clearTreatment(id);
-                }}
-                className="ml-1 text-slate-400 hover:text-slate-100 underline"
-                data-testid="spotlight-clear-all"
-              >
-                Reset all
-              </button>
+            <div className="border-t border-slate-800 pt-1 space-y-1" data-testid="spotlight-active-treatments">
+              <div className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold flex items-center gap-1">
+                <span>Active per-part ({Object.keys(partTreatments).length})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    for (const id of Object.keys(partTreatments)) clearTreatment(id);
+                  }}
+                  className="ml-auto text-[8px] text-slate-400 hover:text-slate-100 underline normal-case font-normal"
+                  data-testid="spotlight-clear-all"
+                >
+                  Reset all
+                </button>
+              </div>
+              <ul className="space-y-0.5">
+                {Object.values(partTreatments).map(rec => (
+                  <li
+                    key={rec.partId}
+                    className="flex items-center gap-1.5 text-[9px] text-slate-300 bg-slate-950/50 rounded px-1.5 py-0.5"
+                    data-testid={`spotlight-active-${rec.partId}`}
+                  >
+                    <span className="font-mono text-[8px] text-slate-500 uppercase">{rec.partKind[0]}</span>
+                    <span className="truncate flex-1">
+                      <span className="text-slate-100">{rec.partLabel}</span>
+                      <span className="text-slate-500"> · {rec.interventionLabel}</span>
+                    </span>
+                    <span className="text-[8px] text-slate-500 font-mono shrink-0">
+                      {rec.appliedActivationDelta >= 0 ? '+' : ''}{rec.appliedActivationDelta}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => clearTreatment(rec.partId)}
+                      className="text-slate-500 hover:text-rose-300 shrink-0"
+                      title="Remove this per-part treatment"
+                      data-testid={`spotlight-active-remove-${rec.partId}`}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

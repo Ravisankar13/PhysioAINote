@@ -13577,6 +13577,7 @@ ${ddxList}`;
                     size="sm"
                     className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
                     onClick={() => {
+                      if (sidebarOpen) setSidebarOpen(false);
                       setMovementSimExpandSignal(s => s + 1);
                     }}
                     data-testid="movement-toolbar-open-ai-sim"

@@ -77,9 +77,6 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     [caseId, condition, markers, analysis],
   );
 
-  // Always have local scenarios available so panel works offline.
-  // Local templates are merged with pathologyCompensation posturalDeviations
-  // so the joint deltas reflect pathology priors as well as sling priors.
   const localScenarios = useMemo(() => {
     return compromised
       .map(s => generateSlingFailureScenarioLocal(s, { condition }))
@@ -88,9 +85,9 @@ export default function SlingFailureVisualizerPanel(props: Props) {
 
   const fetchMutation = useMutation({
     mutationFn: async (refresh: boolean) => {
-      // Schema constraints: fingerprint ≤200, condition ≤300. Truncate
-      // to stay safely inside both.
-      const safeFingerprint = fingerprint.length > 180 ? `${fingerprint.slice(0, 80)}::${hash32(fingerprint)}` : fingerprint;
+      const safeFingerprint = fingerprint.length > 180
+        ? `${fingerprint.slice(0, 80)}::${hash32(fingerprint)}`
+        : fingerprint;
       const safeCondition = condition && condition.length > 0
         ? (condition.length > 280 ? condition.slice(0, 280) : condition)
         : undefined;
@@ -106,7 +103,6 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           status: s.status,
           activationScore: s.activationScore,
           weakLinks: s.weakLinks.map(w => ({ muscle: w.muscle, activationPct: w.activationPct })),
-          // SlingResult does not carry the pathway — derive it from the sling id.
           bonePathway: getSlingBonePathway(s.slingId),
           forceTransferQuality: s.forceTransferQuality,
         })),
@@ -117,13 +113,10 @@ export default function SlingFailureVisualizerPanel(props: Props) {
         })),
       };
       const data = await apiRequest('/api/sling-failure-scenarios', 'POST', payload);
-      return data;
+      return data as { scenarios: SlingFailureScenario[] };
     },
-    onSuccess: (data: { scenarios: SlingFailureScenario[] }) => {
+    onSuccess: (data) => {
       const ai = Array.isArray(data?.scenarios) ? data.scenarios : [];
-      // Always guarantee one scenario per compromised sling — merge AI
-      // results over local fallbacks so partial AI responses don't drop
-      // any sling. Then fold in pathology compensation deviations.
       const merged = mergeAiAndLocalScenarios(ai, localScenarios)
         .map(sc => mergeWithPathologyCompensation(sc, pathologyCompensation));
       setScenarios(merged);
@@ -131,14 +124,14 @@ export default function SlingFailureVisualizerPanel(props: Props) {
         ? 'AI returned a partial set — missing slings filled from local engine.'
         : null);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setScenarios(localScenarios);
       setErrorMsg('AI scenario generation unavailable — using deterministic local scenarios.');
-      console.warn('[SlingFailureVisualizer] AI failed, using local fallback:', err?.message || err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[SlingFailureVisualizer] AI failed, using local fallback:', msg);
     },
   });
 
-  // Auto-fetch on fingerprint change (case+marker+sling fingerprint).
   useEffect(() => {
     if (compromised.length === 0) {
       setScenarios([]);
@@ -435,13 +428,6 @@ export default function SlingFailureVisualizerPanel(props: Props) {
                       </div>
                     )}
 
-                    {/* Simultaneous dual-ghost stick figure — emerald
-                        intended skeleton (left) and rose actual skeleton
-                        (right) play in lockstep with the scrubber and
-                        flash a ✕ at the failure bone on the actual side
-                        when the failure frame is reached. This satisfies
-                        true side-by-side intended/actual rendering
-                        without a second 3D skinned mesh. */}
                     {isActive && trigger && (() => {
                       const intendedSeq = trigger.sequence;
                       const actualSeq = composeActualSequence(trigger, scenario);
@@ -525,7 +511,6 @@ function prettyMuscle(m: string): string {
 function prettyJoint(j: string): string {
   return j.replace(/([A-Z])/g, ' $1').replace(/^\s/, '').toLowerCase();
 }
-/** Tiny FNV-like 32-bit string hash → base36 to keep fingerprint short. */
 function hash32(s: string): string {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {

@@ -427,8 +427,9 @@ function formatPatientContextBlock(
   return lines.join('\n');
 }
 
-// ---------- Task #353: Sling Failure Scenario cache ----------
-type CachedSlingFailureEntry = { fingerprint: string; scenarios: any[]; cachedAt: number };
+// ---------- Sling Failure Scenario cache ----------
+import type { SlingFailureScenario as SlingFailureScenarioType } from "@shared/schema";
+type CachedSlingFailureEntry = { fingerprint: string; scenarios: SlingFailureScenarioType[]; cachedAt: number };
 const slingFailureCache = new Map<string, CachedSlingFailureEntry>();
 const SLING_FAILURE_CACHE_TTL_MS = 1000 * 60 * 60; // 1 h
 function pruneSlingFailureCache(): void {
@@ -12043,12 +12044,9 @@ Now produce the refined hypothesis JSON.`;
     }
   });
 
-  // ==================================================================
-  // Task #353 — Sling Failure Movement Visualizer
-  // Generates one SlingFailureScenario per compromised sling using
-  // GPT-4o, with deterministic local fallback computed client-side.
-  // Cached by (caseId + fingerprint).
-  // ==================================================================
+  // Sling Failure Movement Visualizer — one SlingFailureScenario per
+  // compromised sling via GPT-4o; deterministic server-side fallback
+  // when AI is unavailable. Cached by (caseId + fingerprint).
   app.post("/api/sling-failure-scenarios", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { slingFailureScenarioRequestSchema } = await import("@shared/schema");
@@ -12080,9 +12078,41 @@ Now produce the refined hypothesis JSON.`;
         posterior_oblique:  { id: 'sfv_gait_stance_push_off',  label: 'Gait stance push-off',            failureFrame: 0.65 },
       };
 
+      const buildLocalFallback = (): SlingFailureScenarioType[] => {
+        return compromised.map(s => {
+          const hint = TRIGGER_HINTS[s.slingId] ?? TRIGGER_HINTS.lateral;
+          const pathway = Array.isArray(s.bonePathway) ? s.bonePathway : [];
+          const mid = Math.floor(pathway.length / 2);
+          const weakBones = pathway.length > 0 ? pathway.slice(Math.max(0, mid - 1), mid + 2) : [];
+          const weakLink = s.weakLinks?.[0];
+          const severity = Math.max(0.4, Math.min(1.4, (100 - Math.min(s.activationScore, 100)) / 50));
+          const deg = Math.round(8 * severity * 10) / 10;
+          return {
+            slingId: s.slingId,
+            slingLabel: s.slingLabel,
+            triggerMovementId: hint.id,
+            triggerMovementLabel: hint.label,
+            triggerReason: 'Maximally loads this sling under closed-chain demand.',
+            failureFrame: hint.failureFrame,
+            weakSegmentMuscle: weakLink?.muscle ?? 'sling weak link',
+            weakSegmentBones: weakBones,
+            rerouteTargetMuscle: 'compensating synergist',
+            rerouteTargetBones: pathway.slice(0, 2),
+            jointDeltas: [
+              { joint: 'spine', axis: 'lateralFlexion', intendedDeg: 0, actualDeg: deg, description: 'Trunk lists toward the weak side' },
+            ],
+            narration: `${hint.label} stalls at ${weakLink?.muscle ?? 'the weakest link'} (${weakLink?.activationPct ?? 0}% activation); force reroutes onto compensating synergists.`,
+            confidence: 0.55,
+            source: 'local' as const,
+          };
+        });
+      };
+
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        return res.status(503).json({ error: "AI unavailable — client should fall back to local generator" });
+        const fallback = buildLocalFallback();
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+        return res.json({ scenarios: fallback, cached: false, source: 'local' });
       }
 
       const prompt = `You are a senior physiotherapist building movement-failure scenarios for a 3D skeleton visualizer.
@@ -12117,24 +12147,25 @@ Return STRICT JSON of shape:
         });
 
         const raw = completion.choices[0]?.message?.content ?? "{}";
-        const parsedJson = JSON.parse(raw);
-        const rawScenarios: any[] = Array.isArray(parsedJson?.scenarios) ? parsedJson.scenarios : [];
+        const parsedJson = JSON.parse(raw) as { scenarios?: unknown };
+        const rawScenarios: unknown[] = Array.isArray(parsedJson?.scenarios) ? parsedJson.scenarios : [];
 
-        // Validate & coerce. Drop bad ones; if all bad, signal local fallback.
         const { slingFailureScenarioSchema } = await import("@shared/schema");
         const validated = rawScenarios
           .map(r => {
-            const hint = TRIGGER_HINTS[r?.slingId as string];
+            const rec = (r ?? {}) as Record<string, unknown>;
+            const slingId = typeof rec.slingId === 'string' ? rec.slingId : '';
+            const hint = TRIGGER_HINTS[slingId];
             const candidate = {
-              ...r,
+              ...rec,
               source: 'ai' as const,
-              triggerMovementId: hint?.id ?? r?.triggerMovementId ?? 'sfv_single_leg_stance',
-              triggerMovementLabel: hint?.label ?? r?.triggerMovementLabel ?? 'Single-leg stance',
-              failureFrame: typeof r?.failureFrame === 'number' ? Math.max(0, Math.min(1, r.failureFrame)) : (hint?.failureFrame ?? 0.5),
-              weakSegmentBones: Array.isArray(r?.weakSegmentBones) ? r.weakSegmentBones.slice(0, 8) : [],
-              rerouteTargetBones: Array.isArray(r?.rerouteTargetBones) ? r.rerouteTargetBones.slice(0, 8) : [],
-              jointDeltas: Array.isArray(r?.jointDeltas) ? r.jointDeltas.slice(0, 12) : [],
-              confidence: typeof r?.confidence === 'number' ? Math.max(0, Math.min(1, r.confidence)) : 0.7,
+              triggerMovementId: hint?.id ?? (typeof rec.triggerMovementId === 'string' ? rec.triggerMovementId : 'sfv_single_leg_stance'),
+              triggerMovementLabel: hint?.label ?? (typeof rec.triggerMovementLabel === 'string' ? rec.triggerMovementLabel : 'Single-leg stance'),
+              failureFrame: typeof rec.failureFrame === 'number' ? Math.max(0, Math.min(1, rec.failureFrame)) : (hint?.failureFrame ?? 0.5),
+              weakSegmentBones: Array.isArray(rec.weakSegmentBones) ? rec.weakSegmentBones.slice(0, 8) : [],
+              rerouteTargetBones: Array.isArray(rec.rerouteTargetBones) ? rec.rerouteTargetBones.slice(0, 8) : [],
+              jointDeltas: Array.isArray(rec.jointDeltas) ? rec.jointDeltas.slice(0, 12) : [],
+              confidence: typeof rec.confidence === 'number' ? Math.max(0, Math.min(1, rec.confidence)) : 0.7,
             };
             const result = slingFailureScenarioSchema.safeParse(candidate);
             return result.success ? result.data : null;
@@ -12142,17 +12173,23 @@ Return STRICT JSON of shape:
           .filter((s): s is NonNullable<typeof s> => !!s);
 
         if (validated.length === 0) {
-          return res.status(502).json({ error: "AI returned no usable scenarios — client should fall back to local generator" });
+          const fallback = buildLocalFallback();
+          slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+          return res.json({ scenarios: fallback, cached: false, source: 'local' });
         }
 
         slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: validated, cachedAt: Date.now() });
         return res.json({ scenarios: validated, cached: false, source: 'ai' });
-      } catch (err: any) {
-        console.error("[sling-failure-scenarios] OpenAI error:", err?.message || err);
-        return res.status(502).json({ error: "AI generation failed — client should fall back to local generator" });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[sling-failure-scenarios] OpenAI error:", msg);
+        const fallback = buildLocalFallback();
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+        return res.json({ scenarios: fallback, cached: false, source: 'local' });
       }
-    } catch (err: any) {
-      console.error("[sling-failure-scenarios] error:", err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[sling-failure-scenarios] error:", msg);
       return res.status(500).json({ error: "Internal error" });
     }
   });

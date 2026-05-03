@@ -410,20 +410,24 @@ export function mergeAiAndLocalScenarios(
   return local.map(l => byId.get(l.slingId)!).filter(Boolean);
 }
 
-/* Cache key helper — case + marker fingerprint + sling status fingerprint.
- * Keep stable across renders so identical context returns the same key. */
 export function buildScenarioFingerprint(input: {
   caseId: string;
   condition?: string | null;
-  markers: Array<{ nearestBone?: string; severity?: number }>;
+  markers: Array<{ nearestBone?: string; anatomicalLabel?: string; severity?: number; type?: string }>;
   analysis: SlingAnalysisResult | null;
 }): string {
   const markerSig = (input.markers ?? [])
-    .map(m => `${m.nearestBone ?? ''}:${Math.round((m.severity ?? 0) * 10) / 10}`)
+    .map(m => `${m.nearestBone ?? ''}@${m.anatomicalLabel ?? ''}:${m.type ?? ''}:${Math.round((m.severity ?? 0) * 10) / 10}`)
     .sort()
     .join('|');
   const slingSig = (input.analysis?.slings ?? [])
-    .map(s => `${s.slingId}:${s.status}:${Math.round(s.activationScore)}`)
+    .map(s => {
+      const wl = (s.weakLinks ?? [])
+        .map(w => `${w.muscle}@${Math.round(w.activationPct)}`)
+        .sort()
+        .join(',');
+      return `${s.slingId}:${s.status}:${Math.round(s.activationScore)}:${s.forceTransferQuality}:${wl}`;
+    })
     .sort()
     .join('|');
   return `${input.caseId}::${input.condition ?? ''}::${markerSig}::${slingSig}`;

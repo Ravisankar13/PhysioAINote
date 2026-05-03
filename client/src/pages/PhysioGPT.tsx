@@ -1065,7 +1065,7 @@ export default function PhysioGPT() {
   // be toggled from the toolbar pill or dismissed via the panel X. Persists
   // in the case snapshot.
   const [movementSpotlightEnabled, setMovementSpotlightEnabled] = useState(true);
-  // Task #353 — Sling Failure Movement Visualizer: which sling+scenario
+  // Sling Failure Movement Visualizer: which sling+scenario
   // is currently being played (drives the SVG overlay over the 3D viewer).
   const [activeFailureSel, setActiveFailureSel] = useState<SlingFailureVisualizerSelection | null>(null);
   const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
@@ -10677,9 +10677,8 @@ ${ddxList}`;
                     onClose={() => setMovementSpotlightEnabled(false)}
                   />
                 )}
-                {/* Task #353 — Sling Failure Movement Visualizer SVG overlay
-                    rendered over the 3D viewer. Anchored to live bone screen
-                    positions; draws the continuous tube + tension pulse +
+                {/* Sling failure visualizer SVG overlay anchored to live
+                    bone screen positions: continuous tube + tension pulse +
                     failure-frame badge + reroute arrow for the active scenario. */}
                 {skeletonMode === 'movement' && activeFailureSel && (
                   <SlingFailureVisualizerOverlay

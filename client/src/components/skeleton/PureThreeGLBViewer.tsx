@@ -6716,6 +6716,22 @@ export default function PureThreeGLBViewer({
       drag.lastValue = newValue;
       if (exceededActiveLimit) drag.attemptedExceeded = true;
       if (inPainfulArc) drag.lastPainfulArc = true;
+      // Patch the live config ref in-place so the bone-application
+      // path and the throttled muscle overlay both read the current
+      // drag value instead of the parent's last-flushed pose. The
+      // parent's React state still gets a fresh object on the next
+      // throttled flush; mutating in place between flushes keeps
+      // the bone glued to the cursor at full frame rate.
+      {
+        const cfg = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined> | undefined;
+        const [j2, m2] = drag.configKey.split('.');
+        if (cfg && j2 && m2) {
+          const grp = cfg[j2];
+          if (grp && typeof grp === 'object') {
+            grp[m2] = newValue;
+          }
+        }
+      }
       if (skeletonModeRef.current === 'movement' && row) {
         const now = performance.now();
         // Two-tier overlay cadence: the cheap activation chip runs at

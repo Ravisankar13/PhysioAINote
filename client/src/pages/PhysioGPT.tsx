@@ -13509,6 +13509,7 @@ ${ddxList}`;
                   {painMarkerMode ? 'Marking...' : 'Mark Pain'}
                 </Button>
               </div>
+              {skeletonMode !== 'movement' && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -13531,6 +13532,7 @@ ${ddxList}`;
                 <Ruler className="h-3 w-3 mr-1" />
                 {romMode ? 'Measuring...' : 'Measure ROM'}
               </Button>
+              )}
               {skeletonMode === 'movement' ? (
                 <>
                   <div
@@ -13555,6 +13557,40 @@ ${ddxList}`;
                     <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${movementSpotlightEnabled ? 'bg-amber-300 animate-pulse' : 'bg-slate-500'}`} />
                     Sling spotlight: {movementSpotlightEnabled ? 'ON' : 'OFF'}
                   </button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
+                    onClick={() => {
+                      setRightPanelTab('slings');
+                      setChatPanelOpen(true);
+                    }}
+                    data-testid="movement-toolbar-open-slings"
+                    title="Open the slings analysis panel."
+                  >
+                    <GitBranch className="h-3 w-3 mr-1" />
+                    Slings
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
+                    onClick={() => {
+                      const rail = document.querySelector('[data-testid="movement-findings-rail"]');
+                      if (rail) {
+                        rail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        const toggle = rail.querySelector<HTMLElement>('[data-testid="movement-sim-toggle"]');
+                        if (toggle && toggle.getAttribute('aria-expanded') === 'false') {
+                          toggle.click();
+                        }
+                      }
+                    }}
+                    data-testid="movement-toolbar-open-ai-sim"
+                    title="Open the Movement AI Simulator panel."
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Simulator
+                  </Button>
                 </>
               ) : (
                 <Button
@@ -13578,6 +13614,8 @@ ${ddxList}`;
                   {poseMode ? 'Posing...' : 'Pose'}
                 </Button>
               )}
+              {skeletonMode !== 'movement' && (
+              <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -13756,6 +13794,8 @@ ${ddxList}`;
                 <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
                 Mechanics Analyser
               </Button>
+              </>
+              )}
               <Button
                 variant="secondary"
                 size="sm"

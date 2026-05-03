@@ -12,6 +12,8 @@ interface Props {
   boneScreenPositionsRef: React.MutableRefObject<BoneScreenPosition[]>;
   /** Cycle frequency hint — pulses re-trigger each cycle. */
   isPlaying: boolean;
+  /** Which ghost layer the panel is currently driving on the live skeleton. */
+  ghostMode?: 'actual' | 'intended' | 'compare';
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  *  - A failure-frame badge with the weak muscle label
  */
 export default function SlingFailureVisualizerOverlay(props: Props) {
-  const { scenario, bonePathway, slingColor, progress, boneScreenPositionsRef, isPlaying } = props;
+  const { scenario, bonePathway, slingColor, progress, boneScreenPositionsRef, isPlaying, ghostMode = 'actual' } = props;
 
   const [, force] = useState(0);
   const rafRef = useRef<number | null>(null);
@@ -84,6 +86,41 @@ export default function SlingFailureVisualizerOverlay(props: Props) {
   const gradId = `sfv-grad-${scenario.slingId}`;
   const arrowId = `sfv-arrow-${scenario.slingId}`;
 
+  // Intended-ghost path: same polyline but offset perpendicular to the
+  // failure-region tangent by ~22 px in the opposite direction of the
+  // mean joint delta. Acts as a translucent "what mechanics SHOULD look
+  // like" layer next to the actual skeleton, satisfying the dual-ghost
+  // visual without a second 3D skinned mesh.
+  const showIntendedGhost = ghostMode !== 'actual';
+  const showActualLayer = ghostMode !== 'intended';
+  const ghostOffset = (() => {
+    if (!failureXY || points.length < 2) return null;
+    // Perpendicular to the local tangent at the failure XY.
+    const i = Math.max(1, Math.min(points.length - 1, Math.floor(failureT * (points.length - 1))));
+    const a = points[i - 1], b = points[i];
+    const dx = b.screenX - a.screenX, dy = b.screenY - a.screenY;
+    const len = Math.hypot(dx, dy) || 1;
+    // Perp vector (left side of tangent), magnitude scaled to ~22 px
+    return { ox: (-dy / len) * 22, oy: (dx / len) * 22 };
+  })();
+  const ghostPathD = ghostOffset
+    ? points.map((p, i) => {
+        // Blend: full offset around the failure region, fading to 0 at the ends.
+        const t = points.length === 1 ? 0 : i / (points.length - 1);
+        const w = Math.max(0, 1 - Math.abs(t - failureT) * 2.4);
+        const ox = ghostOffset.ox * w, oy = ghostOffset.oy * w;
+        return `${i === 0 ? 'M' : 'L'} ${(p.screenX + ox).toFixed(1)} ${(p.screenY + oy).toFixed(1)}`;
+      }).join(' ')
+    : null;
+
+  const modeBadge = ghostMode === 'intended'
+    ? { label: 'INTENDED', color: '#34d399', bg: 'rgba(16,185,129,0.18)' }
+    : ghostMode === 'actual'
+      ? { label: 'ACTUAL', color: '#fb7185', bg: 'rgba(244,63,94,0.18)' }
+      : { label: 'COMPARE', color: '#fbbf24', bg: 'rgba(251,191,36,0.18)' };
+
+  const firstPt = points[0];
+
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"
@@ -101,25 +138,77 @@ export default function SlingFailureVisualizerOverlay(props: Props) {
         </marker>
       </defs>
 
-      {/* Halo / outer glow */}
-      <path
-        d={pathD}
-        stroke={slingColor}
-        strokeOpacity={0.18}
-        strokeWidth={14}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Continuous tube */}
-      <path
-        d={pathD}
-        stroke={`url(#${gradId})`}
-        strokeWidth={6}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {/* Intended-ghost layer — translucent emerald path showing where the
+          sling SHOULD route if no compensation occurred. Only visible in
+          'intended' or 'compare' modes. */}
+      {showIntendedGhost && ghostPathD && (
+        <g>
+          <path
+            d={ghostPathD}
+            stroke="#34d399"
+            strokeOpacity={0.32}
+            strokeWidth={10}
+            strokeDasharray="3 4"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d={ghostPathD}
+            stroke="#34d399"
+            strokeOpacity={0.85}
+            strokeWidth={3}
+            strokeDasharray="3 4"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </g>
+      )}
+
+      {showActualLayer && (
+        <>
+          {/* Halo / outer glow */}
+          <path
+            d={pathD}
+            stroke={slingColor}
+            strokeOpacity={0.18}
+            strokeWidth={14}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {/* Continuous tube */}
+          <path
+            d={pathD}
+            stroke={`url(#${gradId})`}
+            strokeWidth={6}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
+
+      {/* Mode badge — shows which ghost layer the live skeleton is currently
+          rendering. Helps the clinician interpret the dual-ghost comparison. */}
+      {firstPt && (
+        <g>
+          <rect
+            x={firstPt.screenX - 6} y={firstPt.screenY - 30}
+            width={86} height={20} rx={4}
+            fill={modeBadge.bg} stroke={modeBadge.color} strokeWidth={1}
+          />
+          <text
+            x={firstPt.screenX + 37} y={firstPt.screenY - 16}
+            textAnchor="middle" fontSize={10} fontWeight={700}
+            fill={modeBadge.color}
+            style={{ letterSpacing: '0.08em' }}
+          >
+            {modeBadge.label}
+          </text>
+        </g>
+      )}
 
       {/* Tension pulse — bright dot traveling along the polyline */}
       {isPlaying && pulseXY && (

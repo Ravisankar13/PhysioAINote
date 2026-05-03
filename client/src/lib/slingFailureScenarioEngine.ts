@@ -1,6 +1,7 @@
-import type { MovementSequence } from './movementSequences';
+import type { MovementSequence, JointTimeline, JointKeyframe } from './movementSequences';
 import type { SlingResult, SlingId, SlingAnalysisResult } from './slingEngine';
 import type { SlingFailureScenario } from '@shared/schema';
+import type { PathologyCompensationResult, PosturalDeviation } from './pathologyCompensationEngine';
 
 export type { SlingFailureScenario } from '@shared/schema';
 
@@ -270,6 +271,143 @@ function describeDeltas(deltas: Array<{ joint: string; axis: string; actualDeg: 
 
 function prettifyJoint(j: string): string {
   return j.replace(/([A-Z])/g, ' $1').replace(/^\s/, '').toLowerCase();
+}
+
+/* ----------------------------------------------------------------------
+ * composeActualSequence — bakes a scenario's joint deltas into a clone
+ * of the trigger sequence so the live skeleton actually performs the
+ * compensated movement (the delta ramps in to its full value at the
+ * failure frame, then holds). The intended sequence is unchanged so a
+ * separate "intended" playback can be compared against this one.
+ * -------------------------------------------------------------------- */
+export function composeActualSequence(
+  trigger: TriggerMovementSpec,
+  scenario: SlingFailureScenario,
+): MovementSequence {
+  const base = trigger.sequence;
+  const failureT = Math.max(0.05, Math.min(0.95, scenario.failureFrame));
+  const onsetT = Math.max(0.0, failureT - 0.18); // start drifting before failure
+
+  // Index existing joint timelines by joint+property so we can additively
+  // overlay deltas onto matching tracks (or create new ones for novel joints).
+  const trackKey = (j: string, p: string) => `${j}::${p}`;
+  const trackMap = new Map<string, JointTimeline>();
+  base.joints.forEach(t => trackMap.set(trackKey(t.joint, t.property), {
+    ...t,
+    keyframes: t.keyframes.map(k => ({ ...k })),
+  }));
+
+  for (const d of scenario.jointDeltas) {
+    const delta = d.actualDeg - d.intendedDeg;
+    if (Math.abs(delta) < 0.5) continue;
+    const key = trackKey(d.joint, d.axis);
+    let track = trackMap.get(key);
+    if (!track) {
+      // Novel track: synthesize a flat 0° baseline and ramp the delta in.
+      track = { joint: d.joint, property: d.axis, keyframes: [
+        { time: 0, value: 0 },
+        { time: onsetT, value: 0 },
+        { time: failureT, value: delta },
+        { time: 1, value: delta * 0.7 },
+      ]};
+      trackMap.set(key, track);
+      continue;
+    }
+    // Existing track: additively shift values from onsetT onwards.
+    const existingAtFailure = sampleKeyframes(track.keyframes, failureT);
+    const existingAtOnset = sampleKeyframes(track.keyframes, onsetT);
+    const existingAtEnd = sampleKeyframes(track.keyframes, 1);
+
+    // Filter out keyframes inside the deviation window so we can rebuild it.
+    const before = track.keyframes.filter(k => k.time < onsetT);
+    const after = track.keyframes.filter(k => k.time > 1.01); // none in normal seqs
+
+    track.keyframes = [
+      ...before,
+      { time: onsetT, value: existingAtOnset },
+      { time: failureT, value: existingAtFailure + delta },
+      { time: 1, value: existingAtEnd + delta * 0.4 },
+      ...after,
+    ].sort((a, b) => a.time - b.time);
+  }
+
+  return {
+    id: `${base.id}__actual_${scenario.slingId}`,
+    name: `${base.name} (compensated)`,
+    description: `${base.description} — with ${scenario.slingLabel} failure compensations applied.`,
+    duration: base.duration,
+    loop: base.loop,
+    joints: Array.from(trackMap.values()),
+    useIK: base.useIK,
+  };
+}
+
+function sampleKeyframes(keyframes: JointKeyframe[], t: number): number {
+  if (keyframes.length === 0) return 0;
+  if (keyframes.length === 1) return keyframes[0].value;
+  if (t <= keyframes[0].time) return keyframes[0].value;
+  if (t >= keyframes[keyframes.length - 1].time) return keyframes[keyframes.length - 1].value;
+  for (let i = 1; i < keyframes.length; i++) {
+    if (t <= keyframes[i].time) {
+      const a = keyframes[i - 1], b = keyframes[i];
+      const span = b.time - a.time;
+      const f = span === 0 ? 0 : (t - a.time) / span;
+      return a.value + (b.value - a.value) * f;
+    }
+  }
+  return keyframes[keyframes.length - 1].value;
+}
+
+/* ----------------------------------------------------------------------
+ * mergeWithPathologyCompensation — augments a scenario's joint deltas
+ * with posturalDeviations from the pathology compensation engine. Each
+ * deviation that targets a joint we don't already have a delta for is
+ * added as an "actual" deviation; matching ones are blended (averaged)
+ * so the skeleton respects pathology priors as well as sling priors.
+ * -------------------------------------------------------------------- */
+export function mergeWithPathologyCompensation(
+  scenario: SlingFailureScenario,
+  comp: PathologyCompensationResult | null | undefined,
+): SlingFailureScenario {
+  if (!comp || !Array.isArray(comp.posturalDeviations) || comp.posturalDeviations.length === 0) {
+    return scenario;
+  }
+  const have = new Map(scenario.jointDeltas.map(d => [`${d.joint}::${d.axis}`, d]));
+  const merged = [...scenario.jointDeltas];
+  for (const dev of comp.posturalDeviations) {
+    const key = `${dev.joint}::${dev.parameter}`;
+    const existing = have.get(key);
+    if (existing) {
+      const blended = (existing.actualDeg + dev.deviationDegrees) / 2;
+      const idx = merged.findIndex(d => d === existing);
+      merged[idx] = { ...existing, actualDeg: blended, description: existing.description ?? dev.reason };
+    } else {
+      merged.push({
+        joint: dev.joint,
+        axis: dev.parameter,
+        intendedDeg: 0,
+        actualDeg: dev.deviationDegrees,
+        description: `Pathology compensation: ${dev.reason}`,
+      });
+    }
+  }
+  return { ...scenario, jointDeltas: merged.slice(0, 12) };
+}
+
+/* ----------------------------------------------------------------------
+ * mergeAiAndLocalScenarios — guarantees one scenario per compromised
+ * sling. AI-validated scenarios win when present; missing ones are
+ * filled from the local generator so the visualiser is always total.
+ * -------------------------------------------------------------------- */
+export function mergeAiAndLocalScenarios(
+  ai: SlingFailureScenario[],
+  local: SlingFailureScenario[],
+): SlingFailureScenario[] {
+  const byId = new Map<SlingId, SlingFailureScenario>();
+  for (const s of local) byId.set(s.slingId, s);
+  for (const s of ai) byId.set(s.slingId, s);
+  // Preserve local order (= compromised-sling order from analysis)
+  return local.map(l => byId.get(l.slingId)!).filter(Boolean);
 }
 
 /* Cache key helper — case + marker fingerprint + sling status fingerprint.

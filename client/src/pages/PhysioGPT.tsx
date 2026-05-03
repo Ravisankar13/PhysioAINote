@@ -10689,7 +10689,24 @@ ${ddxList}`;
                     progress={animationState.progress}
                     boneScreenPositionsRef={boneScreenPositionsRef}
                     isPlaying={!!animationState.isPlaying}
+                    ghostMode={activeFailureSel.ghostMode}
                   />
+                )}
+                {/* Reopen pill — visible only in Movement Mode when the
+                    panel has been closed and there is sling analysis to
+                    show. Brings the visualizer back without forcing the
+                    user to re-run analysis. */}
+                {skeletonMode === 'movement' && slingAnalysis && !slingFailureVisualizerOpen && (
+                  <button
+                    onClick={() => setSlingFailureVisualizerOpen(true)}
+                    className="absolute z-30 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-[10.5px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition-colors"
+                    style={{ top: 'calc(3.5rem + 350px)' }}
+                    data-testid="sfv-reopen-pill"
+                    title="Show Sling Failure Visualizer"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                    Sling Failure Visualizer
+                  </button>
                 )}
                 {/* Floating panel — lists compromised slings, plays the
                     trigger movement, scrubs the timeline, shows joint
@@ -10708,6 +10725,7 @@ ${ddxList}`;
                     onAnimationStateChange={setAnimationState}
                     onActiveScenarioChange={setActiveFailureSel}
                     onClose={() => setSlingFailureVisualizerOpen(false)}
+                    pathologyCompensation={pathologyCompensation}
                   />
                 )}
               </div>

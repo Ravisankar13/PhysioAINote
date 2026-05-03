@@ -1,14 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Play, Pause, RefreshCw, AlertTriangle, Activity, ChevronDown, ChevronUp, Sparkles, X, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Play, Pause, RefreshCw, AlertTriangle, Activity, ChevronDown, ChevronUp, Sparkles, X, Loader2, GitCompare } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type { SlingAnalysisResult, SlingId, SlingResult } from '@/lib/slingEngine';
 import type { SlingFailureScenario } from '@shared/schema';
+import type { PathologyCompensationResult } from '@/lib/pathologyCompensationEngine';
 import {
   generateSlingFailureScenarioLocal,
   buildScenarioFingerprint,
   getTriggerMovementById,
   TRIGGER_MOVEMENT_LIBRARY,
+  composeActualSequence,
+  mergeWithPathologyCompensation,
+  mergeAiAndLocalScenarios,
 } from '@/lib/slingFailureScenarioEngine';
 import { registerDynamicMovement, unregisterDynamicMovement } from '@/lib/movementSequences';
 import type { AnimationState } from './PureThreeGLBViewer';
@@ -16,7 +20,10 @@ import type { AnimationState } from './PureThreeGLBViewer';
 export interface SlingFailureVisualizerSelection {
   scenario: SlingFailureScenario;
   sling: SlingResult;
+  ghostMode: GhostMode;
 }
+
+export type GhostMode = 'actual' | 'intended' | 'compare';
 
 interface Props {
   caseId: string;
@@ -30,6 +37,9 @@ interface Props {
    *  drive the SVG overlay over the 3D viewer. Pass `null` to hide. */
   onActiveScenarioChange: (sel: SlingFailureVisualizerSelection | null) => void;
   onClose?: () => void;
+  /** Optional — pathology engine output is folded into each scenario's
+   *  joint deltas so the live "actual" playback respects pathology priors. */
+  pathologyCompensation?: PathologyCompensationResult | null;
 }
 
 const STATUS_COLOR: Record<SlingResult['status'], string> = {
@@ -43,13 +53,17 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   const {
     caseId, condition, patientFactors, analysis, markers,
     animationState, onAnimationStateChange, onActiveScenarioChange, onClose,
+    pathologyCompensation,
   } = props;
 
   const [collapsed, setCollapsed] = useState(false);
   const [scenarios, setScenarios] = useState<SlingFailureScenario[]>([]);
   const [activeSlingId, setActiveSlingId] = useState<SlingId | null>(null);
+  const [ghostMode, setGhostMode] = useState<GhostMode>('compare');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aiAttempted, setAiAttempted] = useState(false);
+  const compareTickRef = useRef<number>(0);
+  const [, forceTick] = useState(0);
 
   const compromised = useMemo(
     () => (analysis?.slings ?? []).filter(s => s.status !== 'normal'),
@@ -62,9 +76,13 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   );
 
   // Always have local scenarios available so panel works offline.
+  // Local templates are merged with pathologyCompensation posturalDeviations
+  // so the joint deltas reflect pathology priors as well as sling priors.
   const localScenarios = useMemo(() => {
-    return compromised.map(s => generateSlingFailureScenarioLocal(s, { condition }));
-  }, [compromised, condition]);
+    return compromised
+      .map(s => generateSlingFailureScenarioLocal(s, { condition }))
+      .map(sc => mergeWithPathologyCompensation(sc, pathologyCompensation));
+  }, [compromised, condition, pathologyCompensation]);
 
   const fetchMutation = useMutation({
     mutationFn: async (refresh: boolean) => {
@@ -93,13 +111,16 @@ export default function SlingFailureVisualizerPanel(props: Props) {
       return data;
     },
     onSuccess: (data: { scenarios: SlingFailureScenario[] }) => {
-      if (Array.isArray(data?.scenarios) && data.scenarios.length > 0) {
-        setScenarios(data.scenarios);
-        setErrorMsg(null);
-      } else {
-        // Empty AI result — fall back to local
-        setScenarios(localScenarios);
-      }
+      const ai = Array.isArray(data?.scenarios) ? data.scenarios : [];
+      // Always guarantee one scenario per compromised sling — merge AI
+      // results over local fallbacks so partial AI responses don't drop
+      // any sling. Then fold in pathology compensation deviations.
+      const merged = mergeAiAndLocalScenarios(ai, localScenarios)
+        .map(sc => mergeWithPathologyCompensation(sc, pathologyCompensation));
+      setScenarios(merged);
+      setErrorMsg(ai.length > 0 && ai.length < localScenarios.length
+        ? 'AI returned a partial set — missing slings filled from local engine.'
+        : null);
     },
     onError: (err: any) => {
       setScenarios(localScenarios);
@@ -141,11 +162,13 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     }
     const sling = analysis?.slings.find(s => s.slingId === activeScenario.slingId);
     if (sling) {
-      onActiveScenarioChange({ scenario: activeScenario, sling });
+      onActiveScenarioChange({ scenario: activeScenario, sling, ghostMode });
     }
-  }, [activeScenario, analysis, onActiveScenarioChange]);
+  }, [activeScenario, analysis, ghostMode, onActiveScenarioChange]);
 
-  // Register all trigger movements once (so the player can find them).
+  // Register all trigger movements once (intended sequences) so the player
+  // can find them. Per-scenario "actual" sequences (with deltas baked in)
+  // are registered lazily when a scenario plays.
   useEffect(() => {
     TRIGGER_MOVEMENT_LIBRARY.forEach(t => registerDynamicMovement(t.sequence));
     return () => {
@@ -153,17 +176,69 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     };
   }, []);
 
+  // Track per-scenario registered "actual" sequence ids so we can clean up.
+  const registeredActualIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    return () => {
+      registeredActualIds.current.forEach(id => unregisterDynamicMovement(id));
+      registeredActualIds.current.clear();
+    };
+  }, []);
+
+  /** Returns the sequence id the player should run for a given scenario,
+   *  honouring the current ghostMode. In compare mode we alternate every
+   *  ~1.4s between intended and actual so the clinician sees the delta
+   *  as a frame-by-frame ghost flicker. */
+  const resolveSequenceId = useCallback((scenario: SlingFailureScenario, mode: GhostMode): string => {
+    const trigger = getTriggerMovementById(scenario.triggerMovementId);
+    if (!trigger) return '';
+    if (mode === 'intended') return trigger.sequence.id;
+    // Build & register the per-scenario "actual" sequence with deltas baked in.
+    const actual = composeActualSequence(trigger, scenario);
+    if (!registeredActualIds.current.has(actual.id)) {
+      registerDynamicMovement(actual);
+      registeredActualIds.current.add(actual.id);
+    }
+    if (mode === 'actual') return actual.id;
+    // compare → flip every 1.4s between intended/actual
+    const flipped = (compareTickRef.current % 2) === 1;
+    return flipped ? trigger.sequence.id : actual.id;
+  }, []);
+
+  // Keep latest animationState in a ref so the compare-mode interval
+  // doesn't tear down on every 60fps progress update.
+  const animationStateRef = useRef(animationState);
+  useEffect(() => { animationStateRef.current = animationState; }, [animationState]);
+
+  // Drive the compare-mode flicker — alternates currentMovement between
+  // intended and actual every ~1.4s so the clinician sees the deviation
+  // as a ghost-frame flicker on the live skeleton.
+  useEffect(() => {
+    if (ghostMode !== 'compare' || !animationState.isPlaying || !activeScenario) return;
+    const id = window.setInterval(() => {
+      compareTickRef.current = (compareTickRef.current + 1) % 1000;
+      const seqId = resolveSequenceId(activeScenario, 'compare');
+      onAnimationStateChange({
+        ...animationStateRef.current,
+        currentMovement: seqId,
+      });
+      forceTick(c => (c + 1) % 1000);
+    }, 1400);
+    return () => window.clearInterval(id);
+  }, [ghostMode, animationState.isPlaying, activeScenario, resolveSequenceId, onAnimationStateChange]);
+
   const handlePlay = useCallback((scenario: SlingFailureScenario) => {
     const trigger = getTriggerMovementById(scenario.triggerMovementId);
     if (!trigger) return;
     setActiveSlingId(scenario.slingId);
+    const seqId = resolveSequenceId(scenario, ghostMode);
     onAnimationStateChange({
       isPlaying: true,
-      currentMovement: trigger.sequence.id,
+      currentMovement: seqId,
       progress: 0,
       speed: animationState.speed || 1,
     });
-  }, [animationState.speed, onAnimationStateChange]);
+  }, [animationState.speed, ghostMode, resolveSequenceId, onAnimationStateChange]);
 
   const handlePause = useCallback(() => {
     onAnimationStateChange({ ...animationState, isPlaying: !animationState.isPlaying });
@@ -177,13 +252,16 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     const trigger = getTriggerMovementById(scenario.triggerMovementId);
     if (!trigger) return;
     setActiveSlingId(scenario.slingId);
+    // Jumping to failure should show the compensated pose, otherwise the
+    // user sees the unaffected intended pose and the failure looks invisible.
+    const seqId = resolveSequenceId(scenario, ghostMode === 'intended' ? 'actual' : ghostMode);
     onAnimationStateChange({
       isPlaying: false,
-      currentMovement: trigger.sequence.id,
+      currentMovement: seqId,
       progress: scenario.failureFrame,
       speed: animationState.speed || 1,
     });
-  }, [animationState.speed, onAnimationStateChange]);
+  }, [animationState.speed, ghostMode, resolveSequenceId, onAnimationStateChange]);
 
   if (compromised.length === 0) return null;
 
@@ -200,6 +278,34 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           <span className="text-[9px] text-rose-300/70 font-mono bg-rose-500/15 px-1.5 py-0.5 rounded">{compromised.length}</span>
         </div>
         <div className="flex items-center gap-1">
+          {/* Ghost-mode segmented control — drives whether the live skeleton
+              plays the intended trigger, the compensated (actual) sequence
+              with joint deltas baked in, or alternates between them as a
+              ghost-layer comparison. */}
+          <div className="flex items-center bg-gray-800/80 border border-gray-700/60 rounded overflow-hidden mr-1" title="Ghost mode">
+            {(['intended','actual','compare'] as GhostMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  setGhostMode(m);
+                  if (activeScenario) {
+                    const seqId = resolveSequenceId(activeScenario, m);
+                    onAnimationStateChange({ ...animationState, currentMovement: seqId });
+                  }
+                }}
+                className={`px-1.5 py-0.5 text-[8.5px] uppercase tracking-wider font-medium transition-colors ${
+                  ghostMode === m
+                    ? m === 'intended' ? 'bg-emerald-500/30 text-emerald-200'
+                    : m === 'actual'   ? 'bg-rose-500/30 text-rose-200'
+                                       : 'bg-amber-500/30 text-amber-200'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+                data-testid={`sfv-ghost-mode-${m}`}
+              >
+                {m === 'compare' ? <GitCompare className="w-2.5 h-2.5 inline" /> : m[0].toUpperCase()}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => fetchMutation.mutate(true)}
             disabled={fetchMutation.isPending}

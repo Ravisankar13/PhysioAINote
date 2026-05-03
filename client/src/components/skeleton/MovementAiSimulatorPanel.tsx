@@ -415,6 +415,8 @@ export default function MovementAiSimulatorPanel({ context, onResult, onReset, c
             <span
               className={`text-[9px] uppercase tracking-wider rounded border px-1.5 py-0.5 ${VERDICT_STYLES[result.netVerdict].bg} ${VERDICT_STYLES[result.netVerdict].border} ${VERDICT_STYLES[result.netVerdict].text}`}
               data-testid="verdict-pill"
+              data-no-drag="true"
+              onMouseDown={(e) => e.stopPropagation()}
             >
               {result.netVerdict}
             </span>

@@ -876,6 +876,24 @@ export default function PhysioGPT() {
   // findings the parse produced. Distinct from `clinicalTextAppliedRef`
   // which only tracks what was applied to the skeleton.
   const [lastClinicalParseResult, setLastClinicalParseResult] = useState<ClinicalParseResult | null>(null);
+  // Stable per-case ID from the same FNV hash used by the CaseResearchPanel
+  // below. Hoisted up here (before the SFV reset effect at ~L1144 that
+  // references it in its dep array) to avoid a TDZ ReferenceError on
+  // component render. Also used by the saved-hypotheses query and the
+  // active-capacities pipeline far below — both pick up the same memo.
+  const activeCaseId = useMemo(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    if (!desc) return null;
+    const fnv32 = (s: string) => {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16).padStart(8, '0');
+    };
+    return `case-${fnv32(desc)}`;
+  }, [lastClinicalParseResult]);
   // AI-driven Patient Context state — session-level only (intentionally
   // not persisted across reloads, per task spec).
   const [patientContextState, setPatientContextState] = useState<PatientContextState>(EMPTY_PATIENT_CONTEXT_STATE);
@@ -6586,22 +6604,8 @@ ${ddxList}`;
     setWhatIfFlareUpId(null);
   }, [whatIfFlareUpBaseline]);
 
-  // Stable per-case ID from the same FNV hash used by the CaseResearchPanel
-  // below, so the active-capacity profile and saved hypotheses live on the
-  // same case row. Declared here (before its first use) to avoid TDZ.
-  const activeCaseId = useMemo(() => {
-    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
-    if (!desc) return null;
-    const fnv32 = (s: string) => {
-      let h = 0x811c9dc5;
-      for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
-      }
-      return h.toString(16).padStart(8, '0');
-    };
-    return `case-${fnv32(desc)}`;
-  }, [lastClinicalParseResult]);
+  // `activeCaseId` is hoisted up near `lastClinicalParseResult` (~L879)
+  // so the SFV reset effect can reference it without TDZ.
 
   const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
     queryKey: [`/api/treatment-hypotheses/${activeCaseId}`],

@@ -474,8 +474,9 @@ export default function FocusedCameraCapture({
         y: (landmarks[11].y + landmarks[12].y) / 2,
         z: ((landmarks[11].z || 0) + (landmarks[12].z || 0)) / 2
       };
-      // Forward trunk lean: 0° at upright, ~30° when shoulders pitched 30° forward of hips.
-      angles['Trunk Inclination'] = Math.round(180 - angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }));
+      // Forward trunk lean: hip→shoulder vs hip→up. Both align at neutral (0°);
+      // pitching the shoulders forward 30° opens the angle to 30°.
+      angles['Trunk Inclination'] = Math.round(angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }));
     }
 
     return angles;

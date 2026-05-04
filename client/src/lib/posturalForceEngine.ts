@@ -353,7 +353,9 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   // stoop-vs-squat lift compression amplification (Marras 1995; NIOSH 1993;
   // Schultz & Andersson 1981). The erector spinae lever arm is ~5 cm vs a
   // potentially 50 cm load lever arm, hence the ~10× amplification.
-  const totalExternalKg = loadForSide(config, 'left') + loadForSide(config, 'right');
+  const lKg = loadForSide(config, 'left');
+  const rKg = loadForSide(config, 'right');
+  const totalExternalKg = lKg + rKg;
   const externalBwFrac = totalExternalKg / bodyWeightOf(config);
   let externalLumbarBoost = 0;
   if (externalBwFrac > 0) {
@@ -370,7 +372,15 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
     const rHandX = 0.215 * Math.abs(Math.sin(deg2rad(rShoulder)))
                  + 0.17  * Math.abs(Math.sin(deg2rad(rForearm)))
                  + 0.115 * Math.abs(Math.sin(deg2rad(rForearm)));
-    const handXFromSpine = trunkFwd + (lHandX + rHandX) * 0.5;
+    // Task #364 (review refinement): weight per-hand horizontal distance by
+    // that hand's actual carried mass so a unilateral 10 kg suitcase carry
+    // uses the loaded-side reach, not an unweighted left/right average that
+    // dilutes asymmetry. Falls back to 50/50 only if both kgs are 0 (which
+    // is impossible in this branch but kept for safety).
+    const handFwdLoadWeighted = totalExternalKg > 0
+      ? (lKg * lHandX + rKg * rHandX) / totalExternalKg
+      : (lHandX + rHandX) * 0.5;
+    const handXFromSpine = trunkFwd + handFwdLoadWeighted;
     externalLumbarBoost = externalBwFrac * Math.min(handXFromSpine, 1.2) * 8.0;
   }
 

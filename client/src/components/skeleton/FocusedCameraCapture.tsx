@@ -93,20 +93,10 @@ export default function FocusedCameraCapture({
   const [footLockEnabled, setFootLockEnabled] = useState(true);
   const footLockEnabledRef = useRef(true);
   const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
-  // feetVisible drives the foot-support badges so they only appear when the
-  // ANKLE itself is on-frame and visible — bodyVisibility.lowerBody can be
-  // true with hips+knees showing while the feet are still cut off the
-  // bottom of the frame, which would otherwise leave stale badges visible.
+  // Per-foot visibility (ankle on-frame + visible) drives the foot-support badges.
   const [feetVisible, setFeetVisible] = useState<FootVisibilityState | null>(null);
   const [bodyVisibility, setBodyVisibility] = useState<BodyVisibility | null>(null);
-  // `displayedFramingHint` is the *UI-only* version of bodyVisibility used to
-  // decide whether the amber "step back" banner is shown. The raw
-  // `bodyVisibility` state still drives per-joint write gating in
-  // PhysioGPT (which must stay immediate so we don't write garbage during
-  // the grace period), but the banner gets a 1s "hide" hysteresis: it
-  // shows the moment landmarks go off-frame, but only disappears after
-  // the body has stayed fully observed for ≥1s. Without the delay the
-  // banner flickers in and out on every borderline frame.
+  // UI-only banner state with 1s hide hysteresis to prevent flicker on borderline frames.
   const [displayedFramingHint, setDisplayedFramingHint] = useState<BodyVisibility | null>(null);
   const hintHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -531,19 +521,7 @@ export default function FocusedCameraCapture({
           }
 
           if (regionId === 'full_body') {
-            // No hard "all-or-nothing" frame gate here. The previous
-            // count-based ≥15-visible-landmarks gate let half-frame poses
-            // through (MediaPipe extrapolates off-frame landmarks with
-            // surprisingly high visibility), and replacing it with a
-            // strict upper+lower body requirement broke partial-frame
-            // tracking entirely (upper-body-only frames would silently
-            // drop). Instead we always emit pose updates and rely on
-            // PhysioGPT.handleCameraPoseUpdate to do per-joint /
-            // per-region write gating using the bodyVisibility +
-            // jointConfidence fields propagated below — that way an
-            // upper-body-only frame moves the avatar's arms while the
-            // legs hold their last good pose, and a full-body frame
-            // updates everything.
+            // Always emit; per-joint/region gating happens in handleCameraPoseUpdate.
             setPoseDetected(true);
             if (onPoseUpdate) {
               const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
@@ -568,11 +546,7 @@ export default function FocusedCameraCapture({
             }
           } else {
             const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
-            // Only count anatomical joint keys — convertPartialMediaPipeTo3D
-            // also attaches metadata fields (jointConfidence, bodyVisibility,
-            // etc.) for downstream gating, and a naïve Object.entries filter
-            // would treat those as "detected joints" and inflate the
-            // detected-joint chips / pose-detected gate.
+            // Filter to anatomical joint keys only — partial output also carries metadata.
             const PARTIAL_JOINT_KEYS = [
               'spine', 'neck', 'leftShoulder', 'rightShoulder',
               'leftElbow', 'rightElbow', 'leftHip', 'rightHip',

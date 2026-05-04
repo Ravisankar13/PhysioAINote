@@ -4584,10 +4584,7 @@ ${ddxList}`;
       setPoseTrackingQuality({ overall: avgConfidence, estimatedJoints: estimated as string[] });
     }
 
-    // Per-joint write gating: when MediaPipe can't really see a joint (low
-    // confidence) or the camera is missing whole halves of the body, hold
-    // the previous angle instead of writing the smoother's stale guess —
-    // otherwise the avatar contorts to chase noise from off-frame parts.
+    // Per-joint write gating: hold prior angle when joint confidence or region visibility is low.
     const conf = pose.jointConfidence;
     const JOINT_CONF_GATE = 0.45;
     const allow = (joint: keyof NonNullable<typeof conf>) =>
@@ -4613,25 +4610,13 @@ ${ddxList}`;
       rightWrist: allowUpperJoint('rightWrist') ? { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) } : prev.rightWrist,
       pelvis: {
         ...prev.pelvis,
-        // Pelvis tilt/obliquity/rotation depend on hip + shoulder
-        // landmarks — gate on lowerOK so a torso-only crop doesn't
-        // overwrite the pelvis with garbage estimates from
-        // extrapolated hips. Tilt also reads off the upper body so
-        // upperOK is required too.
         tilt: (upperOK && lowerOK) ? rad2deg(smoothed.pelvis.tilt) : (prev.pelvis?.tilt ?? 0),
         obliquity: lowerOK ? rad2deg(smoothed.pelvis.obliquity) : (prev.pelvis?.obliquity ?? 0),
         rotation: lowerOK ? rad2deg(smoothed.pelvis.rotation) : (prev.pelvis?.rotation ?? 0),
-        // Pelvis translation is only trustworthy when the lower body is
-        // actually being tracked — otherwise the foot lock is anchoring
-        // off extrapolated landmarks and the avatar hops every frame.
         zShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
         yShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
         xShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
       },
-      // Spine gating: requires the upper body to be tracked at all (and
-      // its own joint confidence). Holding the previous spine on a
-      // partial frame stops the avatar's torso from snapping when the
-      // shoulders briefly fall below the on-frame visibility gate.
       spine: allow('spine') && upperOK ? {
         ...prev.spine,
         flexion: rad2deg(smoothed.spine.flexion),
@@ -4648,9 +4633,6 @@ ${ddxList}`;
         thoracicScoliosis: rad2deg(smoothed.spine.thoracicLateralFlexion),
         cervicalScoliosis: rad2deg(smoothed.spine.cervicalLateralFlexion),
       } : prev.spine,
-      // Limb-scale ratios are anthropometric estimates that need both
-      // halves of the body in frame — otherwise MediaPipe's missing-
-      // landmark extrapolations skew the proportions wildly.
       limbScales: pose.bodyProportions && upperOK && lowerOK ? {
         upperArm: Math.round((pose.bodyProportions.upperArmRatio - 0.55) * 100),
         forearm: Math.round((pose.bodyProportions.forearmRatio - 0.45) * 100),
@@ -4658,12 +4640,9 @@ ${ddxList}`;
         shin: Math.round((pose.bodyProportions.shinRatio - 0.7) * 100),
         overall: prev.limbScales.overall,
       } : prev.limbScales,
-      // Neck gating: reads off head + shoulder landmarks (upper body).
       neck: allow('neck') && upperOK
         ? { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) }
         : prev.neck,
-      // Scapula estimates are derived from shoulder/ear landmarks; gate
-      // them on the matching shoulder joint confidence + upperOK.
       leftScapula: allowUpperJoint('leftShoulder')
         ? { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) }
         : prev.leftScapula,
@@ -4677,12 +4656,7 @@ ${ddxList}`;
     if (!cameraPoseActive) return;
     const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
 
-    // Mirror the per-joint write gating used by the full-body camera path
-    // (handleCameraPoseUpdate) so partial-region tracking gets the same
-    // protection from extrapolated / off-frame landmarks. Without it the
-    // partial path would happily overwrite the avatar with whatever low-
-    // confidence guess MediaPipe produced for joints the camera can't
-    // really see in the focused crop.
+    // Same per-joint write gating as the full-body path.
     const conf = partialPose.jointConfidence;
     const JOINT_CONF_GATE = 0.45;
     const allow = (joint: keyof NonNullable<typeof conf>) =>

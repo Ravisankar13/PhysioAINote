@@ -142,11 +142,7 @@ function normalizeVec(v: Vec3): Vec3 {
   return { x: v.x / m, y: v.y / m, z: v.z / m };
 }
 
-/**
- * Stand-alone torso-basis low-pass filter with degenerate-frame hold.
- * Used by FootLockTracker internally and as a module-level fallback so
- * torso stabilization runs even when the foot-lock layer is disabled.
- */
+/** Torso-basis low-pass filter with degenerate-frame hold. */
 export class TorsoBasisSmoother {
   private smoothedUp: Vec3 | null = null;
   private smoothedFwd: Vec3 | null = null;
@@ -193,12 +189,7 @@ export class TorsoBasisSmoother {
   }
 }
 
-/**
- * Module-level fallback torso basis smoother. Used by convertMediaPipeTo3D
- * when no FootLockTracker is provided so degenerate-frame hold still runs.
- * This is a single shared instance; in practice only one camera path drives
- * full-body conversion at a time.
- */
+/** Fallback shared smoother used when no FootLockTracker is provided. */
 export const defaultTorsoBasisSmoother = new TorsoBasisSmoother();
 const BASELINE_FLOOR_RISE = 0.05;            // baseline tracks slowly toward newly-observed lower foot
 const BASELINE_FLOOR_FALL = 0.0005;          // baseline drifts up extremely slowly, and ONLY while both feet
@@ -296,22 +287,10 @@ export class FootLockTracker {
     const lFoot = footCentroid(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rFoot = footCentroid(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
     // Blend visibility across the same three landmarks the centroid uses
-    // (ankle + heel + foot-index) instead of ankle-only, so the gate
-    // doesn't drop the foot to "low confidence" when the ankle is
-    // briefly occluded but the heel/forefoot remain clearly visible
-    // (e.g., long pants over the malleoli).
     const lVis = footVisibility(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rVis = footVisibility(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
 
-    // Strict per-foot gate: require ALL THREE foot landmarks (ankle,
-    // heel, foot-index) to be on-frame AND meaningfully visible before
-    // the tracker is allowed to capture an anchor or run IK against
-    // them. MediaPipe will happily extrapolate any single foot landmark
-    // past the image edges (often with surprisingly high visibility
-    // scores), so a centroid + ankle-only check could still let the
-    // tracker plant against a ghost position. Routing through the
-    // shared `footFullyVisible` helper keeps this consistent with the
-    // `footVisibility` Math.min change above.
+    // Strict gate before anchor capture / IK.
     const leftVisible = footFullyVisible(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rightVisible = footFullyVisible(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
 
@@ -470,24 +449,11 @@ function footVisibility(lms: NormalizedLandmark[], ai: number, hi: number, fi: n
   const av = lms[ai]?.visibility ?? 0;
   const hv = lms[hi]?.visibility ?? 0;
   const fv = lms[fi]?.visibility ?? 0;
-  // Use the MIN of the three: if any one of ankle/heel/foot-index is
-  // missing or invisible, the foot's reported position is unreliable
-  // (the centroid collapses toward the surviving landmarks). The previous
-  // Math.max masked dropouts — if MediaPipe extrapolated the ankle off
-  // the bottom of the frame with high visibility but lost the heel +
-  // foot-index, we'd still treat the foot as "fully visible" and capture
-  // an anchor against the ghost ankle position.
+  // Min of the three so a single missing landmark drops the foot's confidence.
   return Math.min(av, hv, fv);
 }
 
-/**
- * Strict per-foot on-frame + visibility gate. Requires ALL THREE foot
- * landmarks (ankle, heel, foot-index) to be both on the image AND
- * meaningfully visible. Used to short-circuit phase/IK updates so the
- * foot lock can't anchor against extrapolated landmarks. Defined as a
- * module-level helper so it stays in lockstep with footVisibility() —
- * if either gate softens, the other should too.
- */
+/** Strict gate: all three foot landmarks must be on-frame AND visibility ≥ VISIBILITY_MIN. */
 function footFullyVisible(
   lms: NormalizedLandmark[],
   ai: number,

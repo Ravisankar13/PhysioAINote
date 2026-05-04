@@ -293,9 +293,7 @@ function getLandmarkConfidence(landmarks: NormalizedLandmark[], indices: number[
     const lm = landmarks[i];
     if (lm) {
       let v = lm.visibility ?? 0.5;
-      // Heavily penalise off-frame extrapolations so the smoother's
-      // CONFIDENCE_GATE_THRESHOLD trips and holds the previous value
-      // instead of contorting the avatar onto MediaPipe's guess.
+      // Penalise off-frame extrapolations so the smoother's confidence gate trips.
       if (!isOnFrame(lm)) v = Math.min(v, 0.1);
       totalVis += v;
       count++;
@@ -555,15 +553,8 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     (rightHip.visibility ?? 1) >= 0.4 && isOnFrame(rightHip);
   const torsoBasisValid = torsoLandmarksOK && upMag > 0.05 && rightMag > 0.05 && fwdMag > 0.10;
 
-  // Always low-pass filter the torso basis (with degenerate-frame hold) so
-  // torso stabilization runs even when Foot Lock is disabled. When a
-  // FootLockTracker is provided, its built-in smoother is used so foot-lock
-  // and basis state stay in sync; otherwise we fall back to the module-level
-  // `defaultTorsoBasisSmoother`. This absorbs torso wobble that would
-  // otherwise corrupt hip/knee/shoulder dot-product calculations and holds
-  // the prior basis on degenerate frames (partial-frame torso, near-parallel
-  // up/right vectors, etc.) instead of letting a single bad frame flip
-  // every downstream angle.
+  // Low-pass filter torso basis with degenerate-frame hold (uses tracker's
+  // smoother when foot lock is on, module fallback otherwise).
   let footLockUpdate: ReturnType<FootLockTracker['update']> | null = null;
   const torsoSmoothed = footLockTracker
     ? footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight, torsoBasisValid)
@@ -1734,13 +1725,7 @@ export function convertPartialMediaPipeTo3D(
     }
   }
 
-  // Populate jointConfidence + bodyVisibility on the partial output so
-  // the avatar driver in handlePartialPoseUpdate can run the same per-
-  // joint / per-region write gating as the full-body path. Without
-  // these, the gating in PhysioGPT short-circuits to permissive and
-  // the focused-region path can overwrite the avatar with low-
-  // confidence guesses for joints the camera can't really see in the
-  // crop.
+  // Populate metadata so handlePartialPoseUpdate can run the same per-joint/region gating.
   const jointConfidence = buildJointConfidence(landmarks);
   const bodyVisibility = computeBodyVisibility(landmarks);
   result.jointConfidence = jointConfidence;
@@ -1762,9 +1747,7 @@ export function convertPartialMediaPipeTo3D(
     swapped.rightAnkle = result.leftAnkle;
     if (swapped.spine) swapped.spine = { ...swapped.spine, z: -swapped.spine.z };
     if (swapped.neck) swapped.neck = { ...swapped.neck, y: -swapped.neck.y, z: -swapped.neck.z };
-    // Mirror jointConfidence so left/right gating still aligns with the
-    // mirrored joint values. bodyVisibility is symmetric so it passes
-    // through unchanged.
+    // Swap L/R confidence to align with mirrored joints; bodyVisibility is symmetric.
     swapped.jointConfidence = {
       ...jointConfidence,
       leftShoulder: jointConfidence.rightShoulder,

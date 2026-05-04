@@ -14,7 +14,7 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
-import { FootLockTracker, FootSupportState, FootVisibilityState, solveLegIK } from './footLock';
+import { FootLockTracker, FootSupportState, FootVisibilityState, solveLegIK, defaultTorsoBasisSmoother } from './footLock';
 
 export type { FootSupportPhase, FootSupportState, FootVisibilityState } from './footLock';
 export { FootLockTracker, solveLegIK } from './footLock';
@@ -555,14 +555,23 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     (rightHip.visibility ?? 1) >= 0.4 && isOnFrame(rightHip);
   const torsoBasisValid = torsoLandmarksOK && upMag > 0.05 && rightMag > 0.05 && fwdMag > 0.10;
 
-  // Foot lock: optionally low-pass filter the torso basis to absorb torso wobble
-  // before it propagates into hip/knee/shoulder dot-product calculations.
+  // Always low-pass filter the torso basis (with degenerate-frame hold) so
+  // torso stabilization runs even when Foot Lock is disabled. When a
+  // FootLockTracker is provided, its built-in smoother is used so foot-lock
+  // and basis state stay in sync; otherwise we fall back to the module-level
+  // `defaultTorsoBasisSmoother`. This absorbs torso wobble that would
+  // otherwise corrupt hip/knee/shoulder dot-product calculations and holds
+  // the prior basis on degenerate frames (partial-frame torso, near-parallel
+  // up/right vectors, etc.) instead of letting a single bad frame flip
+  // every downstream angle.
   let footLockUpdate: ReturnType<FootLockTracker['update']> | null = null;
+  const torsoSmoothed = footLockTracker
+    ? footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight, torsoBasisValid)
+    : defaultTorsoBasisSmoother.smooth(torsoUp, torsoForward, torsoRight, torsoBasisValid);
+  torsoUp = torsoSmoothed.up;
+  torsoForward = torsoSmoothed.forward;
+  torsoRight = torsoSmoothed.right;
   if (footLockTracker) {
-    const smoothed = footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight, torsoBasisValid);
-    torsoUp = smoothed.up;
-    torsoForward = smoothed.forward;
-    torsoRight = smoothed.right;
     footLockUpdate = footLockTracker.update(landmarks);
   }
 

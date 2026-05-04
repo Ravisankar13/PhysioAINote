@@ -135,6 +135,71 @@ const Y_PLANTED_TOLERANCE = 0.07;            // foot must be within ~7% y of low
 const FRAMES_TO_PLANT = 3;
 const FRAMES_TO_SWING = 2;
 const TORSO_BASIS_ALPHA = 0.18;              // heavier low-pass on torso frame
+
+function normalizeVec(v: Vec3): Vec3 {
+  const m = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+  if (m < 1e-9) return { x: 0, y: 0, z: 0 };
+  return { x: v.x / m, y: v.y / m, z: v.z / m };
+}
+
+/**
+ * Stand-alone torso-basis low-pass filter with degenerate-frame hold.
+ * Used by FootLockTracker internally and as a module-level fallback so
+ * torso stabilization runs even when the foot-lock layer is disabled.
+ */
+export class TorsoBasisSmoother {
+  private smoothedUp: Vec3 | null = null;
+  private smoothedFwd: Vec3 | null = null;
+  private smoothedRight: Vec3 | null = null;
+
+  reset(): void {
+    this.smoothedUp = null;
+    this.smoothedFwd = null;
+    this.smoothedRight = null;
+  }
+
+  smooth(up: Vec3, forward: Vec3, right: Vec3, valid: boolean = true): { up: Vec3; forward: Vec3; right: Vec3 } {
+    if (!valid && this.smoothedUp && this.smoothedFwd && this.smoothedRight) {
+      return {
+        up: normalizeVec(this.smoothedUp),
+        forward: normalizeVec(this.smoothedFwd),
+        right: normalizeVec(this.smoothedRight),
+      };
+    }
+    const a = TORSO_BASIS_ALPHA;
+    if (!this.smoothedUp) this.smoothedUp = { ...up };
+    else {
+      this.smoothedUp.x += (up.x - this.smoothedUp.x) * a;
+      this.smoothedUp.y += (up.y - this.smoothedUp.y) * a;
+      this.smoothedUp.z += (up.z - this.smoothedUp.z) * a;
+    }
+    if (!this.smoothedFwd) this.smoothedFwd = { ...forward };
+    else {
+      this.smoothedFwd.x += (forward.x - this.smoothedFwd.x) * a;
+      this.smoothedFwd.y += (forward.y - this.smoothedFwd.y) * a;
+      this.smoothedFwd.z += (forward.z - this.smoothedFwd.z) * a;
+    }
+    if (!this.smoothedRight) this.smoothedRight = { ...right };
+    else {
+      this.smoothedRight.x += (right.x - this.smoothedRight.x) * a;
+      this.smoothedRight.y += (right.y - this.smoothedRight.y) * a;
+      this.smoothedRight.z += (right.z - this.smoothedRight.z) * a;
+    }
+    return {
+      up: normalizeVec(this.smoothedUp),
+      forward: normalizeVec(this.smoothedFwd),
+      right: normalizeVec(this.smoothedRight),
+    };
+  }
+}
+
+/**
+ * Module-level fallback torso basis smoother. Used by convertMediaPipeTo3D
+ * when no FootLockTracker is provided so degenerate-frame hold still runs.
+ * This is a single shared instance; in practice only one camera path drives
+ * full-body conversion at a time.
+ */
+export const defaultTorsoBasisSmoother = new TorsoBasisSmoother();
 const BASELINE_FLOOR_RISE = 0.05;            // baseline tracks slowly toward newly-observed lower foot
 const BASELINE_FLOOR_FALL = 0.0005;          // baseline drifts up extremely slowly, and ONLY while both feet
                                               //   are clearly above it — prevents long-run decay from eroding

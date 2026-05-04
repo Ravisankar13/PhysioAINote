@@ -129,6 +129,9 @@ const Y_PLANTED_TOLERANCE = 0.07;            // foot must be within ~7% y of low
 const FRAMES_TO_PLANT = 3;
 const FRAMES_TO_SWING = 2;
 const TORSO_BASIS_ALPHA = 0.18;              // heavier low-pass on torso frame
+const BASELINE_FLOOR_RISE = 0.05;            // baseline tracks slowly toward newly-observed lower foot
+const BASELINE_FLOOR_FALL = 0.002;           // baseline drifts up (decays) very slowly when feet leave the ground
+const AIRBORNE_GAP = 0.10;                   // both feet >10% above baseline floor → airborne, force swinging
 
 export class FootLockTracker {
   private left: FootState = makeFootState();
@@ -136,6 +139,12 @@ export class FootLockTracker {
   private smoothedUp: Vec3 | null = null;
   private smoothedFwd: Vec3 | null = null;
   private smoothedRight: Vec3 | null = null;
+  // Absolute floor baseline (in MediaPipe normalized y, where larger = lower
+  // on screen). Tracks the lowest stable foot position seen this session so
+  // we can detect true "both feet airborne" frames (e.g., during a jump or
+  // when the camera tilts sharply) and avoid mis-classifying them as
+  // planted just because the two feet happen to be at similar heights.
+  private baselineFloorY: number | null = null;
 
   reset(): void {
     this.left = makeFootState();
@@ -143,6 +152,7 @@ export class FootLockTracker {
     this.smoothedUp = null;
     this.smoothedFwd = null;
     this.smoothedRight = null;
+    this.baselineFloorY = null;
   }
 
   /**
@@ -199,8 +209,40 @@ export class FootLockTracker {
     const rVis = rAnkle.visibility ?? 1.0;
     const maxY = Math.max(lFoot.y, rFoot.y);
 
+    // Update absolute floor baseline: react quickly when a foot lands lower
+    // than the current baseline (rise toward maxY), drift slowly upward
+    // when both feet are above it (e.g., camera shifts or person leaves
+    // the floor). This gives us a reference frame for detecting true
+    // airborne states independent of the relative-only `nearFloor` rule.
+    if (this.baselineFloorY === null) {
+      this.baselineFloorY = maxY;
+    } else if (maxY > this.baselineFloorY) {
+      this.baselineFloorY += (maxY - this.baselineFloorY) * BASELINE_FLOOR_RISE;
+    } else {
+      this.baselineFloorY -= BASELINE_FLOOR_FALL;
+    }
+
     this.updateFoot(this.left, lFoot, lVis, maxY);
     this.updateFoot(this.right, rFoot, rVis, maxY);
+
+    // Airborne guard: if BOTH feet are clearly above the baseline floor,
+    // force both to 'swinging' so the avatar falls back to hip-driven
+    // translation instead of locking to stale anchors. Bypasses the
+    // FRAMES_TO_SWING hysteresis because airborne is unambiguous.
+    const airborneL = (this.baselineFloorY - lFoot.y) > AIRBORNE_GAP;
+    const airborneR = (this.baselineFloorY - rFoot.y) > AIRBORNE_GAP;
+    if (airborneL && airborneR) {
+      if (this.left.phase === 'planted') {
+        this.left.phase = 'swinging';
+        this.left.framesInPhase = 0;
+        this.left.anchor = null;
+      }
+      if (this.right.phase === 'planted') {
+        this.right.phase = 'swinging';
+        this.right.framesInPhase = 0;
+        this.right.anchor = null;
+      }
+    }
 
     let dxRaw = 0, dyRaw = 0, dzRaw = 0, count = 0;
     if (this.left.phase === 'planted' && this.left.anchor) {

@@ -120,11 +120,14 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           bonePathway: getSlingBonePathway(s.slingId),
           forceTransferQuality: s.forceTransferQuality,
         })),
-        markers: markers.map(m => ({
-          nearestBone: m.nearestBone,
-          anatomicalLabel: m.anatomicalLabel,
-          severity: m.severity,
-        })),
+        markers: [...markers]
+          .sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0))
+          .slice(0, 12)
+          .map(m => ({
+            nearestBone: m.nearestBone,
+            anatomicalLabel: m.anatomicalLabel,
+            severity: m.severity,
+          })),
       };
       const data = await apiRequest('/api/sling-failure-scenarios', 'POST', payload);
       return data as { scenarios: SlingFailureScenario[] };

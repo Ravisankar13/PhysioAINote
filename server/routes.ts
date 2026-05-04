@@ -12050,6 +12050,21 @@ Now produce the refined hypothesis JSON.`;
   app.post("/api/sling-failure-scenarios", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { slingFailureScenarioRequestSchema } = await import("@shared/schema");
+      // Defensive truncation: older clients (or future drift) may send more
+      // than 12 pain markers, which would otherwise fail strict validation.
+      // Keep the top-12 by severity so the AI call still proceeds.
+      const rawBody = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+      const rawMarkers = Array.isArray(rawBody.markers) ? rawBody.markers as Array<Record<string, unknown>> : null;
+      if (rawMarkers && rawMarkers.length > 12) {
+        const trimmed = [...rawMarkers]
+          .sort((a, b) => {
+            const sa = typeof a?.severity === 'number' ? a.severity : 0;
+            const sb = typeof b?.severity === 'number' ? b.severity : 0;
+            return sb - sa;
+          })
+          .slice(0, 12);
+        req.body = { ...rawBody, markers: trimmed };
+      }
       const parsed = slingFailureScenarioRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });

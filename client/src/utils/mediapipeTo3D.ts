@@ -1725,6 +1725,18 @@ export function convertPartialMediaPipeTo3D(
     }
   }
 
+  // Populate jointConfidence + bodyVisibility on the partial output so
+  // the avatar driver in handlePartialPoseUpdate can run the same per-
+  // joint / per-region write gating as the full-body path. Without
+  // these, the gating in PhysioGPT short-circuits to permissive and
+  // the focused-region path can overwrite the avatar with low-
+  // confidence guesses for joints the camera can't really see in the
+  // crop.
+  const jointConfidence = buildJointConfidence(landmarks);
+  const bodyVisibility = computeBodyVisibility(landmarks);
+  result.jointConfidence = jointConfidence;
+  result.bodyVisibility = bodyVisibility;
+
   if (mirrorMode) {
     const swapped: PartialSkeleton3DPose = { ...result };
     swapped.leftShoulder = result.rightShoulder;
@@ -1741,6 +1753,25 @@ export function convertPartialMediaPipeTo3D(
     swapped.rightAnkle = result.leftAnkle;
     if (swapped.spine) swapped.spine = { ...swapped.spine, z: -swapped.spine.z };
     if (swapped.neck) swapped.neck = { ...swapped.neck, y: -swapped.neck.y, z: -swapped.neck.z };
+    // Mirror jointConfidence so left/right gating still aligns with the
+    // mirrored joint values. bodyVisibility is symmetric so it passes
+    // through unchanged.
+    swapped.jointConfidence = {
+      ...jointConfidence,
+      leftShoulder: jointConfidence.rightShoulder,
+      rightShoulder: jointConfidence.leftShoulder,
+      leftElbow: jointConfidence.rightElbow,
+      rightElbow: jointConfidence.leftElbow,
+      leftHip: jointConfidence.rightHip,
+      rightHip: jointConfidence.leftHip,
+      leftKnee: jointConfidence.rightKnee,
+      rightKnee: jointConfidence.leftKnee,
+      leftWrist: jointConfidence.rightWrist,
+      rightWrist: jointConfidence.leftWrist,
+      leftAnkle: jointConfidence.rightAnkle,
+      rightAnkle: jointConfidence.leftAnkle,
+    };
+    swapped.bodyVisibility = bodyVisibility;
     return swapped;
   }
 
@@ -1789,7 +1820,13 @@ export class PartialPoseSmoother {
       return newPose;
     }
 
-    const smoothed: PartialSkeleton3DPose = {} as PartialSkeleton3DPose;
+    const smoothed: PartialSkeleton3DPose = {
+      // Carry through the gating metadata so handlePartialPoseUpdate
+      // sees real values (otherwise its `?? 0.7` fallback would always
+      // permit writes and the gate would be a no-op).
+      jointConfidence: newPose.jointConfidence,
+      bodyVisibility: newPose.bodyVisibility,
+    } as PartialSkeleton3DPose;
 
     for (const jointName of PartialPoseSmoother.ALL_JOINTS) {
       const newVal = newPose[jointName];

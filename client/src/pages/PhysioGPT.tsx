@@ -4613,9 +4613,14 @@ ${ddxList}`;
       rightWrist: allowUpperJoint('rightWrist') ? { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) } : prev.rightWrist,
       pelvis: {
         ...prev.pelvis,
-        tilt: rad2deg(smoothed.pelvis.tilt),
-        obliquity: rad2deg(smoothed.pelvis.obliquity),
-        rotation: rad2deg(smoothed.pelvis.rotation),
+        // Pelvis tilt/obliquity/rotation depend on hip + shoulder
+        // landmarks — gate on lowerOK so a torso-only crop doesn't
+        // overwrite the pelvis with garbage estimates from
+        // extrapolated hips. Tilt also reads off the upper body so
+        // upperOK is required too.
+        tilt: (upperOK && lowerOK) ? rad2deg(smoothed.pelvis.tilt) : (prev.pelvis?.tilt ?? 0),
+        obliquity: lowerOK ? rad2deg(smoothed.pelvis.obliquity) : (prev.pelvis?.obliquity ?? 0),
+        rotation: lowerOK ? rad2deg(smoothed.pelvis.rotation) : (prev.pelvis?.rotation ?? 0),
         // Pelvis translation is only trustworthy when the lower body is
         // actually being tracked — otherwise the foot lock is anchoring
         // off extrapolated landmarks and the avatar hops every frame.
@@ -4623,7 +4628,11 @@ ${ddxList}`;
         yShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
         xShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
       },
-      spine: {
+      // Spine gating: requires the upper body to be tracked at all (and
+      // its own joint confidence). Holding the previous spine on a
+      // partial frame stops the avatar's torso from snapping when the
+      // shoulders briefly fall below the on-frame visibility gate.
+      spine: allow('spine') && upperOK ? {
         ...prev.spine,
         flexion: rad2deg(smoothed.spine.flexion),
         lateralFlexion: rad2deg(smoothed.spine.lateralFlexion),
@@ -4638,17 +4647,29 @@ ${ddxList}`;
         lumbarScoliosis: rad2deg(smoothed.spine.lumbarLateralFlexion),
         thoracicScoliosis: rad2deg(smoothed.spine.thoracicLateralFlexion),
         cervicalScoliosis: rad2deg(smoothed.spine.cervicalLateralFlexion),
-      },
-      limbScales: pose.bodyProportions ? {
+      } : prev.spine,
+      // Limb-scale ratios are anthropometric estimates that need both
+      // halves of the body in frame — otherwise MediaPipe's missing-
+      // landmark extrapolations skew the proportions wildly.
+      limbScales: pose.bodyProportions && upperOK && lowerOK ? {
         upperArm: Math.round((pose.bodyProportions.upperArmRatio - 0.55) * 100),
         forearm: Math.round((pose.bodyProportions.forearmRatio - 0.45) * 100),
         thigh: Math.round((pose.bodyProportions.thighRatio - 0.75) * 100),
         shin: Math.round((pose.bodyProportions.shinRatio - 0.7) * 100),
         overall: prev.limbScales.overall,
       } : prev.limbScales,
-      neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
-      leftScapula: { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) },
-      rightScapula: { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction), upwardRotation: rad2deg(smoothed.scapula.rightUpwardRotation) },
+      // Neck gating: reads off head + shoulder landmarks (upper body).
+      neck: allow('neck') && upperOK
+        ? { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) }
+        : prev.neck,
+      // Scapula estimates are derived from shoulder/ear landmarks; gate
+      // them on the matching shoulder joint confidence + upperOK.
+      leftScapula: allowUpperJoint('leftShoulder')
+        ? { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) }
+        : prev.leftScapula,
+      rightScapula: allowUpperJoint('rightShoulder')
+        ? { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction), upwardRotation: rad2deg(smoothed.scapula.rightUpwardRotation) }
+        : prev.rightScapula,
     }));
   }, [cameraPoseActive]);
 

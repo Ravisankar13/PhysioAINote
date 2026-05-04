@@ -238,19 +238,17 @@ export class FootLockTracker {
     const lVis = footVisibility(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rVis = footVisibility(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
 
-    // Off-frame + ankle-visibility check FIRST so we can short-circuit
-    // phase updates and IK for feet the camera literally can't see.
-    // MediaPipe will happily extrapolate ankle landmarks past the image
-    // edges (often with surprisingly high visibility scores) and the
-    // tracker would otherwise capture a "planted" anchor against that
-    // ghost position, holding the avatar foot to a phantom point. Pre-
-    // condition for any planted state: feetVisible must be true.
-    const lOnFrame = lFoot.x >= -0.05 && lFoot.x <= 1.05 && lFoot.y >= -0.05 && lFoot.y <= 1.05;
-    const rOnFrame = rFoot.x >= -0.05 && rFoot.x <= 1.05 && rFoot.y >= -0.05 && rFoot.y <= 1.05;
-    const lAnkleVis = (landmarks[LEFT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
-    const rAnkleVis = (landmarks[RIGHT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
-    const leftVisible = lOnFrame && lAnkleVis;
-    const rightVisible = rOnFrame && rAnkleVis;
+    // Strict per-foot gate: require ALL THREE foot landmarks (ankle,
+    // heel, foot-index) to be on-frame AND meaningfully visible before
+    // the tracker is allowed to capture an anchor or run IK against
+    // them. MediaPipe will happily extrapolate any single foot landmark
+    // past the image edges (often with surprisingly high visibility
+    // scores), so a centroid + ankle-only check could still let the
+    // tracker plant against a ghost position. Routing through the
+    // shared `footFullyVisible` helper keeps this consistent with the
+    // `footVisibility` Math.min change above.
+    const leftVisible = footFullyVisible(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
+    const rightVisible = footFullyVisible(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
 
     const maxY = Math.max(lFoot.y, rFoot.y);
 
@@ -405,11 +403,42 @@ function makeFootState(): FootState {
 
 function footVisibility(lms: NormalizedLandmark[], ai: number, hi: number, fi: number): number {
   const av = lms[ai]?.visibility ?? 0;
-  const hv = lms[hi]?.visibility ?? av;
-  const fv = lms[fi]?.visibility ?? av;
-  // Use the max of the three so a single-landmark dropout doesn't
-  // immediately push the foot into the swinging gate.
-  return Math.max(av, hv, fv);
+  const hv = lms[hi]?.visibility ?? 0;
+  const fv = lms[fi]?.visibility ?? 0;
+  // Use the MIN of the three: if any one of ankle/heel/foot-index is
+  // missing or invisible, the foot's reported position is unreliable
+  // (the centroid collapses toward the surviving landmarks). The previous
+  // Math.max masked dropouts — if MediaPipe extrapolated the ankle off
+  // the bottom of the frame with high visibility but lost the heel +
+  // foot-index, we'd still treat the foot as "fully visible" and capture
+  // an anchor against the ghost ankle position.
+  return Math.min(av, hv, fv);
+}
+
+/**
+ * Strict per-foot on-frame + visibility gate. Requires ALL THREE foot
+ * landmarks (ankle, heel, foot-index) to be both on the image AND
+ * meaningfully visible. Used to short-circuit phase/IK updates so the
+ * foot lock can't anchor against extrapolated landmarks. Defined as a
+ * module-level helper so it stays in lockstep with footVisibility() —
+ * if either gate softens, the other should too.
+ */
+function footFullyVisible(
+  lms: NormalizedLandmark[],
+  ai: number,
+  hi: number,
+  fi: number,
+): boolean {
+  const onFrame = (i: number) => {
+    const lm = lms[i];
+    if (!lm) return false;
+    return lm.x >= -0.05 && lm.x <= 1.05 && lm.y >= -0.05 && lm.y <= 1.05;
+  };
+  const visOK = (i: number) => (lms[i]?.visibility ?? 0) >= VISIBILITY_MIN;
+  return (
+    onFrame(ai) && onFrame(hi) && onFrame(fi) &&
+    visOK(ai) && visOK(hi) && visOK(fi)
+  );
 }
 
 function footCentroid(lms: NormalizedLandmark[], ai: number, hi: number, fi: number): Vec3 {

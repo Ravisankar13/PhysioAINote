@@ -1114,6 +1114,7 @@ export default function PhysioGPT() {
     if (sfvStallTimerRef.current) clearTimeout(sfvStallTimerRef.current);
   }, []);
   const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
+  const [sfvPanelPosition, setSfvPanelPosition] = useState<{ left: number; top: number } | null>(null);
   // Last bone the clinician interacted with via Pose / Auto-pose. Drives
   // a "focus bonus" in the spotlight selector so dragging a bone that
   // belongs to a sling's pathway nudges the spotlight toward it.
@@ -10837,6 +10838,8 @@ ${ddxList}`;
                     onActiveScenarioChange={setActiveFailureSel}
                     onClose={() => setSlingFailureVisualizerOpen(false)}
                     pathologyCompensation={pathologyCompensation}
+                    position={sfvPanelPosition}
+                    onPositionChange={setSfvPanelPosition}
                   />
                 )}
               </div>

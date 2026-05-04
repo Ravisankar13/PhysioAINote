@@ -42,6 +42,10 @@ interface Props {
   /** Optional — pathology engine output is folded into each scenario's
    *  joint deltas so the live "actual" playback respects pathology priors. */
   pathologyCompensation?: PathologyCompensationResult | null;
+  /** Controlled drag position (viewer-relative px). Lifted to the parent
+   *  so the panel keeps its position across close/reopen within a session. */
+  position?: { left: number; top: number } | null;
+  onPositionChange?: (p: { left: number; top: number } | null) => void;
 }
 
 const STATUS_COLOR: Record<SlingResult['status'], string> = {
@@ -55,7 +59,7 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   const {
     caseId, condition, patientFactors, analysis, markers,
     animationState, onAnimationStateChange, onActiveScenarioChange, onClose,
-    pathologyCompensation,
+    pathologyCompensation, position, onPositionChange,
   } = props;
 
   const [collapsed, setCollapsed] = useState(false);
@@ -240,7 +244,7 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   if (compromised.length === 0) return null;
 
   return (
-    <DraggableShell>
+    <DraggableShell position={position ?? null} onPositionChange={onPositionChange}>
       {(dragHandlers) => (
         <>
       <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-rose-500/15 to-rose-500/5 border-b border-gray-700/50 select-none cursor-grab active:cursor-grabbing"
@@ -485,22 +489,37 @@ interface DragHandlers {
   onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-function DraggableShell({ children }: { children: (h: DragHandlers) => React.ReactNode }) {
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+interface DraggableShellProps {
+  position: { left: number; top: number } | null;
+  onPositionChange?: (p: { left: number; top: number } | null) => void;
+  children: (h: DragHandlers) => React.ReactNode;
+}
+
+function DraggableShell({ position, onPositionChange, children }: DraggableShellProps) {
   const [dragging, setDragging] = useState(false);
-  const dragStateRef = useRef<{ pointerStartX: number; pointerStartY: number; panelStartLeft: number; panelStartTop: number } | null>(null);
+  const dragStateRef = useRef<{
+    pointerStartX: number;
+    pointerStartY: number;
+    panelStartLeft: number;
+    panelStartTop: number;
+    container: HTMLElement | null;
+  } | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     if (e.button !== 0) return;
-    const rect = panelRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const container = (panel.offsetParent as HTMLElement | null) ?? null;
+    const containerRect = container?.getBoundingClientRect();
     dragStateRef.current = {
       pointerStartX: e.clientX,
       pointerStartY: e.clientY,
-      panelStartLeft: rect.left,
-      panelStartTop: rect.top,
+      panelStartLeft: rect.left - (containerRect?.left ?? 0),
+      panelStartTop: rect.top - (containerRect?.top ?? 0),
+      container,
     };
     setDragging(true);
     e.preventDefault();
@@ -508,8 +527,8 @@ function DraggableShell({ children }: { children: (h: DragHandlers) => React.Rea
 
   const onDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
-    setPos(null);
-  }, []);
+    onPositionChange?.(null);
+  }, [onPositionChange]);
 
   useEffect(() => {
     if (!dragging) return;
@@ -518,15 +537,23 @@ function DraggableShell({ children }: { children: (h: DragHandlers) => React.Rea
       if (!ds) return;
       const dx = ev.clientX - ds.pointerStartX;
       const dy = ev.clientY - ds.pointerStartY;
-      const rect = panelRef.current?.getBoundingClientRect();
-      const w = rect?.width ?? 320;
-      const minX = 8;
-      const minY = 8;
-      const maxX = window.innerWidth - w - 8;
-      const maxY = window.innerHeight - 40;
+      const panel = panelRef.current;
+      const w = panel?.offsetWidth ?? 320;
+      const containerRect = ds.container?.getBoundingClientRect();
+      const containerW = containerRect?.width ?? window.innerWidth;
+      const containerH = containerRect?.height ?? window.innerHeight;
+      const minX = 4;
+      const minY = 4;
+      const maxX = Math.max(minX, containerW - w - 4);
+      const maxY = Math.max(minY, containerH - 40);
       const nextLeft = Math.max(minX, Math.min(maxX, ds.panelStartLeft + dx));
       const nextTop = Math.max(minY, Math.min(maxY, ds.panelStartTop + dy));
-      setPos({ left: nextLeft, top: nextTop });
+      onPositionChange?.({ left: nextLeft, top: nextTop });
+      if (!onPositionChange && panel) {
+        panel.style.left = `${nextLeft}px`;
+        panel.style.top = `${nextTop}px`;
+        panel.style.right = 'auto';
+      }
     };
     const handleUp = () => {
       setDragging(false);
@@ -538,16 +565,16 @@ function DraggableShell({ children }: { children: (h: DragHandlers) => React.Rea
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [dragging]);
+  }, [dragging, onPositionChange]);
 
-  const style: React.CSSProperties = pos
-    ? { left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 24rem)' }
+  const style: React.CSSProperties = position
+    ? { left: position.left, top: position.top, maxHeight: 'calc(100vh - 24rem)' }
     : { top: 'calc(3.5rem + 350px)', right: '0.75rem', maxHeight: 'calc(100vh - 24rem)' };
 
   return (
     <div
       ref={panelRef}
-      className={`fixed z-30 w-80 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/60 shadow-2xl overflow-hidden flex flex-col ${dragging ? 'shadow-rose-500/30 ring-1 ring-rose-500/40' : ''}`}
+      className={`absolute z-30 w-80 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/60 shadow-2xl overflow-hidden flex flex-col ${dragging ? 'shadow-rose-500/30 ring-1 ring-rose-500/40' : ''}`}
       style={style}
       data-testid="sling-failure-visualizer-panel"
     >

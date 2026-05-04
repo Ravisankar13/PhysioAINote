@@ -568,9 +568,20 @@ export default function FocusedCameraCapture({
             }
           } else {
             const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
-            const visibleJoints = Object.entries(partialPose)
-              .filter(([_, val]) => val !== null)
-              .map(([key]) => key);
+            // Only count anatomical joint keys — convertPartialMediaPipeTo3D
+            // also attaches metadata fields (jointConfidence, bodyVisibility,
+            // etc.) for downstream gating, and a naïve Object.entries filter
+            // would treat those as "detected joints" and inflate the
+            // detected-joint chips / pose-detected gate.
+            const PARTIAL_JOINT_KEYS = [
+              'spine', 'neck', 'leftShoulder', 'rightShoulder',
+              'leftElbow', 'rightElbow', 'leftHip', 'rightHip',
+              'leftKnee', 'rightKnee', 'leftWrist', 'rightWrist',
+              'leftAnkle', 'rightAnkle',
+            ] as const;
+            const visibleJoints = PARTIAL_JOINT_KEYS.filter(
+              (key) => partialPose[key] != null,
+            );
             setDetectedJoints(visibleJoints);
             if (visibleJoints.length > 0) {
               setPoseDetected(true);

@@ -4737,16 +4737,23 @@ ${ddxList}`;
         next.neck = { ...prev.neck, flexion: rad2deg(partialPose.neck.x), rotation: rad2deg(partialPose.neck.y), lateralFlexion: rad2deg(partialPose.neck.z) };
       }
       if (partialPose.pelvisTilt !== undefined || partialPose.pelvisObliquity !== undefined || partialPose.pelvisRotation !== undefined) {
+        const pelvisTiltOK = upperOK && lowerOK;
+        const pelvisObliquityOK = lowerOK;
+        const pelvisRotationOK = lowerOK;
         next.pelvis = {
           ...prev.pelvis,
-          tilt: partialPose.pelvisTilt !== undefined ? rad2deg(partialPose.pelvisTilt) : (prev.pelvis?.tilt ?? 0),
-          obliquity: partialPose.pelvisObliquity !== undefined ? rad2deg(partialPose.pelvisObliquity) : (prev.pelvis?.obliquity ?? 0),
-          rotation: partialPose.pelvisRotation !== undefined ? rad2deg(partialPose.pelvisRotation) : (prev.pelvis?.rotation ?? 0),
+          tilt: (partialPose.pelvisTilt !== undefined && pelvisTiltOK) ? rad2deg(partialPose.pelvisTilt) : (prev.pelvis?.tilt ?? 0),
+          obliquity: (partialPose.pelvisObliquity !== undefined && pelvisObliquityOK) ? rad2deg(partialPose.pelvisObliquity) : (prev.pelvis?.obliquity ?? 0),
+          rotation: (partialPose.pelvisRotation !== undefined && pelvisRotationOK) ? rad2deg(partialPose.pelvisRotation) : (prev.pelvis?.rotation ?? 0),
         };
       }
       if (partialPose.scapulaData) {
-        next.leftScapula = { ...prev.leftScapula, elevation: rad2deg(partialPose.scapulaData.leftElevation), protraction: rad2deg(partialPose.scapulaData.leftProtraction) };
-        next.rightScapula = { ...prev.rightScapula, elevation: rad2deg(partialPose.scapulaData.rightElevation), protraction: rad2deg(partialPose.scapulaData.rightProtraction) };
+        if (allowUpperJoint('leftShoulder')) {
+          next.leftScapula = { ...prev.leftScapula, elevation: rad2deg(partialPose.scapulaData.leftElevation), protraction: rad2deg(partialPose.scapulaData.leftProtraction) };
+        }
+        if (allowUpperJoint('rightShoulder')) {
+          next.rightScapula = { ...prev.rightScapula, elevation: rad2deg(partialPose.scapulaData.rightElevation), protraction: rad2deg(partialPose.scapulaData.rightProtraction) };
+        }
       }
       return next;
     });

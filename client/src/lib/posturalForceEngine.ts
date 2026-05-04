@@ -354,6 +354,31 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
     externalLumbarBoost = externalBwFrac * Math.min(handXFromSpine, 1.2) * 8.0;
   }
 
+  // Leg-chain lumbar shear: a hip-flexed extended leg cantilevers thigh+
+  // shank+foot mass forward of the spine. Bending the knee folds the shank
+  // back and reduces the gravity moment — the basis of bent-knee SLR being
+  // less provocative than straight-leg SLR at the same hip angle.
+  function legChainBoost(hipFlexDeg: number, kneeFlexDeg: number): number {
+    if (hipFlexDeg < 5) return 0;
+    const thighGlobal = hipFlexDeg;
+    const shankGlobal = thighGlobal - Math.min(kneeFlexDeg, 140);
+    const chain = computeChainMoment({
+      segments: [
+        { massBwFrac: SEGMENT_MASS_PCT.thigh, normLen: 0.45, angleDeg: thighGlobal },
+        { massBwFrac: SEGMENT_MASS_PCT.shank, normLen: 0.40, angleDeg: shankGlobal },
+        { massBwFrac: SEGMENT_MASS_PCT.foot,  normLen: 0.15, angleDeg: shankGlobal },
+      ],
+    });
+    return chain.totalWeightBwFrac * chain.leverArmFrac;
+  }
+  const lumbarLegBoost = legChainBoost(
+    Math.abs(config.leftHip?.flexion ?? 0),
+    Math.abs(config.leftKnee?.flexion ?? 0),
+  ) + legChainBoost(
+    Math.abs(config.rightHip?.flexion ?? 0),
+    Math.abs(config.rightKnee?.flexion ?? 0),
+  );
+
   const l1l2Comp = lumAbove * lumMomentMult * 0.9 * lumLatFactor;
   const l1l2Shear = lumAbove * lumLeverArm * 0.5;
   const l1l2Tension = lumAbove * 0.15 * (1 + 0.01 * lumLord);
@@ -373,10 +398,11 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
 
   const l45Above = headMass + SEGMENT_MASS_PCT.trunk * 0.5 + armMass;
   const l45Comp = l45Above * lumMomentMult * 1.2 * lumLatFactor * (1 + 0.015 * lumRot + 0.01 * sacrumNut);
-  const l45Shear = l45Above * lumLeverArm * 0.6 + l45Above * Math.abs(pelvisTilt) * 0.012;
+  const l45Shear = l45Above * lumLeverArm * 0.6 + l45Above * Math.abs(pelvisTilt) * 0.012
+                 + lumbarLegBoost * 0.55;
   const l45Tension = l45Above * 0.18 * (1 + 0.015 * lumLord);
-  const l45FacetComp = l45Comp + externalLumbarBoost * 1.0 * 0.6;
-  const l45DiscComp  = l45Comp * 1.2 + externalLumbarBoost * 1.0 * 1.0;
+  const l45FacetComp = l45Comp + externalLumbarBoost * 1.0 * 0.6 + lumbarLegBoost * 0.20;
+  const l45DiscComp  = l45Comp * 1.2 + externalLumbarBoost * 1.0 * 1.0 + lumbarLegBoost * 0.30;
   joints.push({ id: 'l4l5_facet', label: 'L4-L5 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45FacetComp, tension: l45Tension, shear: l45Shear, totalForce: l45FacetComp + l45Shear, status: getStatus(l45FacetComp), clinical: getClinicalNote(l45FacetComp, 'facet'), enabled: true });
   joints.push({ id: 'l4l5_disc', label: 'L4-L5 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45DiscComp, tension: l45Tension * 0.8, shear: l45Shear * 0.9, totalForce: l45DiscComp + l45Shear * 0.9, status: getStatus(l45DiscComp), clinical: getClinicalNote(l45DiscComp, 'disc'), enabled: true });
 
@@ -384,11 +410,13 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   const sacralAngle = Math.abs(pelvisTilt) + lumLord * 0.4 + sacrumNut;
   const l5s1SacralShearFactor = Math.sin(deg2rad(clamp(sacralAngle, 0, 60)));
   const l5s1Comp = l5s1Above * lumMomentMult * 1.35 * lumLatFactor * (1 + 0.02 * sacrumNut);
-  const l5s1Shear = l5s1Above * (lumLeverArm * 0.65 + l5s1SacralShearFactor * 0.4) + l5s1Above * Math.abs(pelvisTilt) * 0.015;
+  const l5s1Shear = l5s1Above * (lumLeverArm * 0.65 + l5s1SacralShearFactor * 0.4)
+                  + l5s1Above * Math.abs(pelvisTilt) * 0.015
+                  + lumbarLegBoost * 0.65;
   const l5s1Tension = l5s1Above * 0.22 * (1 + 0.02 * lumLord + 0.015 * sacrumNut);
   // L5-S1 takes the largest external-load amplification (Marras 1995).
-  const l5s1FacetComp = l5s1Comp + externalLumbarBoost * 1.1 * 0.6;
-  const l5s1DiscComp  = l5s1Comp * 1.25 + externalLumbarBoost * 1.1 * 1.0;
+  const l5s1FacetComp = l5s1Comp + externalLumbarBoost * 1.1 * 0.6 + lumbarLegBoost * 0.22;
+  const l5s1DiscComp  = l5s1Comp * 1.25 + externalLumbarBoost * 1.1 * 1.0 + lumbarLegBoost * 0.32;
   joints.push({ id: 'l5s1_facet', label: 'L5-S1 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1FacetComp, tension: l5s1Tension, shear: l5s1Shear, totalForce: l5s1FacetComp + l5s1Shear, status: getStatus(l5s1FacetComp), clinical: getClinicalNote(l5s1FacetComp, 'facet'), enabled: true });
   joints.push({ id: 'l5s1_disc', label: 'L5-S1 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1DiscComp, tension: l5s1Tension * 0.75, shear: l5s1Shear * 1.1, totalForce: l5s1DiscComp + l5s1Shear * 1.1, status: getStatus(l5s1DiscComp), clinical: getClinicalNote(l5s1DiscComp, 'disc'), enabled: true });
 

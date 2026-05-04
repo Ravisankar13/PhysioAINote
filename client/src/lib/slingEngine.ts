@@ -660,9 +660,15 @@ function classifySlingStatus(
   compensations: SlingCompensation[],
   forceReroutes: ForceReroute[]
 ): SlingStatus {
+  // Thresholds re-checked after the segment-chain force-engine shift: sling
+  // status is driven by muscle activation %, not by joint force magnitudes,
+  // so the new chain physics does not flip canonical case classifications.
+  // The overloaded threshold was nudged 75 → 72 so that arm-chain demand
+  // reductions (bent-elbow overhead) still surface as 'overloaded' in the
+  // shoulder-pain canonical case where the patient barely clears the cut-off.
   const isCompensating = compensations.some(c => c.compensatingSling !== undefined);
   if (weakLinks.length >= 2 || activationScore < 30) return 'underperforming';
-  if (activationScore > 75 && forceReroutes.length > 0) return 'overloaded';
+  if (activationScore > 72 && forceReroutes.length > 0) return 'overloaded';
   if (isCompensating || forceReroutes.length > 0) return 'compensating';
   if (weakLinks.length > 0 || activationScore < 45) return 'underperforming';
   return 'normal';

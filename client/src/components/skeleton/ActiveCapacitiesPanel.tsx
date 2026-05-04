@@ -11,7 +11,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sparkles, Loader2, Pencil, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { useActiveCapacities, type ActiveCapacityRow } from '@/hooks/useActiveCapacities';
 import { useAuth } from '@/hooks/use-auth';
@@ -138,7 +137,7 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
           )}
         </div>
       </div>
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto" data-testid="active-capacities-scroll">
         <div className="p-3 space-y-2">
           {REGION_ORDER.concat(Object.keys(groupedRows).filter(k => !REGION_ORDER.includes(k))).map(region => {
             const rows = groupedRows[region];
@@ -319,7 +318,7 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
             );
           })}
         </div>
-      </ScrollArea>
+      </div>
     </Card>
   );
 }

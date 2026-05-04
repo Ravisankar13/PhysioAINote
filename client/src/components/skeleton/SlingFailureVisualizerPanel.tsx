@@ -240,13 +240,14 @@ export default function SlingFailureVisualizerPanel(props: Props) {
   if (compromised.length === 0) return null;
 
   return (
-    <div
-      className="absolute z-30 w-80 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/60 shadow-2xl overflow-hidden flex flex-col"
-      style={{ top: 'calc(3.5rem + 350px)', right: '0.75rem', maxHeight: 'calc(100vh - 24rem)' }}
-      data-testid="sling-failure-visualizer-panel"
-    >
-      <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-rose-500/15 to-rose-500/5 border-b border-gray-700/50">
-        <div className="flex items-center gap-2">
+    <DraggableShell>
+      {(dragHandlers) => (
+        <>
+      <div className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-rose-500/15 to-rose-500/5 border-b border-gray-700/50 select-none cursor-grab active:cursor-grabbing"
+           onMouseDown={dragHandlers.onMouseDown}
+           onDoubleClick={dragHandlers.onDoubleClick}
+           data-testid="sling-failure-visualizer-header">
+        <div className="flex items-center gap-2 pointer-events-none">
           <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
           <span className="text-[11px] font-semibold text-rose-200 uppercase tracking-wider">Sling Failure Visualizer</span>
           <span className="text-[9px] text-rose-300/70 font-mono bg-rose-500/15 px-1.5 py-0.5 rounded">{compromised.length}</span>
@@ -473,6 +474,84 @@ export default function SlingFailureVisualizerPanel(props: Props) {
           })}
         </div>
       )}
+        </>
+      )}
+    </DraggableShell>
+  );
+}
+
+interface DragHandlers {
+  onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
+  onDoubleClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+}
+
+function DraggableShell({ children }: { children: (h: DragHandlers) => React.ReactNode }) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStateRef = useRef<{ pointerStartX: number; pointerStartY: number; panelStartLeft: number; panelStartTop: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.button !== 0) return;
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragStateRef.current = {
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      panelStartLeft: rect.left,
+      panelStartTop: rect.top,
+    };
+    setDragging(true);
+    e.preventDefault();
+  }, []);
+
+  const onDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    setPos(null);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (ev: MouseEvent) => {
+      const ds = dragStateRef.current;
+      if (!ds) return;
+      const dx = ev.clientX - ds.pointerStartX;
+      const dy = ev.clientY - ds.pointerStartY;
+      const rect = panelRef.current?.getBoundingClientRect();
+      const w = rect?.width ?? 320;
+      const minX = 8;
+      const minY = 8;
+      const maxX = window.innerWidth - w - 8;
+      const maxY = window.innerHeight - 40;
+      const nextLeft = Math.max(minX, Math.min(maxX, ds.panelStartLeft + dx));
+      const nextTop = Math.max(minY, Math.min(maxY, ds.panelStartTop + dy));
+      setPos({ left: nextLeft, top: nextTop });
+    };
+    const handleUp = () => {
+      setDragging(false);
+      dragStateRef.current = null;
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragging]);
+
+  const style: React.CSSProperties = pos
+    ? { left: pos.left, top: pos.top, maxHeight: 'calc(100vh - 24rem)' }
+    : { top: 'calc(3.5rem + 350px)', right: '0.75rem', maxHeight: 'calc(100vh - 24rem)' };
+
+  return (
+    <div
+      ref={panelRef}
+      className={`fixed z-30 w-80 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/60 shadow-2xl overflow-hidden flex flex-col ${dragging ? 'shadow-rose-500/30 ring-1 ring-rose-500/40' : ''}`}
+      style={style}
+      data-testid="sling-failure-visualizer-panel"
+    >
+      {children({ onMouseDown, onDoubleClick })}
     </div>
   );
 }

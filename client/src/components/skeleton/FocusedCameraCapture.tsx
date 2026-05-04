@@ -1119,38 +1119,42 @@ export default function FocusedCameraCapture({
               <Label htmlFor="mirror-cam" className="text-[11px] text-slate-400">Mirror</Label>
             </div>
             )}
-            <div className="flex items-center gap-1.5">
-              <Switch
-                id="foot-lock-focused"
-                checked={footLockEnabled}
-                onCheckedChange={setFootLockEnabled}
-                className="scale-75"
-                data-testid="switch-foot-lock-focused"
-              />
-              <Label htmlFor="foot-lock-focused" className="text-[11px] text-slate-400 flex items-center gap-1">
-                <Footprints className="h-3 w-3" /> Foot lock
-              </Label>
-            </div>
-            {footLockEnabled && isActive && footSupport && (
-              <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
-                  data-testid="badge-foot-left-focused"
-                >
-                  L:{footSupport.left === 'planted' ? '●' : '○'}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
-                  data-testid="badge-foot-right-focused"
-                >
-                  R:{footSupport.right === 'planted' ? '●' : '○'}
-                </Badge>
-              </div>
-            )}
           </div>
         )}
+
+        {/* Foot lock control + status — visible in all modes (full_body, focused, phone) */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <Switch
+              id="foot-lock-focused"
+              checked={footLockEnabled}
+              onCheckedChange={setFootLockEnabled}
+              className="scale-75"
+              data-testid="switch-foot-lock-focused"
+            />
+            <Label htmlFor="foot-lock-focused" className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Footprints className="h-3 w-3" /> Foot lock
+            </Label>
+          </div>
+          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && (
+            <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
+              <Badge
+                variant="outline"
+                className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                data-testid="badge-foot-left-focused"
+              >
+                L:{footSupport.left === 'planted' ? '●' : '○'}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                data-testid="badge-foot-right-focused"
+              >
+                R:{footSupport.right === 'planted' ? '●' : '○'}
+              </Badge>
+            </div>
+          )}
+        </div>
 
         {Object.keys(computedAngles).length > 0 && isActive && (
           <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700 flex-shrink-0">

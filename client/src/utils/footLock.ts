@@ -207,8 +207,13 @@ export class FootLockTracker {
 
     const lFoot = footCentroid(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rFoot = footCentroid(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
-    const lVis = lAnkle.visibility ?? 1.0;
-    const rVis = rAnkle.visibility ?? 1.0;
+    // Blend visibility across the same three landmarks the centroid uses
+    // (ankle + heel + foot-index) instead of ankle-only, so the gate
+    // doesn't drop the foot to "low confidence" when the ankle is
+    // briefly occluded but the heel/forefoot remain clearly visible
+    // (e.g., long pants over the malleoli).
+    const lVis = footVisibility(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
+    const rVis = footVisibility(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
     const maxY = Math.max(lFoot.y, rFoot.y);
 
     // Update absolute floor baseline. React quickly when a foot lands
@@ -336,6 +341,15 @@ function makeFootState(): FootState {
     anchor: null,
     framesInPhase: 0,
   };
+}
+
+function footVisibility(lms: NormalizedLandmark[], ai: number, hi: number, fi: number): number {
+  const av = lms[ai]?.visibility ?? 0;
+  const hv = lms[hi]?.visibility ?? av;
+  const fv = lms[fi]?.visibility ?? av;
+  // Use the max of the three so a single-landmark dropout doesn't
+  // immediately push the foot into the swinging gate.
+  return Math.max(av, hv, fv);
 }
 
 function footCentroid(lms: NormalizedLandmark[], ai: number, hi: number, fi: number): Vec3 {

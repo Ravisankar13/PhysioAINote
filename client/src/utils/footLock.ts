@@ -130,7 +130,9 @@ const FRAMES_TO_PLANT = 3;
 const FRAMES_TO_SWING = 2;
 const TORSO_BASIS_ALPHA = 0.18;              // heavier low-pass on torso frame
 const BASELINE_FLOOR_RISE = 0.05;            // baseline tracks slowly toward newly-observed lower foot
-const BASELINE_FLOOR_FALL = 0.002;           // baseline drifts up (decays) very slowly when feet leave the ground
+const BASELINE_FLOOR_FALL = 0.0005;          // baseline drifts up extremely slowly, and ONLY while both feet
+                                              //   are clearly above it — prevents long-run decay from eroding
+                                              //   the airborne reference under quiet standing.
 const AIRBORNE_GAP = 0.10;                   // both feet >10% above baseline floor → airborne, force swinging
 
 export class FootLockTracker {
@@ -209,17 +211,16 @@ export class FootLockTracker {
     const rVis = rAnkle.visibility ?? 1.0;
     const maxY = Math.max(lFoot.y, rFoot.y);
 
-    // Update absolute floor baseline: react quickly when a foot lands lower
-    // than the current baseline (rise toward maxY), drift slowly upward
-    // when both feet are above it (e.g., camera shifts or person leaves
-    // the floor). This gives us a reference frame for detecting true
-    // airborne states independent of the relative-only `nearFloor` rule.
+    // Update absolute floor baseline. React quickly when a foot lands
+    // *at or below* the current baseline (rise toward maxY). Only allow
+    // the baseline to drift upward when BOTH feet are clearly above it
+    // (true airborne) — quiet-standing frames where maxY hovers a hair
+    // below the baseline must NOT erode the reference, otherwise long
+    // sessions slowly invalidate airborne detection.
     if (this.baselineFloorY === null) {
       this.baselineFloorY = maxY;
     } else if (maxY > this.baselineFloorY) {
       this.baselineFloorY += (maxY - this.baselineFloorY) * BASELINE_FLOOR_RISE;
-    } else {
-      this.baselineFloorY -= BASELINE_FLOOR_FALL;
     }
 
     this.updateFoot(this.left, lFoot, lVis, maxY);
@@ -228,10 +229,13 @@ export class FootLockTracker {
     // Airborne guard: if BOTH feet are clearly above the baseline floor,
     // force both to 'swinging' so the avatar falls back to hip-driven
     // translation instead of locking to stale anchors. Bypasses the
-    // FRAMES_TO_SWING hysteresis because airborne is unambiguous.
+    // FRAMES_TO_SWING hysteresis because airborne is unambiguous. Also
+    // the only condition under which the baseline is allowed to decay
+    // upward (drift toward the airborne foot positions slowly).
     const airborneL = (this.baselineFloorY - lFoot.y) > AIRBORNE_GAP;
     const airborneR = (this.baselineFloorY - rFoot.y) > AIRBORNE_GAP;
     if (airborneL && airborneR) {
+      this.baselineFloorY -= BASELINE_FLOOR_FALL;
       if (this.left.phase === 'planted') {
         this.left.phase = 'swinging';
         this.left.framesInPhase = 0;

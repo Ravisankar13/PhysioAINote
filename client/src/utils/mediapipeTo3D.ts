@@ -531,7 +531,15 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const zSpread = Math.max(...legZs) - Math.min(...legZs);
   // 0.20 normalized-Z spread is a healthy 3/4-view; below ~0.05 is a head-on view.
   const legGeomConf = Math.max(0, Math.min(1, zSpread / 0.20));
-  const legDepthConf = Math.min(legVisConf, legGeomConf);
+  // Only emit `legDepthConfidence` when the foot-lock tracker is present.
+  // The depth-aware leg damping in `Posesmoother` is part of the foot-lock
+  // family of behaviors, so when the operator turns Foot lock OFF (the
+  // caller passes a null tracker) it must turn off cleanly too — leaving
+  // `legDepthConfidence` undefined makes the smoother skip the extra
+  // damping multiplier entirely.
+  const legDepthConf: number | undefined = footLockTracker
+    ? Math.min(legVisConf, legGeomConf)
+    : undefined;
 
   // === FOOT LOCK 2-BONE IK ===
   // For each planted leg, re-solve the knee position so that the FK foot

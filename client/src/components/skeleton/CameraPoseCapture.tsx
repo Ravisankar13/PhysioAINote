@@ -167,7 +167,10 @@ export default function CameraPoseCapture({
             const tracker = footLockEnabledRef.current ? footLockTrackerRef.current : null;
             const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
             const smoothedPose = smootherRef.current.smooth(pose3D);
-            if (smoothedPose.footSupport) setFootSupport(smoothedPose.footSupport);
+            if (smoothedPose.footSupport) {
+              const next = smoothedPose.footSupport;
+              setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+            }
             onPoseUpdate(smoothedPose);
           }
 

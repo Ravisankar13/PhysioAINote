@@ -282,7 +282,11 @@ function makeFootState(): FootState {
     prevPos: null,
     velocityHistory: [],
     visibilityHistory: [],
-    phase: 'planted',
+    // Start as 'swinging' so the leg only enters the planted/IK path after
+    // FRAMES_TO_PLANT consecutive low-velocity frames have actually
+    // captured a stable anchor. Defaulting to 'planted' caused the first
+    // few frames to over-damp and apply IK against a null anchor.
+    phase: 'swinging',
     anchor: null,
     framesInPhase: 0,
   };

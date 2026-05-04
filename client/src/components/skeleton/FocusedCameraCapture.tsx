@@ -469,7 +469,10 @@ export default function FocusedCameraCapture({
                 const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
                 const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
                 const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
-                if (fullSmoothed.footSupport) setFootSupport(fullSmoothed.footSupport);
+                if (fullSmoothed.footSupport) {
+                  const next = fullSmoothed.footSupport;
+                  setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+                }
                 onPoseUpdate(fullSmoothed);
               }
               if (onPosturalMetrics) {
@@ -693,7 +696,10 @@ export default function FocusedCameraCapture({
             const tracker = footLockEnabledRef.current ? footLockTrackerRef.current : null;
             const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
             const smoothedPose = smootherRef.current.smooth(pose3D);
-            if (smoothedPose.footSupport) setFootSupport(smoothedPose.footSupport);
+            if (smoothedPose.footSupport) {
+              const next = smoothedPose.footSupport;
+              setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+            }
             onPoseUpdate(smoothedPose);
           }
           if (onPosturalMetrics) {

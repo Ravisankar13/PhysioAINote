@@ -338,6 +338,11 @@ export default function FocusedCameraCapture({
     setIsActive(false);
     setPoseDetected(false);
     setFps(0);
+    // Reset foot-lock anchors so a new session doesn't inherit stale plant positions
+    footLockTrackerRef.current.reset();
+    phoneFootLockTrackerRef.current.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
   }, []);
 
   useEffect(() => {
@@ -618,6 +623,10 @@ export default function FocusedCameraCapture({
   }, [isAnalyzing, selectedRegion, computedAngles, cameraType, mirrorVideo, onFocusedAnalysisComplete]);
 
   const startCamera = useCallback(async () => {
+    footLockTrackerRef.current.reset();
+    phoneFootLockTrackerRef.current.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
     setIsLoading(true);
     setError('');
 
@@ -1106,6 +1115,36 @@ export default function FocusedCameraCapture({
               <Switch id="mirror-cam" checked={mirrorVideo} onCheckedChange={setMirrorVideo} className="scale-75" />
               <Label htmlFor="mirror-cam" className="text-[11px] text-slate-400">Mirror</Label>
             </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <Switch
+                id="foot-lock-focused"
+                checked={footLockEnabled}
+                onCheckedChange={setFootLockEnabled}
+                className="scale-75"
+                data-testid="switch-foot-lock-focused"
+              />
+              <Label htmlFor="foot-lock-focused" className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Footprints className="h-3 w-3" /> Foot lock
+              </Label>
+            </div>
+            {footLockEnabled && isActive && footSupport && (
+              <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-left-focused"
+                >
+                  L:{footSupport.left === 'planted' ? '●' : '○'}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-right-focused"
+                >
+                  R:{footSupport.right === 'planted' ? '●' : '○'}
+                </Badge>
+              </div>
             )}
           </div>
         )}

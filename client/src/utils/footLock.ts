@@ -33,6 +33,70 @@ export interface FootLockUpdate {
   support: FootSupportState;
   hipOffset: FootLockOffset;
   hasAnchor: boolean;
+  leftAnchor: Vec3 | null;
+  rightAnchor: Vec3 | null;
+}
+
+export interface IKLandmarks {
+  knee: Vec3;
+  ankle: Vec3;
+}
+
+/**
+ * Two-bone IK solver for a single leg.
+ * Given a fixed hip and a target ankle position (the planted-foot anchor),
+ * returns the knee and ankle positions whose bone lengths exactly match
+ * `thighLen` and `shinLen`. The `kneePoleHint` (typically the current raw
+ * knee landmark) decides which side the knee bends toward when the leg
+ * isn't fully extended; if the hint projects to zero on the bend plane,
+ * we fall back to camera-forward (+z) so knees bend forward.
+ */
+export function solveLegIK(
+  hip: Vec3,
+  kneePoleHint: Vec3,
+  anchor: Vec3,
+  thighLen: number,
+  shinLen: number
+): IKLandmarks {
+  const v = { x: anchor.x - hip.x, y: anchor.y - hip.y, z: anchor.z - hip.z };
+  let d = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+  const maxD = thighLen + shinLen - 1e-4;
+  const minD = Math.abs(thighLen - shinLen) + 1e-4;
+
+  // Unreachable: clamp ankle along the line and put knee on it
+  if (d > maxD) {
+    const k = maxD / Math.max(d, 1e-6);
+    const newAnkle: Vec3 = { x: hip.x + v.x * k, y: hip.y + v.y * k, z: hip.z + v.z * k };
+    const tk = thighLen / maxD;
+    const newKnee: Vec3 = { x: hip.x + v.x * k * tk, y: hip.y + v.y * k * tk, z: hip.z + v.z * k * tk };
+    return { knee: newKnee, ankle: newAnkle };
+  }
+  if (d < minD) d = minD;
+
+  const vNorm: Vec3 = { x: v.x / d, y: v.y / d, z: v.z / d };
+  const cosA = (thighLen * thighLen + d * d - shinLen * shinLen) / (2 * thighLen * d);
+  const a = Math.acos(Math.max(-1, Math.min(1, cosA)));
+
+  // Pole direction: project (current_knee - midpoint(hip, anchor)) onto plane perpendicular to v
+  const mid: Vec3 = { x: (hip.x + anchor.x) / 2, y: (hip.y + anchor.y) / 2, z: (hip.z + anchor.z) / 2 };
+  let pole: Vec3 = { x: kneePoleHint.x - mid.x, y: kneePoleHint.y - mid.y, z: kneePoleHint.z - mid.z };
+  const pDotV = pole.x * vNorm.x + pole.y * vNorm.y + pole.z * vNorm.z;
+  pole = { x: pole.x - pDotV * vNorm.x, y: pole.y - pDotV * vNorm.y, z: pole.z - pDotV * vNorm.z };
+  let pMag = Math.sqrt(pole.x * pole.x + pole.y * pole.y + pole.z * pole.z);
+  if (pMag < 1e-6) {
+    pole = { x: 0, y: 0, z: 1 };
+    pMag = 1;
+  }
+  pole = { x: pole.x / pMag, y: pole.y / pMag, z: pole.z / pMag };
+
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const newKnee: Vec3 = {
+    x: hip.x + thighLen * (ca * vNorm.x + sa * pole.x),
+    y: hip.y + thighLen * (ca * vNorm.y + sa * pole.y),
+    z: hip.z + thighLen * (ca * vNorm.z + sa * pole.z),
+  };
+  return { knee: newKnee, ankle: { ...anchor } };
 }
 
 interface Vec3 {
@@ -124,6 +188,8 @@ export class FootLockTracker {
         support: { left: this.left.phase, right: this.right.phase },
         hipOffset: { x: 0, y: 0, z: 0 },
         hasAnchor: false,
+        leftAnchor: this.left.anchor ? { ...this.left.anchor } : null,
+        rightAnchor: this.right.anchor ? { ...this.right.anchor } : null,
       };
     }
 
@@ -157,6 +223,8 @@ export class FootLockTracker {
       support: { left: this.left.phase, right: this.right.phase },
       hipOffset: { x: dxRaw, y: -dyRaw, z: -dzRaw },
       hasAnchor: count > 0,
+      leftAnchor: this.left.anchor ? { ...this.left.anchor } : null,
+      rightAnchor: this.right.anchor ? { ...this.right.anchor } : null,
     };
   }
 

@@ -14,10 +14,10 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
-import { FootLockTracker, FootSupportState } from './footLock';
+import { FootLockTracker, FootSupportState, solveLegIK } from './footLock';
 
 export type { FootSupportPhase, FootSupportState } from './footLock';
-export { FootLockTracker } from './footLock';
+export { FootLockTracker, solveLegIK } from './footLock';
 
 export interface Joint3DRotation {
   x: number; // Typically flexion/extension
@@ -104,6 +104,7 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
+  legDepthConfidence?: number;
 }
 
 // MediaPipe landmark indices
@@ -309,14 +310,16 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightWrist = landmarks[LANDMARKS.RIGHT_WRIST];
   const leftHip = landmarks[LANDMARKS.LEFT_HIP];
   const rightHip = landmarks[LANDMARKS.RIGHT_HIP];
-  const leftKnee = landmarks[LANDMARKS.LEFT_KNEE];
-  const rightKnee = landmarks[LANDMARKS.RIGHT_KNEE];
-  const leftAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
-  const rightAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
-  const leftHeel = landmarks[LANDMARKS.LEFT_HEEL] || leftAnkle;
-  const rightHeel = landmarks[LANDMARKS.RIGHT_HEEL] || rightAnkle;
-  const leftFootIndex = landmarks[LANDMARKS.LEFT_FOOT_INDEX] || leftAnkle;
-  const rightFootIndex = landmarks[LANDMARKS.RIGHT_FOOT_INDEX] || rightAnkle;
+  // Lower-body landmarks may be re-solved by 2-bone IK below when the
+  // corresponding foot is planted, so keep them mutable.
+  let leftKnee = landmarks[LANDMARKS.LEFT_KNEE];
+  let rightKnee = landmarks[LANDMARKS.RIGHT_KNEE];
+  let leftAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
+  let rightAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
+  let leftHeel = landmarks[LANDMARKS.LEFT_HEEL] || leftAnkle;
+  let rightHeel = landmarks[LANDMARKS.RIGHT_HEEL] || rightAnkle;
+  let leftFootIndex = landmarks[LANDMARKS.LEFT_FOOT_INDEX] || leftAnkle;
+  let rightFootIndex = landmarks[LANDMARKS.RIGHT_FOOT_INDEX] || rightAnkle;
   const leftIndex = landmarks[LANDMARKS.LEFT_INDEX];
   const rightIndex = landmarks[LANDMARKS.RIGHT_INDEX];
 
@@ -508,6 +511,59 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     torsoForward = smoothed.forward;
     torsoRight = smoothed.right;
     footLockUpdate = footLockTracker.update(landmarks);
+  }
+
+  // Lower-body depth confidence: low (<0.5) means the camera sees the leg
+  // mostly side-on with little Z separation — landmark Z is unreliable, so
+  // downstream Posesmoother will damp leg joints harder.
+  const legDepthConf = getDepthConfidence(landmarks, [
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+    LANDMARKS.LEFT_KNEE, LANDMARKS.RIGHT_KNEE,
+    LANDMARKS.LEFT_ANKLE, LANDMARKS.RIGHT_ANKLE
+  ]);
+
+  // === FOOT LOCK 2-BONE IK ===
+  // For each planted leg, re-solve the knee position so that the FK foot
+  // (hip → knee → ankle) lands exactly on the captured anchor instead of the
+  // drifting raw ankle landmark. Heel and foot-index landmarks are translated
+  // by the same delta so ankle dorsi/inversion calcs stay coherent.
+  if (footLockUpdate) {
+    if (footLockUpdate.support.left === 'planted' && footLockUpdate.leftAnchor) {
+      const thighLen = Math.sqrt(
+        (leftHip.x - leftKnee.x) ** 2 + (leftHip.y - leftKnee.y) ** 2 + (leftHip.z - leftKnee.z) ** 2
+      );
+      const shinLen = Math.sqrt(
+        (leftKnee.x - leftAnkle.x) ** 2 + (leftKnee.y - leftAnkle.y) ** 2 + (leftKnee.z - leftAnkle.z) ** 2
+      );
+      if (thighLen > 1e-4 && shinLen > 1e-4) {
+        const ik = solveLegIK(leftHip, leftKnee, footLockUpdate.leftAnchor, thighLen, shinLen);
+        const dx = ik.ankle.x - leftAnkle.x;
+        const dy = ik.ankle.y - leftAnkle.y;
+        const dz = ik.ankle.z - leftAnkle.z;
+        leftKnee = { ...leftKnee, x: ik.knee.x, y: ik.knee.y, z: ik.knee.z };
+        leftAnkle = { ...leftAnkle, x: ik.ankle.x, y: ik.ankle.y, z: ik.ankle.z };
+        leftHeel = { ...leftHeel, x: leftHeel.x + dx, y: leftHeel.y + dy, z: leftHeel.z + dz };
+        leftFootIndex = { ...leftFootIndex, x: leftFootIndex.x + dx, y: leftFootIndex.y + dy, z: leftFootIndex.z + dz };
+      }
+    }
+    if (footLockUpdate.support.right === 'planted' && footLockUpdate.rightAnchor) {
+      const thighLen = Math.sqrt(
+        (rightHip.x - rightKnee.x) ** 2 + (rightHip.y - rightKnee.y) ** 2 + (rightHip.z - rightKnee.z) ** 2
+      );
+      const shinLen = Math.sqrt(
+        (rightKnee.x - rightAnkle.x) ** 2 + (rightKnee.y - rightAnkle.y) ** 2 + (rightKnee.z - rightAnkle.z) ** 2
+      );
+      if (thighLen > 1e-4 && shinLen > 1e-4) {
+        const ik = solveLegIK(rightHip, rightKnee, footLockUpdate.rightAnchor, thighLen, shinLen);
+        const dx = ik.ankle.x - rightAnkle.x;
+        const dy = ik.ankle.y - rightAnkle.y;
+        const dz = ik.ankle.z - rightAnkle.z;
+        rightKnee = { ...rightKnee, x: ik.knee.x, y: ik.knee.y, z: ik.knee.z };
+        rightAnkle = { ...rightAnkle, x: ik.ankle.x, y: ik.ankle.y, z: ik.ankle.z };
+        rightHeel = { ...rightHeel, x: rightHeel.x + dx, y: rightHeel.y + dy, z: rightHeel.z + dz };
+        rightFootIndex = { ...rightFootIndex, x: rightFootIndex.x + dx, y: rightFootIndex.y + dy, z: rightFootIndex.z + dz };
+      }
+    }
   }
 
   // === ARM CALCULATIONS ===
@@ -790,15 +846,9 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     y: -((leftHip.y + rightHip.y) / 2),
     z: -((leftHip.z + rightHip.z) / 2)
   };
-  // Foot lock: re-anchor the avatar root to the planted foot. The hipOffset
-  // is already in hipMidNorm coordinate space (x=raw, y=-raw, z=-raw), so we
-  // can add it directly. Effect: drift in the planted ankle landmark is
-  // subtracted from the hip-derived global translation.
-  if (footLockUpdate && footLockUpdate.hasAnchor) {
-    hipMidNorm.x += footLockUpdate.hipOffset.x;
-    hipMidNorm.y += footLockUpdate.hipOffset.y;
-    hipMidNorm.z += footLockUpdate.hipOffset.z;
-  }
+  // Note: foot lock re-anchors via the 2-bone IK pass above (which forces
+  // FK from hip to land at the captured anchor), not via hipMidNorm offset.
+  // Applying both would double-correct the planted foot.
   const globalTranslation: GlobalTranslation = {
     lateralShift: clamp((hipMidNorm.x - 0.0) * 2.0, -0.3, 0.3),
     forwardShift: clamp(hipMidNorm.z * 2.0, -0.3, 0.3),
@@ -845,6 +895,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       jointConfidence: buildJointConfidence(landmarks, armDepthConf),
       globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
       footSupport: mirroredFootSupport,
+      legDepthConfidence: legDepthConf,
       spineSegments: {
         ...spineSegments,
         cervicalRotation: -spineSegments.cervicalRotation,
@@ -888,6 +939,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     jointConfidence: buildJointConfidence(landmarks, armDepthConf),
     globalTranslation,
     footSupport,
+    legDepthConfidence: legDepthConf,
     spineSegments,
     bodyProportions,
   };
@@ -985,6 +1037,7 @@ export type PartialSkeleton3DPose = {
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
+  legDepthConfidence?: number;
 };
 
 function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
@@ -1746,6 +1799,7 @@ export class Posesmoother {
         spineSegments: this.prevSpineSegments,
         bodyProportions: this.prevBodyProportions,
         footSupport: newPose.footSupport,
+        legDepthConfidence: newPose.legDepthConfidence,
       };
     }
     
@@ -1774,7 +1828,14 @@ export class Posesmoother {
 
       let noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
 
-      // Adaptive smoothing: heavily damp planted-leg joints to keep feet still.
+      // Adaptive smoothing for lower body:
+      //   1. Planted-leg joints get 2.5× damping to keep feet still.
+      //   2. Low lower-body depth confidence (Z separation < ~0.15 normalized)
+      //      additionally scales noise by up to 3× so a head-on view of the
+      //      leg doesn't translate Z noise into joint jitter.
+      const isLegJoint =
+        jointName === 'leftHip' || jointName === 'leftKnee' || jointName === 'leftAnkle' ||
+        jointName === 'rightHip' || jointName === 'rightKnee' || jointName === 'rightAnkle';
       const support = newPose.footSupport;
       if (support) {
         const PLANTED_LEG_NOISE_MULT = 2.5;
@@ -1784,6 +1845,9 @@ export class Posesmoother {
         if (support.right === 'planted' && (jointName === 'rightHip' || jointName === 'rightKnee' || jointName === 'rightAnkle')) {
           noiseScale *= PLANTED_LEG_NOISE_MULT;
         }
+      }
+      if (isLegJoint && typeof newPose.legDepthConfidence === 'number' && newPose.legDepthConfidence < 0.5) {
+        noiseScale *= 1 + (0.5 - newPose.legDepthConfidence) * 4; // up to 3× at conf=0
       }
 
       const deltaX = rotation.x - prevRotation.x;
@@ -1886,6 +1950,7 @@ export class Posesmoother {
       spineSegments: smoothedSegments,
       bodyProportions: this.prevBodyProportions,
       footSupport: newPose.footSupport,
+      legDepthConfidence: newPose.legDepthConfidence,
     };
   }
   

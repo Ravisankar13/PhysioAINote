@@ -81,6 +81,10 @@ export default function CameraPoseCapture({
     setIsActive(false);
     setPoseDetected(false);
     setFps(0);
+    // Reset foot-lock anchors so a new session doesn't inherit stale plant positions
+    footLockTrackerRef.current.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
   }, []);
 
   // Respond to external isActive prop changes
@@ -100,6 +104,9 @@ export default function CameraPoseCapture({
   const startCamera = useCallback(async () => {
     setIsLoading(true);
     setError('');
+    footLockTrackerRef.current.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
 
     try {
       const support = checkMediaPipeSupport();

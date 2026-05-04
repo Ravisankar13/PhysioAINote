@@ -513,14 +513,25 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     footLockUpdate = footLockTracker.update(landmarks);
   }
 
-  // Lower-body depth confidence: low (<0.5) means the camera sees the leg
-  // mostly side-on with little Z separation — landmark Z is unreliable, so
-  // downstream Posesmoother will damp leg joints harder.
-  const legDepthConf = getDepthConfidence(landmarks, [
+  // Lower-body depth confidence: blends landmark visibility with the actual
+  // Z spread across hip/knee/ankle (both sides). A frontal low-parallax
+  // pose collapses the legs onto a single Z plane → tiny zSpread → low
+  // confidence even when visibility is high, which is exactly when the
+  // Posesmoother needs to damp leg joints harder.
+  const legVisConf = getDepthConfidence(landmarks, [
     LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
     LANDMARKS.LEFT_KNEE, LANDMARKS.RIGHT_KNEE,
     LANDMARKS.LEFT_ANKLE, LANDMARKS.RIGHT_ANKLE
   ]);
+  const legZs = [
+    leftHip.z, rightHip.z,
+    landmarks[LANDMARKS.LEFT_KNEE]?.z ?? 0, landmarks[LANDMARKS.RIGHT_KNEE]?.z ?? 0,
+    landmarks[LANDMARKS.LEFT_ANKLE]?.z ?? 0, landmarks[LANDMARKS.RIGHT_ANKLE]?.z ?? 0,
+  ];
+  const zSpread = Math.max(...legZs) - Math.min(...legZs);
+  // 0.20 normalized-Z spread is a healthy 3/4-view; below ~0.05 is a head-on view.
+  const legGeomConf = Math.max(0, Math.min(1, zSpread / 0.20));
+  const legDepthConf = Math.min(legVisConf, legGeomConf);
 
   // === FOOT LOCK 2-BONE IK ===
   // For each planted leg, re-solve the knee position so that the FK foot

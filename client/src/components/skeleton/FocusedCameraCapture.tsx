@@ -215,6 +215,9 @@ export default function FocusedCameraCapture({
     }
     phonePoseSmootherRef.current.reset();
     phoneFullPoseSmootherRef.current.reset();
+    // Clear any stale planted-foot anchors so a reconnect starts clean
+    phoneFootLockTrackerRef.current.reset();
+    setFootSupport(null);
     setPhonePoseReady(false);
     setPhoneMode(false);
     setPhoneRoomId('');

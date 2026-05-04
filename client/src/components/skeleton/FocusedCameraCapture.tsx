@@ -10,6 +10,7 @@ import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, 
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
 import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, FootVisibilityState, BodyVisibility } from '@/utils/mediapipeTo3D';
+import { defaultTorsoBasisSmoother } from '@/utils/footLock';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -391,6 +392,7 @@ export default function FocusedCameraCapture({
     // Reset foot-lock anchors so a new session doesn't inherit stale plant positions
     footLockTrackerRef.current.reset();
     phoneFootLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
     smootherRef.current.reset();
     setFootSupport(null);
   }, []);
@@ -472,7 +474,8 @@ export default function FocusedCameraCapture({
         y: (landmarks[11].y + landmarks[12].y) / 2,
         z: ((landmarks[11].z || 0) + (landmarks[12].z || 0)) / 2
       };
-      angles['Trunk Inclination'] = Math.round(angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }) - 180);
+      // Forward trunk lean: 0° at upright, ~30° when shoulders pitched 30° forward of hips.
+      angles['Trunk Inclination'] = Math.round(180 - angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }));
     }
 
     return angles;
@@ -703,6 +706,7 @@ export default function FocusedCameraCapture({
   const startCamera = useCallback(async () => {
     footLockTrackerRef.current.reset();
     phoneFootLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
     smootherRef.current.reset();
     setFootSupport(null);
     setFeetVisible(null);

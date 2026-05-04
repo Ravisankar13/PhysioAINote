@@ -83,6 +83,7 @@ export default function CameraPoseCapture({
     setFps(0);
     // Reset foot-lock anchors so a new session doesn't inherit stale plant positions
     footLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
     smootherRef.current.reset();
     setFootSupport(null);
   }, []);
@@ -105,6 +106,7 @@ export default function CameraPoseCapture({
     setIsLoading(true);
     setError('');
     footLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
     smootherRef.current.reset();
     setFootSupport(null);
 

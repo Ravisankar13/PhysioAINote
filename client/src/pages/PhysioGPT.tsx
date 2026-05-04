@@ -121,7 +121,7 @@ import { type HypothesisData, type RefinedHypothesisSuggestion } from "@/compone
 import HypothesisTestBench, { type BenchHypothesisInput, type BenchSkeletonOverlay, type BenchUpdate, type HypothesisFingerprint } from "@/components/skeleton/HypothesisTestBench";
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
-import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
+import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution, type ExternalLoadConfig } from "@/lib/posturalForceEngine";
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
@@ -714,7 +714,7 @@ export default function PhysioGPT() {
   // the engine's segment-chain moment includes the carried load.
   const [externalLoadKg, setExternalLoadKg] = useState(0);
   const [externalLoadHand, setExternalLoadHand] = useState<'left' | 'right' | 'both'>('both');
-  const externalLoads = useMemo(() => {
+  const externalLoads = useMemo<ExternalLoadConfig | undefined>(() => {
     const k = Math.max(0, externalLoadKg);
     if (k === 0) return undefined;
     if (externalLoadHand === 'left')  return { leftHandKg: k };
@@ -722,9 +722,19 @@ export default function PhysioGPT() {
     const half = k / 2;
     return { leftHandKg: half, rightHandKg: half };
   }, [externalLoadKg, externalLoadHand]);
-  const withForceContext = useCallback(<T extends Record<string, any>>(cfg: T): T => {
+  // Task #364: inject `externalLoads` and `bodyWeightKg` into every model
+  // config consumed by `calculatePosturalForces`. Both fields are first-class
+  // optional members of the engine's `JointAngles` type, so no casts are
+  // needed at the call sites. Short-circuits when there is nothing to add so
+  // memoized config identity is preserved (avoids force-cache invalidation).
+  const withForceContext = useCallback(<T extends ModelConfig>(cfg: T): T => {
     if (!externalLoads && bodyWeightKg === 70) return cfg;
-    return { ...cfg, externalLoads, bodyWeightKg } as T;
+    const augmented: T & { externalLoads?: ExternalLoadConfig; bodyWeightKg?: number } = {
+      ...cfg,
+      externalLoads,
+      bodyWeightKg,
+    };
+    return augmented as T;
   }, [externalLoads, bodyWeightKg]);
   const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
   const [collapsedForceCategories, setCollapsedForceCategories] = useState<Set<string>>(new Set());
@@ -1848,6 +1858,8 @@ export default function PhysioGPT() {
     slingPartMuscleAdjustments,
     movementSpotlightEnabled,
     bodyWeightKg,
+    externalLoadKg,
+    externalLoadHand,
     clinicalHighlights,
     subjectiveHistoryInput,
     patientContextState,
@@ -1999,6 +2011,12 @@ export default function PhysioGPT() {
         setMovementSpotlightEnabled(!snap.movementSpotlightDismissed);
       }
       if (typeof snap.bodyWeightKg === 'number') setBodyWeightKg(snap.bodyWeightKg);
+      // Task #364: hydrate hand-held external load + which hand carries it so
+      // a saved loaded-carry scenario survives a case reload.
+      if (typeof snap.externalLoadKg === 'number') setExternalLoadKg(Math.max(0, snap.externalLoadKg));
+      if (snap.externalLoadHand === 'left' || snap.externalLoadHand === 'right' || snap.externalLoadHand === 'both') {
+        setExternalLoadHand(snap.externalLoadHand);
+      }
       if (Array.isArray(snap.clinicalHighlights)) setClinicalHighlights(snap.clinicalHighlights as RegionHighlight[]);
       if (typeof snap.subjectiveHistoryInput === 'string') setSubjectiveHistoryInput(snap.subjectiveHistoryInput);
       if (snap.patientContextState && typeof snap.patientContextState === 'object') {

@@ -14,6 +14,10 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
+import { FootLockTracker, FootSupportState } from './footLock';
+
+export type { FootSupportPhase, FootSupportState } from './footLock';
+export { FootLockTracker } from './footLock';
 
 export interface Joint3DRotation {
   x: number; // Typically flexion/extension
@@ -99,6 +103,7 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   globalTranslation?: GlobalTranslation;
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
+  footSupport?: FootSupportState;
 }
 
 // MediaPipe landmark indices
@@ -288,7 +293,7 @@ function depthWeightedZ(z: number, depthConf: number): number {
  * All rotations are in radians
  * Returns null for joints whose key landmarks have low visibility
  */
-export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode: boolean = false): PartialSkeleton3DPose {
+export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode: boolean = false, footLockTracker?: FootLockTracker | null): PartialSkeleton3DPose {
   // Mirror mode handling:
   // - Keep all calculations in the original anatomical coordinate frame
   // - After computing joint rotations, swap left/right outputs if mirrored
@@ -477,7 +482,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   };
 
   // === TORSO COORDINATE FRAME ===
-  const torsoUp = normalize({
+  let torsoUp = normalize({
     x: shoulderMid.x - hipMid.x,
     y: shoulderMid.y - hipMid.y,
     z: shoulderMid.z - hipMid.z
@@ -487,12 +492,23 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     y: -(rightShoulder.y - leftShoulder.y),
     z: -(rightShoulder.z - leftShoulder.z)
   };
-  const torsoRight = normalize(shoulderVec);
-  const torsoForward = normalize({
+  let torsoRight = normalize(shoulderVec);
+  let torsoForward = normalize({
     x: torsoUp.y * torsoRight.z - torsoUp.z * torsoRight.y,
     y: torsoUp.z * torsoRight.x - torsoUp.x * torsoRight.z,
     z: torsoUp.x * torsoRight.y - torsoUp.y * torsoRight.x
   });
+
+  // Foot lock: optionally low-pass filter the torso basis to absorb torso wobble
+  // before it propagates into hip/knee/shoulder dot-product calculations.
+  let footLockUpdate: ReturnType<FootLockTracker['update']> | null = null;
+  if (footLockTracker) {
+    const smoothed = footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight);
+    torsoUp = smoothed.up;
+    torsoForward = smoothed.forward;
+    torsoRight = smoothed.right;
+    footLockUpdate = footLockTracker.update(landmarks);
+  }
 
   // === ARM CALCULATIONS ===
   // armDepthConf is used ONLY for joint confidence display, not for angle attenuation.
@@ -774,11 +790,24 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     y: -((leftHip.y + rightHip.y) / 2),
     z: -((leftHip.z + rightHip.z) / 2)
   };
+  // Foot lock: re-anchor the avatar root to the planted foot. The hipOffset
+  // is already in hipMidNorm coordinate space (x=raw, y=-raw, z=-raw), so we
+  // can add it directly. Effect: drift in the planted ankle landmark is
+  // subtracted from the hip-derived global translation.
+  if (footLockUpdate && footLockUpdate.hasAnchor) {
+    hipMidNorm.x += footLockUpdate.hipOffset.x;
+    hipMidNorm.y += footLockUpdate.hipOffset.y;
+    hipMidNorm.z += footLockUpdate.hipOffset.z;
+  }
   const globalTranslation: GlobalTranslation = {
     lateralShift: clamp((hipMidNorm.x - 0.0) * 2.0, -0.3, 0.3),
     forwardShift: clamp(hipMidNorm.z * 2.0, -0.3, 0.3),
     verticalShift: clamp((hipMidNorm.y + 0.5) * 1.5, -0.2, 0.2),
   };
+  const footSupport: FootSupportState | undefined = footLockUpdate ? footLockUpdate.support : undefined;
+  const mirroredFootSupport: FootSupportState | undefined = footSupport
+    ? { left: footSupport.right, right: footSupport.left }
+    : undefined;
 
   if (mirrorMode) {
     return {
@@ -815,6 +844,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       } : undefined,
       jointConfidence: buildJointConfidence(landmarks, armDepthConf),
       globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
+      footSupport: mirroredFootSupport,
       spineSegments: {
         ...spineSegments,
         cervicalRotation: -spineSegments.cervicalRotation,
@@ -857,6 +887,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     scapulaData,
     jointConfidence: buildJointConfidence(landmarks, armDepthConf),
     globalTranslation,
+    footSupport,
     spineSegments,
     bodyProportions,
   };
@@ -953,6 +984,7 @@ export type PartialSkeleton3DPose = {
   globalTranslation?: GlobalTranslation;
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
+  footSupport?: FootSupportState;
 };
 
 function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
@@ -1713,6 +1745,7 @@ export class Posesmoother {
         globalTranslation: this.prevGlobalTranslation,
         spineSegments: this.prevSpineSegments,
         bodyProportions: this.prevBodyProportions,
+        footSupport: newPose.footSupport,
       };
     }
     
@@ -1739,8 +1772,20 @@ export class Posesmoother {
         continue;
       }
 
-      const noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
-      
+      let noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
+
+      // Adaptive smoothing: heavily damp planted-leg joints to keep feet still.
+      const support = newPose.footSupport;
+      if (support) {
+        const PLANTED_LEG_NOISE_MULT = 2.5;
+        if (support.left === 'planted' && (jointName === 'leftHip' || jointName === 'leftKnee' || jointName === 'leftAnkle')) {
+          noiseScale *= PLANTED_LEG_NOISE_MULT;
+        }
+        if (support.right === 'planted' && (jointName === 'rightHip' || jointName === 'rightKnee' || jointName === 'rightAnkle')) {
+          noiseScale *= PLANTED_LEG_NOISE_MULT;
+        }
+      }
+
       const deltaX = rotation.x - prevRotation.x;
       const deltaY = rotation.y - prevRotation.y;
       const deltaZ = rotation.z - prevRotation.z;
@@ -1840,6 +1885,7 @@ export class Posesmoother {
       globalTranslation: smoothedTranslation,
       spineSegments: smoothedSegments,
       bodyProportions: this.prevBodyProportions,
+      footSupport: newPose.footSupport,
     };
   }
   

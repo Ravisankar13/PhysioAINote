@@ -6,10 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
+import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -67,6 +67,8 @@ export default function FocusedCameraCapture({
   const poseRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
+  const footLockTrackerRef = useRef<FootLockTracker>(new FootLockTracker());
+  const phoneFootLockTrackerRef = useRef<FootLockTracker>(new FootLockTracker());
   const animationFrameRef = useRef<number | null>(null);
   const analysisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAnalysisRef = useRef<number>(0);
@@ -88,6 +90,18 @@ export default function FocusedCameraCapture({
   const [showDetails, setShowDetails] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [computedAngles, setComputedAngles] = useState<Record<string, number>>({});
+  const [footLockEnabled, setFootLockEnabled] = useState(true);
+  const footLockEnabledRef = useRef(true);
+  const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
+
+  useEffect(() => { footLockEnabledRef.current = footLockEnabled; }, [footLockEnabled]);
+  useEffect(() => {
+    if (!footLockEnabled) {
+      footLockTrackerRef.current.reset();
+      phoneFootLockTrackerRef.current.reset();
+      setFootSupport(null);
+    }
+  }, [footLockEnabled]);
 
   const [phoneMode, setPhoneMode] = useState(false);
   const [phoneRoomId, setPhoneRoomId] = useState('');
@@ -444,8 +458,10 @@ export default function FocusedCameraCapture({
             if (allVisible >= 15) {
               setPoseDetected(true);
               if (onPoseUpdate) {
-                const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+                const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
+                const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
                 const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
+                if (fullSmoothed.footSupport) setFootSupport(fullSmoothed.footSupport);
                 onPoseUpdate(fullSmoothed);
               }
               if (onPosturalMetrics) {
@@ -662,8 +678,10 @@ export default function FocusedCameraCapture({
           }
 
           if (onPoseUpdate) {
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+            const tracker = footLockEnabledRef.current ? footLockTrackerRef.current : null;
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
             const smoothedPose = smootherRef.current.smooth(pose3D);
+            if (smoothedPose.footSupport) setFootSupport(smoothedPose.footSupport);
             onPoseUpdate(smoothedPose);
           }
           if (onPosturalMetrics) {

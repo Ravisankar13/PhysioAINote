@@ -5,10 +5,10 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
-import { Camera, CameraOff, RefreshCw, AlertCircle, User } from 'lucide-react';
+import { Camera, CameraOff, RefreshCw, AlertCircle, User, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, Posesmoother, SmoothedPoseOutput } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, Posesmoother, SmoothedPoseOutput, FootLockTracker, FootSupportState } from '@/utils/mediapipeTo3D';
 
 interface CameraPoseCaptureProps {
   onPoseUpdate?: (pose: SmoothedPoseOutput) => void;
@@ -29,6 +29,7 @@ export default function CameraPoseCapture({
   const poseRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
+  const footLockTrackerRef = useRef<FootLockTracker>(new FootLockTracker());
   const animationFrameRef = useRef<number | null>(null);
 
   const [isActive, setIsActive] = useState(false);
@@ -38,7 +39,18 @@ export default function CameraPoseCapture({
   const [showPreview, setShowPreview] = useState(true);
   const [smoothingLevel, setSmoothingLevel] = useState(0.4);
   const [mirrorVideo, setMirrorVideo] = useState(true);
+  const [footLockEnabled, setFootLockEnabled] = useState(true);
+  const footLockEnabledRef = useRef(true);
+  const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
   const [fps, setFps] = useState(0);
+
+  useEffect(() => { footLockEnabledRef.current = footLockEnabled; }, [footLockEnabled]);
+  useEffect(() => {
+    if (!footLockEnabled) {
+      footLockTrackerRef.current.reset();
+      setFootSupport(null);
+    }
+  }, [footLockEnabled]);
   const lastFrameTimeRef = useRef(Date.now());
   const frameCountRef = useRef(0);
 
@@ -145,8 +157,10 @@ export default function CameraPoseCapture({
           if (onPoseUpdate) {
             // Always pass false for mirrorMode - video mirroring is handled in UI only
             // The pose data should remain anatomically correct (left arm = left humerus)
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+            const tracker = footLockEnabledRef.current ? footLockTrackerRef.current : null;
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
             const smoothedPose = smootherRef.current.smooth(pose3D);
+            if (smoothedPose.footSupport) setFootSupport(smoothedPose.footSupport);
             onPoseUpdate(smoothedPose);
           }
 
@@ -316,8 +330,39 @@ export default function CameraPoseCapture({
               />
               <Label htmlFor="preview" className="text-sm text-slate-300">Preview</Label>
             </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="foot-lock"
+                checked={footLockEnabled}
+                onCheckedChange={setFootLockEnabled}
+                data-testid="switch-foot-lock"
+              />
+              <Label htmlFor="foot-lock" className="text-sm text-slate-300 flex items-center gap-1">
+                <Footprints className="h-3.5 w-3.5" /> Foot lock
+              </Label>
+            </div>
           </div>
         </div>
+
+        {footLockEnabled && isActive && footSupport && (
+          <div className="flex items-center gap-2 text-xs" data-testid="foot-support-indicators">
+            <Badge
+              variant="outline"
+              className={footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}
+              data-testid="badge-foot-left"
+            >
+              L: {footSupport.left}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}
+              data-testid="badge-foot-right"
+            >
+              R: {footSupport.right}
+            </Badge>
+          </div>
+        )}
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">

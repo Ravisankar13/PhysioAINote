@@ -539,13 +539,14 @@ function DraggableShell({ position, onPositionChange, children }: DraggableShell
       const dy = ev.clientY - ds.pointerStartY;
       const panel = panelRef.current;
       const w = panel?.offsetWidth ?? 320;
+      const h = panel?.offsetHeight ?? 200;
       const containerRect = ds.container?.getBoundingClientRect();
       const containerW = containerRect?.width ?? window.innerWidth;
       const containerH = containerRect?.height ?? window.innerHeight;
       const minX = 4;
       const minY = 4;
       const maxX = Math.max(minX, containerW - w - 4);
-      const maxY = Math.max(minY, containerH - 40);
+      const maxY = Math.max(minY, containerH - h - 4);
       const nextLeft = Math.max(minX, Math.min(maxX, ds.panelStartLeft + dx));
       const nextTop = Math.max(minY, Math.min(maxY, ds.panelStartTop + dy));
       onPositionChange?.({ left: nextLeft, top: nextTop });

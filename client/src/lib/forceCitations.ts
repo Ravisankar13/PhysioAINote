@@ -26,9 +26,6 @@ export interface CategoryThresholds {
   bands: Record<PatientState, ThresholdBand>;
   /** Primary citation key for the supporting evidence. */
   citationId: string;
-  /** Task #364: optional supplementary citations the chip UI can fan out so
-   * a single category can surface multiple relevant references (e.g. lumbar
-   * thresholds quote both NIOSH and Marras 1995). */
   secondaryCitationIds?: string[];
 }
 
@@ -190,9 +187,6 @@ const baseLumbar = {
   category: 'lumbar_disc',
   label: 'Lumbar Disc Compression',
   citationId: 'niosh_lifting',
-  // Task #364: surface Marras 1995 alongside NIOSH so the lumbar threshold
-  // chip exposes the source of the hand-distance amplification used by the
-  // segment-chain lumbar moment.
   secondaryCitationIds: ['marras_lifting', 'schultz_spine'],
   bands: {
     default: { safeN: 3400, warnN: 5000, note: 'NIOSH action limit 3400 N · permissible limit 6400 N.' },
@@ -245,9 +239,6 @@ const basePfj = {
 const baseShoulder = {
   category: 'shoulder',
   label: 'Glenohumeral Compression',
-  // Task #364: GH thresholds are now anchored on Veeger & van der Helm 2007
-  // (the actual shoulder-specific source), correcting the prior
-  // mis-attribution to schultz_spine which is a lumbar EMG paper.
   citationId: 'veeger_shoulder',
   secondaryCitationIds: ['de_leva'],
   bands: {
@@ -322,12 +313,7 @@ export function citationFor(jointId: string): Citation | null {
   return CITATIONS[entry.citationId] ?? null;
 }
 
-/**
- * Task #364: returns the primary citation for a joint plus any secondary
- * citations declared on the category, deduped and resolved against the
- * `CITATIONS` registry. Lets the threshold-chip UI surface multiple sources
- * (e.g. NIOSH + Marras for lumbar discs, Veeger + de Leva for shoulder).
- */
+/** Primary + secondary citations for a joint, deduped. */
 export function citationsFor(jointId: string): Citation[] {
   const entry = getCategoryEntry(jointId);
   if (!entry) return [];

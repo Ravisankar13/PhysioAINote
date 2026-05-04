@@ -3168,10 +3168,6 @@ export interface PhysioGptCaseSnapshot {
   muscleOverrides?: unknown;
   slingActivationOverrides?: unknown;
   bodyWeightKg?: number;
-  // Task #364: persisted hand-held external load (kg) + which hand carries
-  // it. Wired into the segment-chain moment at every joint via
-  // withForceContext, so reopening the case restores loaded-carry scenarios
-  // (HUD load circle + per-joint forces) exactly as they were left.
   externalLoadKg?: number;
   externalLoadHand?: 'left' | 'right' | 'both';
   clinicalHighlights?: unknown;

@@ -709,9 +709,6 @@ export default function PhysioGPT() {
   const [grfOverlayEnabled, setGrfOverlayEnabled] = useState(true);
   const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
-  // Task #364: hand-held external load (kg) + which hand carries it. Wired
-  // into every calculatePosturalForces call site via withForceContext() so
-  // the engine's segment-chain moment includes the carried load.
   const [externalLoadKg, setExternalLoadKg] = useState(0);
   const [externalLoadHand, setExternalLoadHand] = useState<'left' | 'right' | 'both'>('both');
   const externalLoads = useMemo<ExternalLoadConfig | undefined>(() => {
@@ -722,11 +719,8 @@ export default function PhysioGPT() {
     const half = k / 2;
     return { leftHandKg: half, rightHandKg: half };
   }, [externalLoadKg, externalLoadHand]);
-  // Task #364: inject `externalLoads` and `bodyWeightKg` into every model
-  // config consumed by `calculatePosturalForces`. Both fields are first-class
-  // optional members of the engine's `JointAngles` type, so no casts are
-  // needed at the call sites. Short-circuits when there is nothing to add so
-  // memoized config identity is preserved (avoids force-cache invalidation).
+  // Inject externalLoads + bodyWeightKg into model configs. Short-circuits
+  // to preserve memoized identity when there is nothing to add.
   const withForceContext = useCallback(<T extends ModelConfig>(cfg: T): T => {
     if (!externalLoads && bodyWeightKg === 70) return cfg;
     const augmented: T & { externalLoads?: ExternalLoadConfig; bodyWeightKg?: number } = {
@@ -1795,9 +1789,6 @@ export default function PhysioGPT() {
     slingPartMuscleAdjustments,
     movementSpotlightEnabled,
     bodyWeightKg,
-    // Task #364: persist hand-held external load (kg) + which hand carries
-    // it inside the case snapshot itself, so loaded-carry scenarios survive
-    // a save / reopen round trip.
     externalLoadKg,
     externalLoadHand,
     clinicalHighlights,
@@ -2016,8 +2007,6 @@ export default function PhysioGPT() {
         setMovementSpotlightEnabled(!snap.movementSpotlightDismissed);
       }
       if (typeof snap.bodyWeightKg === 'number') setBodyWeightKg(snap.bodyWeightKg);
-      // Task #364: hydrate hand-held external load + which hand carries it so
-      // a saved loaded-carry scenario survives a case reload.
       if (typeof snap.externalLoadKg === 'number') setExternalLoadKg(Math.max(0, snap.externalLoadKg));
       if (snap.externalLoadHand === 'left' || snap.externalLoadHand === 'right' || snap.externalLoadHand === 'both') {
         setExternalLoadHand(snap.externalLoadHand);

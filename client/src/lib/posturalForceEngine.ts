@@ -1,10 +1,5 @@
-// Task #364: hand-held external load config — declared before JointAngles so
-// it can appear as a typed field on the engine config (no `as any` casts at
-// the call sites or in the helpers below).
 export interface ExternalLoadConfig {
-  /** Mass (kg) carried in the left hand. */
   leftHandKg?: number;
-  /** Mass (kg) carried in the right hand. */
   rightHandKg?: number;
 }
 
@@ -27,11 +22,7 @@ interface JointAngles {
   rightElbow?: { flexion?: number; pronation?: number; supination?: number; valgus?: number };
   leftWrist?: { flexion?: number; extension?: number; radialDeviation?: number; ulnarDeviation?: number; pronation?: number };
   rightWrist?: { flexion?: number; extension?: number; radialDeviation?: number; ulnarDeviation?: number; pronation?: number };
-  /** Task #364: hand-held external load. Drives the segment-chain moment at
-   * shoulder/elbow/wrist and the lumbar amplifier (Marras 1995). */
   externalLoads?: ExternalLoadConfig;
-  /** Task #364: patient body weight in kg, used to convert the carried load
-   * (kg) into a BW fraction inside `computeChainMoment`. Defaults to 70. */
   bodyWeightKg?: number;
   [key: string]: any;
 }
@@ -52,22 +43,9 @@ const SEGMENT_MASS_PCT: Record<string, number> = {
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 
-// ---------------------------------------------------------------------------
-// Task #364 — Lever arm & segment-chain physics
-// ---------------------------------------------------------------------------
-// Pure helper: gravitational moment about a proximal joint produced by a
-// chain of distal segments + an optional hand-held external load. Replaces
-// the previous "single rigid stick" approximation that incorrectly raised
-// shoulder/elbow/wrist load when the elbow was bent (the elbow flexion in
-// reality FOLDS the forearm + hand toward the joint axis and REDUCES the
-// gravity moment, the opposite of what the old engine computed).
-//
-// Segment masses come from de Leva (1996); segment lengths are normalized to
-// the chain so the helper is independent of patient height. A fully-extended
-// chain held at 90° from gravity returns leverArmFrac = 1.0, preserving the
-// magnitude of the legacy `sin(jointAngle)` approximation so calibration of
-// existing `(1 + leverArmFrac × gain)` formulas carries over.
-// ---------------------------------------------------------------------------
+// Gravitational moment about a proximal joint from a chain of distal
+// segments + optional hand-held load. Segment masses: de Leva (1996).
+// A fully-extended horizontal chain returns leverArmFrac = 1.0.
 
 export interface ChainSegment {
   /** Mass of this segment as fraction of body weight (de Leva 1996). */
@@ -348,11 +326,7 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   const lumMomentMult = 1 + lumLeverArm * 3.5;
   const lumLatFactor = 1 + 0.02 * latShift + 0.015 * scoliosis + 0.02 * lumbarScol + 0.01 * spineLat;
 
-  // Task #364: external loads carried in the hands add a moment about the
-  // lumbar spine = load × horizontal_hand_distance. This is the classic
-  // stoop-vs-squat lift compression amplification (Marras 1995; NIOSH 1993;
-  // Schultz & Andersson 1981). The erector spinae lever arm is ~5 cm vs a
-  // potentially 50 cm load lever arm, hence the ~10× amplification.
+  // Hand-held load × horizontal distance amplifier (Marras 1995; NIOSH 1993).
   const lKg = loadForSide(config, 'left');
   const rKg = loadForSide(config, 'right');
   const totalExternalKg = lKg + rKg;
@@ -372,11 +346,7 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
     const rHandX = 0.215 * Math.abs(Math.sin(deg2rad(rShoulder)))
                  + 0.17  * Math.abs(Math.sin(deg2rad(rForearm)))
                  + 0.115 * Math.abs(Math.sin(deg2rad(rForearm)));
-    // Task #364 (review refinement): weight per-hand horizontal distance by
-    // that hand's actual carried mass so a unilateral 10 kg suitcase carry
-    // uses the loaded-side reach, not an unweighted left/right average that
-    // dilutes asymmetry. Falls back to 50/50 only if both kgs are 0 (which
-    // is impossible in this branch but kept for safety).
+    // Per-hand load-weighted reach so unilateral carries use the loaded side.
     const handFwdLoadWeighted = totalExternalKg > 0
       ? (lKg * lHandX + rKg * rHandX) / totalExternalKg
       : (lHandX + rHandX) * 0.5;
@@ -387,8 +357,7 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   const l1l2Comp = lumAbove * lumMomentMult * 0.9 * lumLatFactor;
   const l1l2Shear = lumAbove * lumLeverArm * 0.5;
   const l1l2Tension = lumAbove * 0.15 * (1 + 0.01 * lumLord);
-  // Task #364: external-load level scaling — discs absorb the full carried-
-  // load moment, facets see ~60% of it (Schultz & Andersson 1981).
+  // Discs absorb full load moment, facets ~60% (Schultz & Andersson 1981).
   const l1l2FacetComp = l1l2Comp + externalLumbarBoost * 0.65 * 0.6;
   const l1l2DiscComp  = l1l2Comp * 1.1 + externalLumbarBoost * 0.65 * 1.0;
   joints.push({ id: 'l1l2_facet', label: 'L1-L2 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2FacetComp, tension: l1l2Tension, shear: l1l2Shear, totalForce: l1l2FacetComp + l1l2Shear, status: getStatus(l1l2FacetComp), clinical: getClinicalNote(l1l2FacetComp, 'facet'), enabled: true });
@@ -469,10 +438,7 @@ function computeHipForces(config: JointAngles, side: 'left' | 'right'): JointSur
   const abdFactor = 1 + 0.02 * abd + 0.02 * add;
   const rotFactor = 1 + 0.01 * intRot + 0.01 * extRot + 0.015 * antev;
 
-  // Task #364: leg-chain moment about the hip. Bending the knee folds the
-  // shank back toward the hip axis, REDUCING the hip-flexor demand of an
-  // SLR — the engine previously ignored knee/ankle config at the hip,
-  // so SLR vs bent-knee SLR were indistinguishable.
+  // Leg-chain moment about the hip (knee flexion folds shank → reduces SLR demand).
   const kneeKey = side === 'left' ? 'leftKnee' : 'rightKnee';
   const kneeFlexHere = Math.abs((config[kneeKey] as JointAngles['leftKnee'])?.flexion ?? 0);
   const thighGlobal = hipFlexAngle;
@@ -540,9 +506,7 @@ function computeKneeForces(config: JointAngles, side: 'left' | 'right'): JointSu
   const valgusFromHip = hipAntev * 0.3 + hipIntRot * 0.2;
   const totalVarusValgus = kneeVarus + valgusFromHip;
 
-  // Task #364: lower-leg chain modulates quad demand. A vertical shank
-  // (good ankle mobility, hip flex matches knee flex) loads the PFJ less
-  // than an anterior-translated shank during the same knee flexion depth.
+  // Shank-orientation chain: vertical shank reduces PFJ load vs anterior translation.
   const thighGlobal = hipFlex;
   const shankGlobal = thighGlobal - Math.min(kneeFlex, 140);
   const lowerLegChain = computeChainMoment({
@@ -673,11 +637,7 @@ function computeShoulderForces(config: JointAngles, side: 'left' | 'right'): Joi
 
   const thorKyph = Math.abs(config.spine?.thoracicKyphosis ?? 0);
 
-  // Task #364: chain-based moment about the GH joint. Bending the elbow folds
-  // the forearm + hand back toward the GH axis, REDUCING the lever arm — the
-  // old formula (line above) erroneously added a positive elbow-flex term
-  // that *increased* GH compression with elbow flexion. (Veeger & van der
-  // Helm 2007; de Leva 1996 segment masses.)
+  // Chain about GH (Veeger & van der Helm 2007; de Leva 1996).
   const leverAngle = Math.max(flex, abd);
   const upperArmGlobalDeg = leverAngle;
   const forearmGlobalDeg = upperArmGlobalDeg + Math.min(elbFlex, 150);
@@ -741,14 +701,8 @@ function computeElbowForces(config: JointAngles, side: 'left' | 'right'): JointS
   const shoulderFlex = Math.abs(shoulder.flexion ?? 0);
   const shoulderAbd = Math.abs(shoulder.abduction ?? 0);
 
-  // Task #364: chain hanging off the elbow = forearm + hand + any external
-  // load. Replaces the old `shoulderFactor` (which wrongly raised elbow load
-  // when the shoulder abducted) with proper chain weight + lever-arm physics.
-  // The chain *gravity moment* (chainWeight × leverArmFrac) is the correct
-  // driver of joint reaction force; sin(flex) is kept only as a small
-  // biceps-internal-force term (the elbow flexor's mechanical disadvantage at
-  // mid-range flexion forces it to pull harder, raising the joint reaction
-  // even when the gravity arm is small).
+  // Chain about elbow = forearm + hand + load. sin(flex) kept as small
+  // biceps internal-force term (mid-range mechanical disadvantage).
   const flexRad = deg2rad(clamp(flex, 0, 150));
   const bicepsCoFactor = Math.sin(flexRad) * 0.5;
   const upperArmGlobalDeg = Math.max(shoulderFlex, shoulderAbd);
@@ -805,15 +759,7 @@ function computeWristForces(config: JointAngles, side: 'left' | 'right'): JointS
   const ulnDev = Math.abs(wrist.ulnarDeviation ?? 0);
   const wPro = Math.abs(wrist.pronation ?? 0);
 
-  // Task #364: chain at the wrist is just the hand + any external load.
-  // The previous engine wrongly multiplied wrist load by elbow flexion.
-  // (elbow position cannot raise wrist joint reaction by itself; only the
-  // hand mass + grip load matter at this segment.) The hand's GLOBAL angle
-  // from gravity drives the gravity moment — i.e. an arm hanging straight
-  // down with a flexed wrist still produces a meaningful hand-tilt that the
-  // engine must see. We accumulate shoulder + elbow + wrist tilt so the
-  // chain helper computes a faithful leverArmFrac (was previously hard-coded
-  // to angleDeg: 0, which made leverArmFrac always 0 — a bypass).
+  // Chain at wrist = hand + load. Hand global angle = shoulder+elbow+wrist tilt.
   const shoulderKey = side === 'left' ? 'leftShoulder' : 'rightShoulder';
   const shoulder = config[shoulderKey] || {};
   const shoulderTilt = Math.max(Math.abs(shoulder.flexion ?? 0), Math.abs(shoulder.abduction ?? 0));

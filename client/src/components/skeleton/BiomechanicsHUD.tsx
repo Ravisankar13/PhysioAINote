@@ -47,13 +47,8 @@ interface BiomechanicsHUDProps {
   /** Live patient body weight (kg). Used to dual-label tooltip values in
    * both BW multiples and Newtons so units stay consistent. */
   bodyWeightKg?: number;
-  /** Task #364: total carried external load (kg) summed across both hands.
-   * Drives the new Load HUD circle's display value. */
   externalLoadKg?: number;
-  /** Task #364: which hand(s) the load is assigned to. */
   externalLoadHand?: 'left' | 'right' | 'both';
-  /** Task #364: callback when the user picks a new load preset / hand from
-   * the Load circle popover. PhysioGPT owns the actual force re-computation. */
   onChangeExternalLoad?: (kg: number, hand: 'left' | 'right' | 'both') => void;
 }
 
@@ -119,7 +114,6 @@ export default function BiomechanicsHUD({
   onChangeExternalLoad,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-  // Task #364: popover state for the Load circle (preset kg + hand selector).
   const [loadPopoverOpen, setLoadPopoverOpen] = useState(false);
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
   const prevThresholdsRef = useRef<{
@@ -345,10 +339,6 @@ export default function BiomechanicsHUD({
       // force readout carries provenance (the trust-layer requirement).
       tooltip: (() => {
         if (!topJoint) return 'Forces';
-        // Task #364: surface every citation on the joint's category — primary
-        // *and* secondary refs (e.g. lumbar shows NIOSH + Marras 1995, shoulder
-        // shows Veeger 2007 + de Leva 1996) so the chip carries the full
-        // provenance of the new segment-chain physics.
         const cits = citationsFor(topJoint.id);
         const band = patientForceState ? getThresholdsFor(topJoint.id, patientForceState) : null;
         const bw = topJoint.totalForce;

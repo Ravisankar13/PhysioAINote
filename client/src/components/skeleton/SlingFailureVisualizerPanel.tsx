@@ -252,7 +252,36 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     });
   }, [animationState.speed, ghostMode, resolveSequenceId, onAnimationStateChange]);
 
-  if (compromised.length === 0) return null;
+  // Empty-state shell — when the case has no compromised slings we
+  // still render the panel as a closable header so the clinician knows
+  // the feature exists (and isn't broken) and can dismiss it. (Task #361)
+  if (compromised.length === 0) {
+    return (
+      <DraggableShell position={position ?? null} onPositionChange={onPositionChange}>
+        {(dragHandlers) => (
+          <div
+            className="flex items-center justify-between px-3 py-2 bg-gradient-to-r from-slate-500/15 to-slate-500/5 border-b border-gray-700/50 select-none cursor-grab active:cursor-grabbing"
+            onMouseDown={dragHandlers.onMouseDown}
+            onDoubleClick={dragHandlers.onDoubleClick}
+            data-testid="sling-failure-visualizer-header-empty"
+          >
+            <div className="flex items-center gap-2 pointer-events-none">
+              <AlertTriangle className="w-3.5 h-3.5 text-slate-400" />
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold text-slate-200 uppercase tracking-wider">Sling Failure Visualizer</span>
+                <span className="text-[9.5px] text-slate-400 normal-case mt-0.5">No compromised slings on this case</span>
+              </div>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="p-1 rounded hover:bg-white/10" title="Close" data-testid="sfv-close-empty">
+                <X className="w-3 h-3 text-gray-400" />
+              </button>
+            )}
+          </div>
+        )}
+      </DraggableShell>
+    );
+  }
 
   return (
     <DraggableShell position={position ?? null} onPositionChange={onPositionChange}>
@@ -548,6 +577,40 @@ function DraggableShell({ position, onPositionChange, children }: DraggableShell
     container: HTMLElement | null;
   } | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Position safety net — if a saved position would render the panel
+  // outside the current container (e.g. after a case switch loads a
+  // smaller viewer, or the window was resized while the panel was
+  // closed), clear it on mount and on container resize so the panel
+  // falls back to its default top-right slot rather than disappearing
+  // off-screen. (Task #361)
+  useEffect(() => {
+    if (!position || !onPositionChange) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const container = (panel.offsetParent as HTMLElement | null) ?? null;
+    const checkBounds = () => {
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const w = panel.offsetWidth || 320;
+      const h = panel.offsetHeight || 200;
+      const minX = 4;
+      const minY = 4;
+      const maxX = Math.max(minX, containerRect.width - w - 4);
+      const maxY = Math.max(minY, containerRect.height - h - 4);
+      if (
+        position.left < minX || position.left > maxX ||
+        position.top < minY || position.top > maxY
+      ) {
+        onPositionChange(null);
+      }
+    };
+    checkBounds();
+    if (typeof ResizeObserver === 'undefined' || !container) return;
+    const ro = new ResizeObserver(() => checkBounds());
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [position, onPositionChange]);
 
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;

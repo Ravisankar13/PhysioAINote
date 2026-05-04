@@ -1115,6 +1115,18 @@ export default function PhysioGPT() {
   }, []);
   const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
   const [sfvPanelPosition, setSfvPanelPosition] = useState<{ left: number; top: number } | null>(null);
+  // Reset SFV visibility + dragged position whenever the active case
+  // changes so a freshly loaded case opens with the panel in its
+  // default top-right slot — prevents a closed panel or a stale
+  // off-screen position from carrying over between cases. (Task #361)
+  const lastSfvCaseIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeCaseId !== lastSfvCaseIdRef.current) {
+      lastSfvCaseIdRef.current = activeCaseId;
+      setSlingFailureVisualizerOpen(true);
+      setSfvPanelPosition(null);
+    }
+  }, [activeCaseId]);
   // Movement Findings panel position — lifted so the panel keeps its
   // dragged spot across skeleton-mode re-mounts within the session.
   const [movementFindingsPosition, setMovementFindingsPosition] = useState<{ left: number; top: number } | null>(null);
@@ -10830,18 +10842,26 @@ ${ddxList}`;
                     panel has been closed and there is sling analysis to
                     show. Brings the visualizer back without forcing the
                     user to re-run analysis. */}
-                {skeletonMode === 'movement' && slingAnalysis && slingAnalysis.slings.some(s => s.status !== 'normal') && !slingFailureVisualizerOpen && (
-                  <button
-                    onClick={() => setSlingFailureVisualizerOpen(true)}
-                    className="absolute z-30 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-[10.5px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition-colors"
-                    style={{ top: 'calc(3.5rem + 350px)' }}
-                    data-testid="sfv-reopen-pill"
-                    title="Show Sling Failure Visualizer"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                    Sling Failure Visualizer
-                  </button>
-                )}
+                {skeletonMode === 'movement' && slingAnalysis && !slingFailureVisualizerOpen && (() => {
+                  const hasCompromised = slingAnalysis.slings.some(s => s.status !== 'normal');
+                  return (
+                    <button
+                      onClick={() => setSlingFailureVisualizerOpen(true)}
+                      className={`absolute z-30 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10.5px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition-colors ${
+                        hasCompromised
+                          ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/40 text-rose-200'
+                          : 'bg-slate-700/40 hover:bg-slate-700/60 border-slate-500/40 text-slate-200'
+                      }`}
+                      style={{ top: 'calc(3.5rem + 350px)' }}
+                      data-testid="sfv-reopen-pill"
+                      title={hasCompromised ? 'Show Sling Failure Visualizer' : 'Show Sling Failure Visualizer (no compromised slings on this case)'}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${hasCompromised ? 'bg-rose-400' : 'bg-slate-400'}`} />
+                      Sling Failure Visualizer
+                      {!hasCompromised && <span className="text-slate-400/80 normal-case tracking-normal text-[9.5px] font-normal ml-1">· no compromised slings</span>}
+                    </button>
+                  );
+                })()}
                 {/* Floating panel — lists compromised slings, plays the
                     trigger movement, scrubs the timeline, shows joint
                     deltas + narration. */}

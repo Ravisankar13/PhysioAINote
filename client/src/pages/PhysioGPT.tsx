@@ -709,6 +709,23 @@ export default function PhysioGPT() {
   const [grfOverlayEnabled, setGrfOverlayEnabled] = useState(true);
   const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
+  // Task #364: hand-held external load (kg) + which hand carries it. Wired
+  // into every calculatePosturalForces call site via withForceContext() so
+  // the engine's segment-chain moment includes the carried load.
+  const [externalLoadKg, setExternalLoadKg] = useState(0);
+  const [externalLoadHand, setExternalLoadHand] = useState<'left' | 'right' | 'both'>('both');
+  const externalLoads = useMemo(() => {
+    const k = Math.max(0, externalLoadKg);
+    if (k === 0) return undefined;
+    if (externalLoadHand === 'left')  return { leftHandKg: k };
+    if (externalLoadHand === 'right') return { rightHandKg: k };
+    const half = k / 2;
+    return { leftHandKg: half, rightHandKg: half };
+  }, [externalLoadKg, externalLoadHand]);
+  const withForceContext = useCallback(<T extends Record<string, any>>(cfg: T): T => {
+    if (!externalLoads && bodyWeightKg === 70) return cfg;
+    return { ...cfg, externalLoads, bodyWeightKg } as T;
+  }, [externalLoads, bodyWeightKg]);
   const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
   const [collapsedForceCategories, setCollapsedForceCategories] = useState<Set<string>>(new Set());
   const [muscleMode, setMuscleMode] = useState(false);
@@ -4956,7 +4973,7 @@ ${ddxList}`;
       sections.push(`**Symptom Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
     }
 
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const highForces = forces.joints.filter(j => j.status === 'high' || j.status === 'very_high');
     const forceLines = forces.joints.map(j =>
       `- ${j.label}: C=${(j.compression * 100).toFixed(0)}% T=${(j.tension * 100).toFixed(0)}% S=${(j.shear * 100).toFixed(0)}% BW (${forceToNewtons(j.totalForce, bodyWeightKg)}N) — ${j.status}`
@@ -5815,7 +5832,7 @@ ${ddxList}`;
     }));
 
     const postureDeviations = computePostureDeviations(effectiveModelConfig);
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
 
     const forcesSummary = forces.joints
@@ -6312,7 +6329,7 @@ ${ddxList}`;
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode || (liteMode && computeStage < 2)) return null;
-    const result = calculatePosturalForces(effectiveModelConfig);
+    const result = calculatePosturalForces(withForceContext(effectiveModelConfig));
     if (enabledForceJoints.size === 0 && result.joints.length > 0) {
       const defaultEnabled = new Set(result.joints.map(j => j.id));
       setEnabledForceJoints(defaultEnabled);
@@ -6510,7 +6527,7 @@ ${ddxList}`;
   const correlationResult = useMemo(() => {
     if (liteMode && !correlationMode) return null;
     if (!correlationMode && !showUnifiedChainPanel && !showInjuryMechanism) return null;
-    const forces = calculatePosturalForces(finalModelConfig);
+    const forces = calculatePosturalForces(withForceContext(finalModelConfig));
     const baseAnalysis = computeFullMuscleAnalysis(finalModelConfig);
     const muscles = applyOverridesToAnalysis(baseAnalysis, effectiveOverrides);
     return computeCrossSystemCorrelation({
@@ -7395,7 +7412,7 @@ ${ddxList}`;
     const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;
     const base = (forceMode && forceAnalysis && !hasActiveSimulation)
       ? forceAnalysis
-      : calculatePosturalForces(finalModelConfig);
+      : calculatePosturalForces(withForceContext(finalModelConfig));
     if (hasActiveSimulation && whatIfSimulatedConfig.forceMultiplier !== 1.0) {
       const multiplier = whatIfSimulatedConfig.forceMultiplier;
       const adjusted = JSON.parse(JSON.stringify(base));
@@ -9580,7 +9597,7 @@ ${ddxList}`;
 
   const painDriverReports = useMemo((): PainDriverReport[] => {
     if (painMarkers.length === 0) return [];
-    const forces = calculatePosturalForces(effectiveModelConfig, fascialModifiers);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig), fascialModifiers);
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const allPropEffects = propagateChainEffects(baseMuscleTensions.tensions, compensatedOverrides);
     const allChainEffects: import("@/lib/myofascialChains").ChainEffect[] = [];
@@ -9744,7 +9761,7 @@ ${ddxList}`;
 
   const treatmentPlan = useMemo(() => {
     if (rightPanelTab !== 'treatment') return null;
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const corr = computeCrossSystemCorrelation({
       painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
@@ -15354,6 +15371,9 @@ ${ddxList}`;
               onOpenForceTime={() => setShowForceTimePanel(true)}
               patientForceState={patientForceState}
               bodyWeightKg={bodyWeightKg}
+              externalLoadKg={externalLoadKg}
+              externalLoadHand={externalLoadHand}
+              onChangeExternalLoad={(kg, hand) => { setExternalLoadKg(kg); setExternalLoadHand(hand); }}
             />
 
             {showForceTimePanel && (

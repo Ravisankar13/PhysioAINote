@@ -98,6 +98,28 @@ export const CITATIONS: Record<string, Citation> = {
       'Quantifies patellofemoral force scaling with knee flexion angle — ' +
       'reference for the PFJ overload band.',
   },
+  veeger_shoulder: {
+    id: 'veeger_shoulder',
+    title: 'Shoulder function: the perfect compromise between mobility and stability',
+    authors: 'Veeger HEJ, van der Helm FCT',
+    year: 2007,
+    source: 'Journal of Biomechanics 40(10): 2119–2129',
+    blurb:
+      'Models how the gravitational moment of the upper limb at the shoulder ' +
+      'scales with the whole-arm lever — bending the elbow folds the forearm + ' +
+      'hand back toward the GH axis and reduces rotator-cuff demand.',
+  },
+  marras_lifting: {
+    id: 'marras_lifting',
+    title: 'Spine loading and probability of low-back disorder during lifting',
+    authors: 'Marras WS, Lavender SA, Leurgans SE, et al.',
+    year: 1995,
+    source: 'Spine 20(20): 2275–2283',
+    blurb:
+      'Quantifies how horizontal load distance from the spine drives L5/S1 ' +
+      'compression — basis of the stoop-vs-squat load amplification used in ' +
+      'the segment-chain lumbar moment.',
+  },
   kelley_post_op: {
     id: 'kelley_post_op',
     title: 'Early loading after lower-extremity surgery: protective thresholds',

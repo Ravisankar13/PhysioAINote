@@ -36,6 +36,110 @@ const SEGMENT_MASS_PCT: Record<string, number> = {
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
 
+// ---------------------------------------------------------------------------
+// Task #364 — Lever arm & segment-chain physics
+// ---------------------------------------------------------------------------
+// Pure helper: gravitational moment about a proximal joint produced by a
+// chain of distal segments + an optional hand-held external load. Replaces
+// the previous "single rigid stick" approximation that incorrectly raised
+// shoulder/elbow/wrist load when the elbow was bent (the elbow flexion in
+// reality FOLDS the forearm + hand toward the joint axis and REDUCES the
+// gravity moment, the opposite of what the old engine computed).
+//
+// Segment masses come from de Leva (1996); segment lengths are normalized to
+// the chain so the helper is independent of patient height. A fully-extended
+// chain held at 90° from gravity returns leverArmFrac = 1.0, preserving the
+// magnitude of the legacy `sin(jointAngle)` approximation so calibration of
+// existing `(1 + leverArmFrac × gain)` formulas carries over.
+// ---------------------------------------------------------------------------
+
+export interface ChainSegment {
+  /** Mass of this segment as fraction of body weight (de Leva 1996). */
+  massBwFrac: number;
+  /** Length of this segment normalized within the chain. */
+  normLen: number;
+  /** Global angle of segment from vertical down (gravity), in degrees. */
+  angleDeg: number;
+}
+
+export interface ChainMomentInput {
+  segments: ChainSegment[];
+  /** Optional hand-held load in kilograms applied at the distal end. */
+  externalLoadKg?: number;
+  /** Body weight in kilograms (used to convert externalLoadKg → BW frac). */
+  bodyWeightKg?: number;
+}
+
+export interface ChainMomentResult {
+  /** Total chain weight (segments + external load) in BW fractions. */
+  totalWeightBwFrac: number;
+  /**
+   * Effective lever-arm fraction (0..1). 1.0 corresponds to a chain held
+   * straight horizontal (every segment at 90° from gravity), which preserves
+   * the magnitude of the previous `sin(jointAngle)` approximation so the
+   * existing `(1 + leverArm × gain)` calibrations carry over without
+   * re-tuning the gain constants.
+   */
+  leverArmFrac: number;
+}
+
+export function computeChainMoment(input: ChainMomentInput): ChainMomentResult {
+  const externalKg = Math.max(0, input.externalLoadKg ?? 0);
+  const bodyWeightKg = Math.max(1, input.bodyWeightKg ?? 70);
+  const externalBwFrac = externalKg / bodyWeightKg;
+
+  let cumulativeProximalX = 0;     // signed cumulative distal-end position
+  let cumulativeProximalXMax = 0;  // cumulative position with all segments at 90°
+  let momentNum = 0;               // signed Σ mᵢ × xᵢ_COM
+  let momentDenom = 0;             // Σ mᵢ × xᵢ_COMmax (positive, normalizer)
+  let totalWeight = 0;
+
+  for (const seg of input.segments) {
+    const sinA = Math.sin(deg2rad(seg.angleDeg));
+    const distalX = cumulativeProximalX + seg.normLen * sinA;
+    const comX = cumulativeProximalX + (seg.normLen * 0.5) * sinA;
+    const comXMax = cumulativeProximalXMax + seg.normLen * 0.5;
+
+    momentNum += seg.massBwFrac * comX;
+    momentDenom += seg.massBwFrac * comXMax;
+    totalWeight += seg.massBwFrac;
+
+    cumulativeProximalX = distalX;
+    cumulativeProximalXMax += seg.normLen;
+  }
+
+  if (externalBwFrac > 0) {
+    momentNum += externalBwFrac * cumulativeProximalX;
+    momentDenom += externalBwFrac * cumulativeProximalXMax;
+    totalWeight += externalBwFrac;
+  }
+
+  const leverArmFrac = momentDenom > 0
+    ? clamp(Math.abs(momentNum) / momentDenom, 0, 1)
+    : 0;
+
+  return { totalWeightBwFrac: totalWeight, leverArmFrac };
+}
+
+export interface ExternalLoadConfig {
+  /** Mass (kg) carried in the left hand. */
+  leftHandKg?: number;
+  /** Mass (kg) carried in the right hand. */
+  rightHandKg?: number;
+}
+
+function loadForSide(config: JointAngles, side: 'left' | 'right'): number {
+  const ext = (config as any).externalLoads as ExternalLoadConfig | undefined;
+  if (!ext) return 0;
+  const v = side === 'left' ? ext.leftHandKg : ext.rightHandKg;
+  return Math.max(0, v ?? 0);
+}
+
+function bodyWeightOf(config: JointAngles): number {
+  const bw = (config as any).bodyWeightKg as number | undefined;
+  return bw && bw > 0 ? bw : 70;
+}
+
 const MAX_FORCE_BW = 12.0;
 const MIN_FORCE_BW = 0;
 function clampForce(v: number): number { return clamp(Math.abs(v), MIN_FORCE_BW, MAX_FORCE_BW); }
@@ -118,8 +222,8 @@ function getClinicalNote(bw: number, jointType: string): string {
     shoulder: {
       low: 'Minimal GH joint load — favorable rotator cuff environment',
       moderate: 'Normal GH loading — rotator cuff working within capacity',
-      high: 'Elevated GH force — increased rotator cuff demand, impingement risk',
-      very_high: 'High GH loading — significant supraspinatus/infraspinatus stress',
+      high: 'Elevated GH force — consider elbow flexion or loaded-carry adjustment to shorten the lever',
+      very_high: 'High GH loading — reduce external load and bend the elbow to off-load the rotator cuff',
     },
     generic: {
       low: 'Minimal loading',
@@ -235,24 +339,58 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   const lumMomentMult = 1 + lumLeverArm * 3.5;
   const lumLatFactor = 1 + 0.02 * latShift + 0.015 * scoliosis + 0.02 * lumbarScol + 0.01 * spineLat;
 
+  // Task #364: external loads carried in the hands add a moment about the
+  // lumbar spine = load × horizontal_hand_distance. This is the classic
+  // stoop-vs-squat lift compression amplification (Marras 1995; NIOSH 1993;
+  // Schultz & Andersson 1981). The erector spinae lever arm is ~5 cm vs a
+  // potentially 50 cm load lever arm, hence the ~10× amplification.
+  const totalExternalKg = loadForSide(config, 'left') + loadForSide(config, 'right');
+  const externalBwFrac = totalExternalKg / bodyWeightOf(config);
+  let externalLumbarBoost = 0;
+  if (externalBwFrac > 0) {
+    const trunkFwd = Math.sin(deg2rad(clamp(lumFlexAngle, 0, 90))) * 0.3;
+    const lShoulder = Math.max(Math.abs(config.leftShoulder?.flexion ?? 0),
+                               Math.abs(config.leftShoulder?.abduction ?? 0));
+    const rShoulder = Math.max(Math.abs(config.rightShoulder?.flexion ?? 0),
+                               Math.abs(config.rightShoulder?.abduction ?? 0));
+    const lForearm = lShoulder + Math.min(Math.abs(config.leftElbow?.flexion ?? 0), 150);
+    const rForearm = rShoulder + Math.min(Math.abs(config.rightElbow?.flexion ?? 0), 150);
+    const lHandX = 0.215 * Math.abs(Math.sin(deg2rad(lShoulder)))
+                 + 0.17  * Math.abs(Math.sin(deg2rad(lForearm)))
+                 + 0.115 * Math.abs(Math.sin(deg2rad(lForearm)));
+    const rHandX = 0.215 * Math.abs(Math.sin(deg2rad(rShoulder)))
+                 + 0.17  * Math.abs(Math.sin(deg2rad(rForearm)))
+                 + 0.115 * Math.abs(Math.sin(deg2rad(rForearm)));
+    const handXFromSpine = trunkFwd + (lHandX + rHandX) * 0.5;
+    externalLumbarBoost = externalBwFrac * Math.min(handXFromSpine, 1.2) * 8.0;
+  }
+
   const l1l2Comp = lumAbove * lumMomentMult * 0.9 * lumLatFactor;
   const l1l2Shear = lumAbove * lumLeverArm * 0.5;
   const l1l2Tension = lumAbove * 0.15 * (1 + 0.01 * lumLord);
-  joints.push({ id: 'l1l2_facet', label: 'L1-L2 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2Comp, tension: l1l2Tension, shear: l1l2Shear, totalForce: l1l2Comp + l1l2Shear, status: getStatus(l1l2Comp), clinical: getClinicalNote(l1l2Comp, 'facet'), enabled: true });
-  joints.push({ id: 'l1l2_disc', label: 'L1-L2 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2Comp * 1.1, tension: l1l2Tension * 0.8, shear: l1l2Shear * 0.9, totalForce: l1l2Comp * 1.1 + l1l2Shear * 0.9, status: getStatus(l1l2Comp * 1.1), clinical: getClinicalNote(l1l2Comp * 1.1, 'disc'), enabled: true });
+  // Task #364: external-load level scaling — discs absorb the full carried-
+  // load moment, facets see ~60% of it (Schultz & Andersson 1981).
+  const l1l2FacetComp = l1l2Comp + externalLumbarBoost * 0.65 * 0.6;
+  const l1l2DiscComp  = l1l2Comp * 1.1 + externalLumbarBoost * 0.65 * 1.0;
+  joints.push({ id: 'l1l2_facet', label: 'L1-L2 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2FacetComp, tension: l1l2Tension, shear: l1l2Shear, totalForce: l1l2FacetComp + l1l2Shear, status: getStatus(l1l2FacetComp), clinical: getClinicalNote(l1l2FacetComp, 'facet'), enabled: true });
+  joints.push({ id: 'l1l2_disc', label: 'L1-L2 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1Part1_M', compression: l1l2DiscComp, tension: l1l2Tension * 0.8, shear: l1l2Shear * 0.9, totalForce: l1l2DiscComp + l1l2Shear * 0.9, status: getStatus(l1l2DiscComp), clinical: getClinicalNote(l1l2DiscComp, 'disc'), enabled: true });
 
   const l3l4Above = headMass + SEGMENT_MASS_PCT.trunk * 0.55 + armMass;
   const l3l4Comp = l3l4Above * lumMomentMult * 1.05 * lumLatFactor * (1 + 0.01 * lumRot);
   const l3l4Shear = l3l4Above * lumLeverArm * 0.55;
-  joints.push({ id: 'l3l4_facet', label: 'L3-L4 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4Comp, tension: l3l4Above * 0.12, shear: l3l4Shear, totalForce: l3l4Comp + l3l4Shear, status: getStatus(l3l4Comp), clinical: getClinicalNote(l3l4Comp, 'facet'), enabled: true });
-  joints.push({ id: 'l3l4_disc', label: 'L3-L4 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4Comp * 1.15, tension: l3l4Above * 0.1, shear: l3l4Shear * 0.85, totalForce: l3l4Comp * 1.15 + l3l4Shear * 0.85, status: getStatus(l3l4Comp * 1.15), clinical: getClinicalNote(l3l4Comp * 1.15, 'disc'), enabled: true });
+  const l3l4FacetComp = l3l4Comp + externalLumbarBoost * 0.85 * 0.6;
+  const l3l4DiscComp  = l3l4Comp * 1.15 + externalLumbarBoost * 0.85 * 1.0;
+  joints.push({ id: 'l3l4_facet', label: 'L3-L4 Facet Joint', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4FacetComp, tension: l3l4Above * 0.12, shear: l3l4Shear, totalForce: l3l4FacetComp + l3l4Shear, status: getStatus(l3l4FacetComp), clinical: getClinicalNote(l3l4FacetComp, 'facet'), enabled: true });
+  joints.push({ id: 'l3l4_disc', label: 'L3-L4 Intervertebral Disc', category: 'lumbar_spine', boneName: 'Spine1_M', compression: l3l4DiscComp, tension: l3l4Above * 0.1, shear: l3l4Shear * 0.85, totalForce: l3l4DiscComp + l3l4Shear * 0.85, status: getStatus(l3l4DiscComp), clinical: getClinicalNote(l3l4DiscComp, 'disc'), enabled: true });
 
   const l45Above = headMass + SEGMENT_MASS_PCT.trunk * 0.5 + armMass;
   const l45Comp = l45Above * lumMomentMult * 1.2 * lumLatFactor * (1 + 0.015 * lumRot + 0.01 * sacrumNut);
   const l45Shear = l45Above * lumLeverArm * 0.6 + l45Above * Math.abs(pelvisTilt) * 0.012;
   const l45Tension = l45Above * 0.18 * (1 + 0.015 * lumLord);
-  joints.push({ id: 'l4l5_facet', label: 'L4-L5 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45Comp, tension: l45Tension, shear: l45Shear, totalForce: l45Comp + l45Shear, status: getStatus(l45Comp), clinical: getClinicalNote(l45Comp, 'facet'), enabled: true });
-  joints.push({ id: 'l4l5_disc', label: 'L4-L5 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45Comp * 1.2, tension: l45Tension * 0.8, shear: l45Shear * 0.9, totalForce: l45Comp * 1.2 + l45Shear * 0.9, status: getStatus(l45Comp * 1.2), clinical: getClinicalNote(l45Comp * 1.2, 'disc'), enabled: true });
+  const l45FacetComp = l45Comp + externalLumbarBoost * 1.0 * 0.6;
+  const l45DiscComp  = l45Comp * 1.2 + externalLumbarBoost * 1.0 * 1.0;
+  joints.push({ id: 'l4l5_facet', label: 'L4-L5 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45FacetComp, tension: l45Tension, shear: l45Shear, totalForce: l45FacetComp + l45Shear, status: getStatus(l45FacetComp), clinical: getClinicalNote(l45FacetComp, 'facet'), enabled: true });
+  joints.push({ id: 'l4l5_disc', label: 'L4-L5 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart2_M', compression: l45DiscComp, tension: l45Tension * 0.8, shear: l45Shear * 0.9, totalForce: l45DiscComp + l45Shear * 0.9, status: getStatus(l45DiscComp), clinical: getClinicalNote(l45DiscComp, 'disc'), enabled: true });
 
   const l5s1Above = headMass + SEGMENT_MASS_PCT.trunk * 0.45 + armMass;
   const sacralAngle = Math.abs(pelvisTilt) + lumLord * 0.4 + sacrumNut;
@@ -260,8 +398,11 @@ function computeSpineForces(config: JointAngles): JointSurfaceForce[] {
   const l5s1Comp = l5s1Above * lumMomentMult * 1.35 * lumLatFactor * (1 + 0.02 * sacrumNut);
   const l5s1Shear = l5s1Above * (lumLeverArm * 0.65 + l5s1SacralShearFactor * 0.4) + l5s1Above * Math.abs(pelvisTilt) * 0.015;
   const l5s1Tension = l5s1Above * 0.22 * (1 + 0.02 * lumLord + 0.015 * sacrumNut);
-  joints.push({ id: 'l5s1_facet', label: 'L5-S1 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1Comp, tension: l5s1Tension, shear: l5s1Shear, totalForce: l5s1Comp + l5s1Shear, status: getStatus(l5s1Comp), clinical: getClinicalNote(l5s1Comp, 'facet'), enabled: true });
-  joints.push({ id: 'l5s1_disc', label: 'L5-S1 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1Comp * 1.25, tension: l5s1Tension * 0.75, shear: l5s1Shear * 1.1, totalForce: l5s1Comp * 1.25 + l5s1Shear * 1.1, status: getStatus(l5s1Comp * 1.25), clinical: getClinicalNote(l5s1Comp * 1.25, 'disc'), enabled: true });
+  // L5-S1 takes the largest external-load amplification (Marras 1995).
+  const l5s1FacetComp = l5s1Comp + externalLumbarBoost * 1.1 * 0.6;
+  const l5s1DiscComp  = l5s1Comp * 1.25 + externalLumbarBoost * 1.1 * 1.0;
+  joints.push({ id: 'l5s1_facet', label: 'L5-S1 Facet Joint', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1FacetComp, tension: l5s1Tension, shear: l5s1Shear, totalForce: l5s1FacetComp + l5s1Shear, status: getStatus(l5s1FacetComp), clinical: getClinicalNote(l5s1FacetComp, 'facet'), enabled: true });
+  joints.push({ id: 'l5s1_disc', label: 'L5-S1 Intervertebral Disc', category: 'lumbar_spine', boneName: 'RootPart1_M', compression: l5s1DiscComp, tension: l5s1Tension * 0.75, shear: l5s1Shear * 1.1, totalForce: l5s1DiscComp + l5s1Shear * 1.1, status: getStatus(l5s1DiscComp), clinical: getClinicalNote(l5s1DiscComp, 'disc'), enabled: true });
 
   const siAbove = headMass + SEGMENT_MASS_PCT.trunk + armMass;
   const siTorsion = Math.abs(config.sacrum?.torsion ?? 0);
@@ -309,7 +450,26 @@ function computeHipForces(config: JointAngles, side: 'left' | 'right'): JointSur
   const abdFactor = 1 + 0.02 * abd + 0.02 * add;
   const rotFactor = 1 + 0.01 * intRot + 0.01 * extRot + 0.015 * antev;
 
-  const fhComp = aboveHip * 0.5 * (1 + sinFlex * 2.5) * abdFactor * rotFactor + thighMass * 0.5;
+  // Task #364: leg-chain moment about the hip. Bending the knee folds the
+  // shank back toward the hip axis, REDUCING the hip-flexor demand of an
+  // SLR — the engine previously ignored knee/ankle config at the hip,
+  // so SLR vs bent-knee SLR were indistinguishable.
+  const kneeKey = side === 'left' ? 'leftKnee' : 'rightKnee';
+  const kneeFlexHere = Math.abs(((config[kneeKey] as any)?.flexion) ?? 0);
+  const thighGlobal = hipFlexAngle;
+  const shankGlobal = thighGlobal - Math.min(kneeFlexHere, 140);
+  const legChain = computeChainMoment({
+    segments: [
+      { massBwFrac: SEGMENT_MASS_PCT.thigh, normLen: 0.55, angleDeg: thighGlobal },
+      { massBwFrac: SEGMENT_MASS_PCT.shank, normLen: 0.40, angleDeg: shankGlobal },
+      { massBwFrac: SEGMENT_MASS_PCT.foot,  normLen: 0.05, angleDeg: shankGlobal },
+    ],
+  });
+  const legChainGravityComp = legChain.totalWeightBwFrac * legChain.leverArmFrac * 3.0;
+
+  const fhComp = aboveHip * 0.5 * (1 + sinFlex * 2.5) * abdFactor * rotFactor
+               + thighMass * 0.5
+               + legChainGravityComp;
   const fhShear = aboveHip * 0.5 * sinFlex * 0.3 * rotFactor;
   const fhTension = aboveHip * 0.1 * (1 + 0.01 * abd + 0.015 * antev);
   joints.push({ id: `${side}_femoral_head`, label: `${sideLabel} Femoral Head`, category: `${side}_hip`, boneName: boneNameHip, compression: fhComp, tension: fhTension, shear: fhShear, totalForce: fhComp + fhShear, status: getStatus(fhComp), clinical: getClinicalNote(fhComp, 'hip'), enabled: true });
@@ -361,7 +521,20 @@ function computeKneeForces(config: JointAngles, side: 'left' | 'right'): JointSu
   const valgusFromHip = hipAntev * 0.3 + hipIntRot * 0.2;
   const totalVarusValgus = kneeVarus + valgusFromHip;
 
-  const pfMultiplier = 1 + Math.sin(kneeFlexRad) * 4.0;
+  // Task #364: lower-leg chain modulates quad demand. A vertical shank
+  // (good ankle mobility, hip flex matches knee flex) loads the PFJ less
+  // than an anterior-translated shank during the same knee flexion depth.
+  const thighGlobal = hipFlex;
+  const shankGlobal = thighGlobal - Math.min(kneeFlex, 140);
+  const lowerLegChain = computeChainMoment({
+    segments: [
+      { massBwFrac: SEGMENT_MASS_PCT.shank, normLen: 0.85, angleDeg: shankGlobal },
+      { massBwFrac: SEGMENT_MASS_PCT.foot,  normLen: 0.15, angleDeg: shankGlobal },
+    ],
+  });
+  const shankLeverFactor = 0.7 + lowerLegChain.leverArmFrac * 0.6;
+
+  const pfMultiplier = 1 + Math.sin(kneeFlexRad) * 4.0 * shankLeverFactor;
   const pfComp = aboveKnee * pfMultiplier * hipFlexContrib * 0.5;
   const pfShear = pfComp * Math.sin(kneeFlexRad) * 0.12;
   const pfTension = aboveKnee * 0.3 * (1 + Math.sin(kneeFlexRad) * 2.0);
@@ -466,8 +639,6 @@ function computeShoulderForces(config: JointAngles, side: 'left' | 'right'): Joi
   const scapBone = side === 'left' ? 'Scapula_L' : 'Scapula_R';
   const sideLabel = side === 'left' ? 'Left' : 'Right';
 
-  const armMass = SEGMENT_MASS_PCT.upperArm + SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
-
   const flex = Math.abs(shoulder.flexion ?? 0);
   const ext = Math.abs(shoulder.extension ?? 0);
   const abd = Math.abs(shoulder.abduction ?? 0);
@@ -483,11 +654,29 @@ function computeShoulderForces(config: JointAngles, side: 'left' | 'right'): Joi
 
   const thorKyph = Math.abs(config.spine?.thoracicKyphosis ?? 0);
 
+  // Task #364: chain-based moment about the GH joint. Bending the elbow folds
+  // the forearm + hand back toward the GH axis, REDUCING the lever arm — the
+  // old formula (line above) erroneously added a positive elbow-flex term
+  // that *increased* GH compression with elbow flexion. (Veeger & van der
+  // Helm 2007; de Leva 1996 segment masses.)
   const leverAngle = Math.max(flex, abd);
-  const leverArm = Math.sin(deg2rad(clamp(leverAngle, 0, 180)));
-  const ghComp = armMass * (1 + leverArm * 5.0) + armMass * Math.sin(deg2rad(clamp(elbFlex, 0, 150))) * 0.3;
+  const upperArmGlobalDeg = leverAngle;
+  const forearmGlobalDeg = upperArmGlobalDeg + Math.min(elbFlex, 150);
+  const externalLoadKg = loadForSide(config, side);
+  const armChain = computeChainMoment({
+    segments: [
+      { massBwFrac: SEGMENT_MASS_PCT.upperArm, normLen: 0.43, angleDeg: upperArmGlobalDeg },
+      { massBwFrac: SEGMENT_MASS_PCT.forearm,  normLen: 0.34, angleDeg: forearmGlobalDeg },
+      { massBwFrac: SEGMENT_MASS_PCT.hand,     normLen: 0.23, angleDeg: forearmGlobalDeg },
+    ],
+    externalLoadKg,
+    bodyWeightKg: bodyWeightOf(config),
+  });
+  const leverArm = armChain.leverArmFrac;
+  const armChainWeight = armChain.totalWeightBwFrac;
+  const ghComp = armChainWeight * (1 + leverArm * 5.0);
   const ghShear = ghComp * 0.15 * (1 + 0.02 * intRot + 0.02 * extRot + 0.01 * horizAdd);
-  const ghTension = armMass * 0.5 * leverArm * (1 + 0.01 * ext);
+  const ghTension = armChainWeight * 0.5 * leverArm * (1 + 0.01 * ext);
 
   const kyphFactor = 1 + 0.01 * thorKyph;
   const scapDyskFactor = 1 + 0.02 * scapWing + 0.015 * scapAntTilt + 0.01 * scapProt;
@@ -498,20 +687,20 @@ function computeShoulderForces(config: JointAngles, side: 'left' | 'right'): Joi
   const rcComp = ghComp * 0.1;
   joints.push({ id: `${side}_rotator_cuff`, label: `${sideLabel} Rotator Cuff Complex`, category: `${side}_shoulder`, boneName, compression: rcComp, tension: rcTension, shear: rcTension * 0.15, totalForce: rcTension, status: getStatus(rcTension), clinical: getClinicalNote(rcTension, 'shoulder'), enabled: true });
 
-  const subacromialComp = armMass * leverArm * 2.0 * scapDyskFactor * kyphFactor;
+  const subacromialComp = armChainWeight * leverArm * 2.0 * scapDyskFactor * kyphFactor;
   const isImpingementZone = leverAngle > 60 && leverAngle < 120;
   const impingementFactor = isImpingementZone ? 1.5 : 1.0;
   joints.push({ id: `${side}_subacromial`, label: `${sideLabel} Subacromial Space`, category: `${side}_shoulder`, boneName, compression: subacromialComp * impingementFactor, tension: 0, shear: subacromialComp * 0.2 * impingementFactor, totalForce: subacromialComp * impingementFactor, status: getStatus(subacromialComp * impingementFactor), clinical: getClinicalNote(subacromialComp * impingementFactor, 'shoulder'), enabled: true });
 
-  const acComp = armMass * 0.3 * (1 + leverArm * 1.5 + 0.02 * horizAdd + 0.02 * scapProt);
+  const acComp = armChainWeight * 0.3 * (1 + leverArm * 1.5 + 0.02 * horizAdd + 0.02 * scapProt);
   const acShear = acComp * 0.3;
   joints.push({ id: `${side}_ac`, label: `${sideLabel} Acromioclavicular (AC)`, category: `${side}_shoulder`, boneName: scapBone, compression: acComp, tension: acComp * 0.2, shear: acShear, totalForce: acComp + acShear, status: getStatus(acComp), clinical: getClinicalNote(acComp, 'generic'), enabled: true });
 
-  const scComp = armMass * 0.2 * (1 + leverArm * 1.0 + 0.02 * scapElev + 0.01 * scapProt);
+  const scComp = armChainWeight * 0.2 * (1 + leverArm * 1.0 + 0.02 * scapElev + 0.01 * scapProt);
   const scShear = scComp * 0.25;
   joints.push({ id: `${side}_sc`, label: `${sideLabel} Sternoclavicular (SC)`, category: `${side}_shoulder`, boneName: scapBone, compression: scComp, tension: scComp * 0.15, shear: scShear, totalForce: scComp + scShear, status: getStatus(scComp), clinical: getClinicalNote(scComp, 'generic'), enabled: true });
 
-  const stComp = armMass * 0.15 * (1 + 0.02 * scapWing + 0.02 * scapAntTilt + 0.01 * scapUpRot);
+  const stComp = armChainWeight * 0.15 * (1 + 0.02 * scapWing + 0.02 * scapAntTilt + 0.01 * scapUpRot);
   joints.push({ id: `${side}_scapthor`, label: `${sideLabel} Scapulothoracic`, category: `${side}_shoulder`, boneName: scapBone, compression: stComp, tension: stComp * 0.5, shear: stComp * 0.2, totalForce: stComp, status: getStatus(stComp), clinical: getClinicalNote(stComp, 'generic'), enabled: true });
 
   return joints;
@@ -526,8 +715,6 @@ function computeElbowForces(config: JointAngles, side: 'left' | 'right'): JointS
   const boneName = side === 'left' ? 'Elbow_L' : 'Elbow_R';
   const sideLabel = side === 'left' ? 'Left' : 'Right';
 
-  const forearmMass = SEGMENT_MASS_PCT.forearm + SEGMENT_MASS_PCT.hand;
-
   const flex = Math.abs(elbow.flexion ?? 0);
   const pro = Math.abs(elbow.pronation ?? 0);
   const sup = Math.abs(elbow.supination ?? 0);
@@ -535,30 +722,43 @@ function computeElbowForces(config: JointAngles, side: 'left' | 'right'): JointS
   const shoulderFlex = Math.abs(shoulder.flexion ?? 0);
   const shoulderAbd = Math.abs(shoulder.abduction ?? 0);
 
+  // Task #364: chain hanging off the elbow = forearm + hand + any external
+  // load. Replaces the old `shoulderFactor` (which wrongly raised elbow load
+  // when the shoulder abducted) with proper chain weight + lever-arm physics.
   const flexRad = deg2rad(clamp(flex, 0, 150));
-  const leverAngle = Math.max(shoulderFlex, shoulderAbd);
-  const shoulderFactor = 1 + Math.sin(deg2rad(clamp(leverAngle, 0, 180))) * 0.3;
+  const upperArmGlobalDeg = Math.max(shoulderFlex, shoulderAbd);
+  const forearmGlobalDeg = upperArmGlobalDeg + Math.min(flex, 150);
+  const externalLoadKg = loadForSide(config, side);
+  const elbowChain = computeChainMoment({
+    segments: [
+      { massBwFrac: SEGMENT_MASS_PCT.forearm, normLen: 0.6, angleDeg: forearmGlobalDeg },
+      { massBwFrac: SEGMENT_MASS_PCT.hand,    normLen: 0.4, angleDeg: forearmGlobalDeg },
+    ],
+    externalLoadKg,
+    bodyWeightKg: bodyWeightOf(config),
+  });
+  const elbowChainWeight = elbowChain.totalWeightBwFrac;
 
-  const huComp = forearmMass * (1 + Math.sin(flexRad) * 3.5) * shoulderFactor;
+  const huComp = elbowChainWeight * (1 + Math.sin(flexRad) * 3.5);
   const huShear = huComp * 0.12 * (1 + 0.02 * valgus);
-  const huTension = forearmMass * 0.2 * (1 + Math.sin(flexRad) * 1.5);
+  const huTension = elbowChainWeight * 0.2 * (1 + Math.sin(flexRad) * 1.5);
   joints.push({ id: `${side}_humeroulnar`, label: `${sideLabel} Humeroulnar`, category: `${side}_elbow`, boneName, compression: huComp, tension: huTension, shear: huShear, totalForce: huComp + huShear, status: getStatus(huComp), clinical: getClinicalNote(huComp, 'generic'), enabled: true });
 
-  const hrComp = forearmMass * (1 + Math.sin(flexRad) * 2.0) * (1 + 0.02 * pro + 0.02 * sup) * shoulderFactor;
+  const hrComp = elbowChainWeight * (1 + Math.sin(flexRad) * 2.0) * (1 + 0.02 * pro + 0.02 * sup);
   const hrShear = hrComp * 0.1;
   joints.push({ id: `${side}_humeroradial`, label: `${sideLabel} Humeroradial`, category: `${side}_elbow`, boneName, compression: hrComp, tension: hrComp * 0.15, shear: hrShear, totalForce: hrComp + hrShear, status: getStatus(hrComp), clinical: getClinicalNote(hrComp, 'generic'), enabled: true });
 
-  const pruComp = forearmMass * 0.3 * (1 + 0.03 * pro + 0.03 * sup);
+  const pruComp = elbowChainWeight * 0.3 * (1 + 0.03 * pro + 0.03 * sup);
   const pruShear = pruComp * 0.35 * (1 + 0.02 * pro + 0.02 * sup);
   joints.push({ id: `${side}_prox_radioulnar`, label: `${sideLabel} Proximal Radioulnar`, category: `${side}_elbow`, boneName, compression: pruComp, tension: pruComp * 0.2, shear: pruShear, totalForce: pruComp + pruShear, status: getStatus(pruComp), clinical: getClinicalNote(pruComp, 'generic'), enabled: true });
 
-  const uclTension = forearmMass * 0.1 * (1 + 0.04 * valgus + Math.sin(flexRad) * 0.5);
+  const uclTension = elbowChainWeight * 0.1 * (1 + 0.04 * valgus + Math.sin(flexRad) * 0.5);
   joints.push({ id: `${side}_ucl`, label: `${sideLabel} UCL (Medial Collateral)`, category: `${side}_elbow`, boneName, compression: 0, tension: uclTension, shear: 0, totalForce: uclTension, status: getStatus(uclTension), clinical: getClinicalNote(uclTension, 'generic'), enabled: true });
 
-  const cepTension = forearmMass * 0.15 * (1 + Math.sin(flexRad) * 1.0 + 0.02 * pro);
+  const cepTension = elbowChainWeight * 0.15 * (1 + Math.sin(flexRad) * 1.0 + 0.02 * pro);
   joints.push({ id: `${side}_common_extensor`, label: `${sideLabel} Common Extensor (Lateral Epicondyle)`, category: `${side}_elbow`, boneName, compression: 0, tension: cepTension, shear: 0, totalForce: cepTension, status: getStatus(cepTension), clinical: getClinicalNote(cepTension, 'generic'), enabled: true });
 
-  const cfpTension = forearmMass * 0.12 * (1 + Math.sin(flexRad) * 1.2 + 0.02 * sup);
+  const cfpTension = elbowChainWeight * 0.12 * (1 + Math.sin(flexRad) * 1.2 + 0.02 * sup);
   joints.push({ id: `${side}_common_flexor`, label: `${sideLabel} Common Flexor (Medial Epicondyle)`, category: `${side}_elbow`, boneName, compression: 0, tension: cfpTension, shear: 0, totalForce: cfpTension, status: getStatus(cfpTension), clinical: getClinicalNote(cfpTension, 'generic'), enabled: true });
 
   return joints;
@@ -573,33 +773,43 @@ function computeWristForces(config: JointAngles, side: 'left' | 'right'): JointS
   const boneName = side === 'left' ? 'Wrist_L' : 'Wrist_R';
   const sideLabel = side === 'left' ? 'Left' : 'Right';
 
-  const handMass = SEGMENT_MASS_PCT.hand;
-
   const wFlex = Math.abs(wrist.flexion ?? 0);
   const wExt = Math.abs(wrist.extension ?? 0);
   const radDev = Math.abs(wrist.radialDeviation ?? 0);
   const ulnDev = Math.abs(wrist.ulnarDeviation ?? 0);
   const wPro = Math.abs(wrist.pronation ?? 0);
-  const elbFlex = Math.abs(elbow.flexion ?? 0);
 
   const wristAngle = Math.max(wFlex, wExt);
   const wristMoment = Math.sin(deg2rad(clamp(wristAngle, 0, 80)));
-  const elbowFactor = 1 + Math.sin(deg2rad(clamp(elbFlex, 0, 150))) * 0.2;
 
-  const rcComp = handMass * (1 + wristMoment * 3.0) * elbowFactor;
+  // Task #364: chain at the wrist is just the hand + any external load.
+  // The previous engine wrongly multiplied wrist load by elbow flexion.
+  // (elbow position cannot raise wrist joint reaction by itself; only the
+  // hand mass + grip load matter at this segment.)
+  const externalLoadKg = loadForSide(config, side);
+  const wristChain = computeChainMoment({
+    segments: [
+      { massBwFrac: SEGMENT_MASS_PCT.hand, normLen: 1.0, angleDeg: 0 },
+    ],
+    externalLoadKg,
+    bodyWeightKg: bodyWeightOf(config),
+  });
+  const wristChainWeight = wristChain.totalWeightBwFrac;
+
+  const rcComp = wristChainWeight * (1 + wristMoment * 3.0);
   const rcShear = rcComp * 0.15 * (1 + 0.02 * radDev + 0.02 * ulnDev);
   joints.push({ id: `${side}_radiocarpal`, label: `${sideLabel} Radiocarpal`, category: `${side}_wrist`, boneName, compression: rcComp, tension: rcComp * 0.2, shear: rcShear, totalForce: rcComp + rcShear, status: getStatus(rcComp), clinical: getClinicalNote(rcComp, 'generic'), enabled: true });
 
-  const mcComp = handMass * (1 + wristMoment * 2.0) * elbowFactor;
+  const mcComp = wristChainWeight * (1 + wristMoment * 2.0);
   const mcShear = mcComp * 0.12;
   joints.push({ id: `${side}_midcarpal`, label: `${sideLabel} Midcarpal`, category: `${side}_wrist`, boneName, compression: mcComp, tension: mcComp * 0.15, shear: mcShear, totalForce: mcComp + mcShear, status: getStatus(mcComp), clinical: getClinicalNote(mcComp, 'generic'), enabled: true });
 
-  const drujComp = handMass * 0.4 * (1 + 0.03 * wPro + 0.02 * ulnDev);
+  const drujComp = wristChainWeight * 0.4 * (1 + 0.03 * wPro + 0.02 * ulnDev);
   const drujShear = drujComp * 0.4 * (1 + 0.03 * wPro);
   joints.push({ id: `${side}_druj`, label: `${sideLabel} DRUJ (Distal Radioulnar)`, category: `${side}_wrist`, boneName, compression: drujComp, tension: drujComp * 0.2, shear: drujShear, totalForce: drujComp + drujShear, status: getStatus(drujComp), clinical: getClinicalNote(drujComp, 'generic'), enabled: true });
 
-  const tfccComp = handMass * 0.15 * (1 + 0.04 * ulnDev + 0.02 * wPro);
-  const tfccTension = handMass * 0.1 * (1 + 0.03 * ulnDev + 0.02 * wPro);
+  const tfccComp = wristChainWeight * 0.15 * (1 + 0.04 * ulnDev + 0.02 * wPro);
+  const tfccTension = wristChainWeight * 0.1 * (1 + 0.03 * ulnDev + 0.02 * wPro);
   joints.push({ id: `${side}_tfcc`, label: `${sideLabel} TFCC`, category: `${side}_wrist`, boneName, compression: tfccComp, tension: tfccTension, shear: tfccComp * 0.2, totalForce: tfccComp + tfccTension, status: getStatus(Math.max(tfccComp, tfccTension)), clinical: getClinicalNote(Math.max(tfccComp, tfccTension), 'generic'), enabled: true });
 
   return joints;

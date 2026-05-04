@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight, Weight } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -47,6 +47,14 @@ interface BiomechanicsHUDProps {
   /** Live patient body weight (kg). Used to dual-label tooltip values in
    * both BW multiples and Newtons so units stay consistent. */
   bodyWeightKg?: number;
+  /** Task #364: total carried external load (kg) summed across both hands.
+   * Drives the new Load HUD circle's display value. */
+  externalLoadKg?: number;
+  /** Task #364: which hand(s) the load is assigned to. */
+  externalLoadHand?: 'left' | 'right' | 'both';
+  /** Task #364: callback when the user picks a new load preset / hand from
+   * the Load circle popover. PhysioGPT owns the actual force re-computation. */
+  onChangeExternalLoad?: (kg: number, hand: 'left' | 'right' | 'both') => void;
 }
 
 function getForceColor(status: string): string {
@@ -106,8 +114,13 @@ export default function BiomechanicsHUD({
   onOpenForceTime,
   patientForceState,
   bodyWeightKg = 70,
+  externalLoadKg = 0,
+  externalLoadHand = 'both',
+  onChangeExternalLoad,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
+  // Task #364: popover state for the Load circle (preset kg + hand selector).
+  const [loadPopoverOpen, setLoadPopoverOpen] = useState(false);
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
   const prevThresholdsRef = useRef<{
     forceStatus: string;
@@ -413,6 +426,25 @@ export default function BiomechanicsHUD({
       })(),
       onClick: onOpenForceTime,
     }] : []),
+    ...(onChangeExternalLoad ? [{
+      id: 'load',
+      icon: Weight,
+      color: 'text-yellow-300',
+      bgColor: 'bg-yellow-500/15',
+      ringColor: 'ring-yellow-500/30',
+      label: 'Load',
+      value: externalLoadKg > 0 ? `${externalLoadKg}kg` : '0',
+      valueColor: externalLoadKg >= 20 ? '#ef4444'
+                : externalLoadKg >= 10 ? '#f97316'
+                : externalLoadKg >= 5  ? '#eab308'
+                : externalLoadKg > 0   ? '#a3e635'
+                : '#6b7280',
+      onClick: () => setLoadPopoverOpen(v => !v),
+      tooltip: externalLoadKg > 0
+        ? `Carrying ${externalLoadKg} kg in ${externalLoadHand} hand(s) — click to change`
+        : 'Add a hand-held load (click to choose kg + hand)',
+      pressed: loadPopoverOpen || externalLoadKg > 0,
+    }] : []),
     {
       id: 'weight',
       icon: Scale,
@@ -515,6 +547,61 @@ export default function BiomechanicsHUD({
         );
       })}
     </div>
+    {loadPopoverOpen && onChangeExternalLoad && (
+      <div
+        className="absolute top-[72px] left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md ring-1 ring-yellow-500/40 rounded-lg shadow-xl p-3 min-w-[260px]"
+        data-testid="hud-load-popover"
+      >
+        <div className="text-[11px] font-semibold text-yellow-300 uppercase tracking-wider mb-2">
+          External Load (Hand-Held)
+        </div>
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {[0, 2.5, 5, 10, 20].map((kg) => (
+            <button
+              key={kg}
+              onClick={() => onChangeExternalLoad(kg, externalLoadHand)}
+              className={`px-1 py-1.5 rounded text-[11px] font-bold tabular-nums transition-colors ${
+                externalLoadKg === kg
+                  ? 'bg-yellow-500 text-slate-900'
+                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+              }`}
+              data-testid={`hud-load-preset-${kg}`}
+            >
+              {kg === 0 ? 'Off' : `${kg}kg`}
+            </button>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Carried in</div>
+        <div className="grid grid-cols-3 gap-1.5 mb-2">
+          {(['left', 'both', 'right'] as const).map((h) => (
+            <button
+              key={h}
+              onClick={() => onChangeExternalLoad(externalLoadKg, h)}
+              className={`px-1 py-1.5 rounded text-[11px] font-medium capitalize transition-colors ${
+                externalLoadHand === h
+                  ? 'bg-yellow-500 text-slate-900'
+                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+              }`}
+              data-testid={`hud-load-hand-${h}`}
+            >
+              {h}
+            </button>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-400 leading-snug">
+          Total {externalLoadKg} kg → {externalLoadHand === 'both'
+            ? `${(externalLoadKg / 2).toFixed(1)} kg per hand`
+            : `${externalLoadKg} kg in ${externalLoadHand} hand`}.
+          Lever physics: de Leva 1996; lumbar amplification: Marras 1995.
+        </div>
+        <button
+          onClick={() => setLoadPopoverOpen(false)}
+          className="mt-2 w-full py-1 text-[10px] text-slate-400 hover:text-slate-200 uppercase tracking-wider"
+        >
+          Close
+        </button>
+      </div>
+    )}
     </>
   );
 }

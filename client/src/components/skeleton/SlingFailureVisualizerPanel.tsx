@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { Play, Pause, RefreshCw, AlertTriangle, Activity, ChevronDown, ChevronUp, Sparkles, X, Loader2, GitCompare, Eye, EyeOff } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -583,8 +583,9 @@ function DraggableShell({ position, onPositionChange, children }: DraggableShell
   // smaller viewer, or the window was resized while the panel was
   // closed), clear it on mount and on container resize so the panel
   // falls back to its default top-right slot rather than disappearing
-  // off-screen. (Task #361)
-  useEffect(() => {
+  // off-screen. Uses useLayoutEffect so the recovery happens before
+  // paint and the user never sees a one-frame flash off-screen. (Task #361)
+  useLayoutEffect(() => {
     if (!position || !onPositionChange) return;
     const panel = panelRef.current;
     if (!panel) return;

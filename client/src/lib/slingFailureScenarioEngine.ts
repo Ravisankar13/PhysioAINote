@@ -69,7 +69,7 @@ export const TRIGGER_MOVEMENT_LIBRARY: TriggerMovementSpec[] = [
     id: 'sfv_overhead_reach',
     slingId: 'scapular_shoulder',
     label: 'Overhead reach',
-    reason: 'Full overhead reach demands serratus anterior + lower trap to upwardly rotate the scapula and centre the humeral head.',
+    reason: 'Full overhead reach demands serratus anterior + lower trap to upwardly rotate the scapula and centre the humeral head. Forearm + hand mass amplifies GH demand with elbow extended — bending the elbow shortens the chain and noticeably offloads the cuff.',
     failureFrame: 0.7,
     sequence: {
       id: 'sfv_overhead_reach',
@@ -108,7 +108,7 @@ export const TRIGGER_MOVEMENT_LIBRARY: TriggerMovementSpec[] = [
     id: 'sfv_gait_stance_push_off',
     slingId: 'posterior_oblique',
     label: 'Gait stance push-off',
-    reason: 'Push-off in gait loads the posterior oblique sling — latissimus → thoracolumbar fascia → contralateral glute max delivers diagonal force across the SI joint.',
+    reason: 'Push-off in gait loads the posterior oblique sling — latissimus → thoracolumbar fascia → contralateral glute max delivers diagonal force across the SI joint. Lumbar shear scales with the trailing leg-chain moment and any carried load held away from the body.',
     failureFrame: 0.65,
     sequence: {
       id: 'sfv_gait_stance_push_off',

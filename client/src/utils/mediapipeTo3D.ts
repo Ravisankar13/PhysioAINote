@@ -14,9 +14,9 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
-import { FootLockTracker, FootSupportState, solveLegIK } from './footLock';
+import { FootLockTracker, FootSupportState, FootVisibilityState, solveLegIK } from './footLock';
 
-export type { FootSupportPhase, FootSupportState } from './footLock';
+export type { FootSupportPhase, FootSupportState, FootVisibilityState } from './footLock';
 export { FootLockTracker, solveLegIK } from './footLock';
 
 export interface Joint3DRotation {
@@ -109,6 +109,7 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
+  feetVisible?: FootVisibilityState;
   legDepthConfidence?: number;
   bodyVisibility?: BodyVisibility;
 }
@@ -940,6 +941,17 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const mirroredFootSupport: FootSupportState | undefined = footSupport
     ? { left: footSupport.right, right: footSupport.left }
     : undefined;
+  // feetVisible is the per-foot on-frame + ankle-visibility flag from
+  // the foot lock tracker. Surface it on the pose output so UI badges
+  // (foot-support indicators, etc.) can hide whenever the actual foot
+  // landmark is off-frame, instead of using bodyVisibility.lowerBody —
+  // which can read "lower body visible" while the feet themselves are
+  // still off the bottom of the frame (hips + knees are enough to flip
+  // bodyVisibility.lowerBody true).
+  const feetVisible: FootVisibilityState | undefined = footLockUpdate ? footLockUpdate.feetVisible : undefined;
+  const mirroredFeetVisible: FootVisibilityState | undefined = feetVisible
+    ? { left: feetVisible.right, right: feetVisible.left }
+    : undefined;
 
   if (mirrorMode) {
     return {
@@ -977,6 +989,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       jointConfidence: buildJointConfidence(landmarks, armDepthConf),
       globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
       footSupport: mirroredFootSupport,
+      feetVisible: mirroredFeetVisible,
       legDepthConfidence: legDepthConf,
       bodyVisibility: computeBodyVisibility(landmarks),
       spineSegments: {
@@ -1022,6 +1035,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     jointConfidence: buildJointConfidence(landmarks, armDepthConf),
     globalTranslation,
     footSupport,
+    feetVisible,
     legDepthConfidence: legDepthConf,
     bodyVisibility: computeBodyVisibility(landmarks),
     spineSegments,
@@ -1121,6 +1135,7 @@ export type PartialSkeleton3DPose = {
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
+  feetVisible?: FootVisibilityState;
   legDepthConfidence?: number;
   bodyVisibility?: BodyVisibility;
 };
@@ -1914,6 +1929,7 @@ export class Posesmoother {
         spineSegments: this.prevSpineSegments,
         bodyProportions: this.prevBodyProportions,
         footSupport: newPose.footSupport,
+        feetVisible: newPose.feetVisible,
         legDepthConfidence: newPose.legDepthConfidence,
         bodyVisibility: newPose.bodyVisibility,
       };
@@ -2066,6 +2082,7 @@ export class Posesmoother {
       spineSegments: smoothedSegments,
       bodyProportions: this.prevBodyProportions,
       footSupport: newPose.footSupport,
+      feetVisible: newPose.feetVisible,
       legDepthConfidence: newPose.legDepthConfidence,
       bodyVisibility: newPose.bodyVisibility,
     };

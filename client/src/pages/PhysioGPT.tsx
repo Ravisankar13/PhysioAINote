@@ -4656,48 +4656,63 @@ ${ddxList}`;
     if (!cameraPoseActive) return;
     const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
 
+    // Mirror the per-joint write gating used by the full-body camera path
+    // (handleCameraPoseUpdate) so partial-region tracking gets the same
+    // protection from extrapolated / off-frame landmarks. Without it the
+    // partial path would happily overwrite the avatar with whatever low-
+    // confidence guess MediaPipe produced for joints the camera can't
+    // really see in the focused crop.
+    const conf = partialPose.jointConfidence;
+    const JOINT_CONF_GATE = 0.45;
+    const allow = (joint: keyof NonNullable<typeof conf>) =>
+      !conf || (conf[joint] ?? 0.7) >= JOINT_CONF_GATE;
+    const upperOK = partialPose.bodyVisibility?.upperBody !== false;
+    const lowerOK = partialPose.bodyVisibility?.lowerBody !== false;
+    const allowUpperJoint = (joint: keyof NonNullable<typeof conf>) => upperOK && allow(joint);
+    const allowLowerJoint = (joint: keyof NonNullable<typeof conf>) => lowerOK && allow(joint);
+
     setModelConfig(prev => {
       const next = { ...prev };
-      if (partialPose.leftShoulder) {
+      if (partialPose.leftShoulder && allowUpperJoint('leftShoulder')) {
         next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(partialPose.leftShoulder.z), internalRotation: rad2deg(partialPose.leftShoulder.y) };
       }
-      if (partialPose.rightShoulder) {
+      if (partialPose.rightShoulder && allowUpperJoint('rightShoulder')) {
         next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z), internalRotation: rad2deg(partialPose.rightShoulder.y) };
       }
-      if (partialPose.leftElbow) {
+      if (partialPose.leftElbow && allowUpperJoint('leftElbow')) {
         next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x), pronation: rad2deg(partialPose.leftElbow.y) };
       }
-      if (partialPose.rightElbow) {
+      if (partialPose.rightElbow && allowUpperJoint('rightElbow')) {
         next.rightElbow = { ...prev.rightElbow, flexion: rad2deg(partialPose.rightElbow.x), pronation: rad2deg(partialPose.rightElbow.y) };
       }
-      if (partialPose.leftHip) {
+      if (partialPose.leftHip && allowLowerJoint('leftHip')) {
         next.leftHip = { ...prev.leftHip, flexion: rad2deg(partialPose.leftHip.x), abduction: rad2deg(partialPose.leftHip.z) };
       }
-      if (partialPose.rightHip) {
+      if (partialPose.rightHip && allowLowerJoint('rightHip')) {
         next.rightHip = { ...prev.rightHip, flexion: rad2deg(partialPose.rightHip.x), abduction: rad2deg(partialPose.rightHip.z) };
       }
-      if (partialPose.leftKnee) {
+      if (partialPose.leftKnee && allowLowerJoint('leftKnee')) {
         next.leftKnee = { ...prev.leftKnee, flexion: rad2deg(partialPose.leftKnee.x) };
       }
-      if (partialPose.rightKnee) {
+      if (partialPose.rightKnee && allowLowerJoint('rightKnee')) {
         next.rightKnee = { ...prev.rightKnee, flexion: rad2deg(partialPose.rightKnee.x) };
       }
-      if (partialPose.leftAnkle) {
+      if (partialPose.leftAnkle && allowLowerJoint('leftAnkle')) {
         next.leftAnkle = { ...prev.leftAnkle, dorsiflexion: rad2deg(partialPose.leftAnkle.x), inversion: rad2deg(partialPose.leftAnkle.z) };
       }
-      if (partialPose.rightAnkle) {
+      if (partialPose.rightAnkle && allowLowerJoint('rightAnkle')) {
         next.rightAnkle = { ...prev.rightAnkle, dorsiflexion: rad2deg(partialPose.rightAnkle.x), inversion: rad2deg(partialPose.rightAnkle.z) };
       }
-      if (partialPose.leftWrist) {
+      if (partialPose.leftWrist && allowUpperJoint('leftWrist')) {
         next.leftWrist = { ...prev.leftWrist, flexion: rad2deg(partialPose.leftWrist.x), deviation: rad2deg(partialPose.leftWrist.z) };
       }
-      if (partialPose.rightWrist) {
+      if (partialPose.rightWrist && allowUpperJoint('rightWrist')) {
         next.rightWrist = { ...prev.rightWrist, flexion: rad2deg(partialPose.rightWrist.x), deviation: rad2deg(partialPose.rightWrist.z) };
       }
-      if (partialPose.spine) {
+      if (partialPose.spine && upperOK) {
         next.spine = { ...prev.spine, flexion: rad2deg(partialPose.spine.x), lateralFlexion: rad2deg(partialPose.spine.z), thoracicKyphosis: rad2deg(partialPose.spine.x * 0.6), scoliosis: rad2deg(partialPose.spine.z * 1.2) };
       }
-      if (partialPose.neck) {
+      if (partialPose.neck && upperOK) {
         next.neck = { ...prev.neck, flexion: rad2deg(partialPose.neck.x), rotation: rad2deg(partialPose.neck.y), lateralFlexion: rad2deg(partialPose.neck.z) };
       }
       if (partialPose.pelvisTilt !== undefined || partialPose.pelvisObliquity !== undefined || partialPose.pelvisRotation !== undefined) {

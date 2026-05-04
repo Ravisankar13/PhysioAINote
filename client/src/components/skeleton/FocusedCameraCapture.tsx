@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, computeBodyVisibility, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, BodyVisibility } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, computeBodyVisibility, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, FootVisibilityState, BodyVisibility } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -93,6 +93,11 @@ export default function FocusedCameraCapture({
   const [footLockEnabled, setFootLockEnabled] = useState(true);
   const footLockEnabledRef = useRef(true);
   const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
+  // feetVisible drives the foot-support badges so they only appear when the
+  // ANKLE itself is on-frame and visible — bodyVisibility.lowerBody can be
+  // true with hips+knees showing while the feet are still cut off the
+  // bottom of the frame, which would otherwise leave stale badges visible.
+  const [feetVisible, setFeetVisible] = useState<FootVisibilityState | null>(null);
   const [bodyVisibility, setBodyVisibility] = useState<BodyVisibility | null>(null);
   // `displayedFramingHint` is the *UI-only* version of bodyVisibility used to
   // decide whether the amber "step back" banner is shown. The raw
@@ -526,34 +531,40 @@ export default function FocusedCameraCapture({
           }
 
           if (regionId === 'full_body') {
-            // Replace the old "≥15 landmarks above 0.3 visibility" gate
-            // with a per-region body-visibility check that ALSO requires
-            // each landmark to be on-frame. The old gate cleared 15
-            // easily even when only the torso was in the camera (because
-            // MediaPipe extrapolates off-frame landmarks with high
-            // visibility), so the avatar started tracking against
-            // ghost legs. Full-body tracking should require both halves
-            // of the body to be genuinely observed.
-            const rawVisibility = computeBodyVisibility(results.poseLandmarks);
-            if (rawVisibility.upperBody && rawVisibility.lowerBody) {
-              setPoseDetected(true);
-              if (onPoseUpdate) {
-                const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
-                const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
-                const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
-                if (fullSmoothed.footSupport) {
-                  const next = fullSmoothed.footSupport;
-                  setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
-                }
-                if (fullSmoothed.bodyVisibility) {
-                  const nextVis = fullSmoothed.bodyVisibility;
-                  setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
-                }
-                onPoseUpdate(fullSmoothed);
+            // No hard "all-or-nothing" frame gate here. The previous
+            // count-based ≥15-visible-landmarks gate let half-frame poses
+            // through (MediaPipe extrapolates off-frame landmarks with
+            // surprisingly high visibility), and replacing it with a
+            // strict upper+lower body requirement broke partial-frame
+            // tracking entirely (upper-body-only frames would silently
+            // drop). Instead we always emit pose updates and rely on
+            // PhysioGPT.handleCameraPoseUpdate to do per-joint /
+            // per-region write gating using the bodyVisibility +
+            // jointConfidence fields propagated below — that way an
+            // upper-body-only frame moves the avatar's arms while the
+            // legs hold their last good pose, and a full-body frame
+            // updates everything.
+            setPoseDetected(true);
+            if (onPoseUpdate) {
+              const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
+              const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
+              const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
+              if (fullSmoothed.footSupport) {
+                const next = fullSmoothed.footSupport;
+                setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
               }
-              if (onPosturalMetrics) {
-                onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
+              if (fullSmoothed.feetVisible) {
+                const nextFv = fullSmoothed.feetVisible;
+                setFeetVisible(prev => (prev && prev.left === nextFv.left && prev.right === nextFv.right) ? prev : nextFv);
               }
+              if (fullSmoothed.bodyVisibility) {
+                const nextVis = fullSmoothed.bodyVisibility;
+                setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
+              }
+              onPoseUpdate(fullSmoothed);
+            }
+            if (onPosturalMetrics) {
+              onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
             }
           } else {
             const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
@@ -709,6 +720,7 @@ export default function FocusedCameraCapture({
     phoneFootLockTrackerRef.current.reset();
     smootherRef.current.reset();
     setFootSupport(null);
+    setFeetVisible(null);
     setBodyVisibility(null);
     // Also reset the framing-hint hysteresis state so a new camera
     // session doesn't carry over a stale "off-frame" banner from the
@@ -784,6 +796,10 @@ export default function FocusedCameraCapture({
             if (smoothedPose.footSupport) {
               const next = smoothedPose.footSupport;
               setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+            }
+            if (smoothedPose.feetVisible) {
+              const nextFv = smoothedPose.feetVisible;
+              setFeetVisible(prev => (prev && prev.left === nextFv.left && prev.right === nextFv.right) ? prev : nextFv);
             }
             if (smoothedPose.bodyVisibility) {
               const nextVis = smoothedPose.bodyVisibility;
@@ -1247,22 +1263,26 @@ export default function FocusedCameraCapture({
               <Footprints className="h-3 w-3" /> Foot lock
             </Label>
           </div>
-          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && bodyVisibility?.lowerBody && (
+          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && feetVisible && (feetVisible.left || feetVisible.right) && (
             <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
-              <Badge
-                variant="outline"
-                className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
-                data-testid="badge-foot-left-focused"
-              >
-                L:{footSupport.left === 'planted' ? '●' : '○'}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
-                data-testid="badge-foot-right-focused"
-              >
-                R:{footSupport.right === 'planted' ? '●' : '○'}
-              </Badge>
+              {feetVisible.left && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-left-focused"
+                >
+                  L:{footSupport.left === 'planted' ? '●' : '○'}
+                </Badge>
+              )}
+              {feetVisible.right && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-right-focused"
+                >
+                  R:{footSupport.right === 'planted' ? '●' : '○'}
+                </Badge>
+              )}
             </div>
           )}
         </div>

@@ -166,8 +166,24 @@ export class FootLockTracker {
   /**
    * Low-pass filter the torso basis vectors to absorb torso wobble that
    * otherwise corrupts hip / knee dot-product calculations.
+   *
+   * `valid` lets the caller signal that this frame's basis is degenerate
+   * (e.g., torso landmarks below visibility threshold, or up/right
+   * vectors near-parallel so the cross product is meaningless). When
+   * `valid === false` we don't update internal state — we just return
+   * the previously held basis. This prevents single-frame flips/twists
+   * from a partially-occluded torso polluting every downstream dot
+   * product. If we have no previous basis yet (first frame), we accept
+   * the input regardless to avoid returning a zero vector.
    */
-  smoothTorsoBasis(up: Vec3, forward: Vec3, right: Vec3): { up: Vec3; forward: Vec3; right: Vec3 } {
+  smoothTorsoBasis(up: Vec3, forward: Vec3, right: Vec3, valid: boolean = true): { up: Vec3; forward: Vec3; right: Vec3 } {
+    if (!valid && this.smoothedUp && this.smoothedFwd && this.smoothedRight) {
+      return {
+        up: normalize(this.smoothedUp),
+        forward: normalize(this.smoothedFwd),
+        right: normalize(this.smoothedRight),
+      };
+    }
     const a = TORSO_BASIS_ALPHA;
     if (!this.smoothedUp) this.smoothedUp = { ...up };
     else {
@@ -221,6 +237,21 @@ export class FootLockTracker {
     // (e.g., long pants over the malleoli).
     const lVis = footVisibility(landmarks, LEFT_ANKLE, LEFT_HEEL, LEFT_FOOT_INDEX);
     const rVis = footVisibility(landmarks, RIGHT_ANKLE, RIGHT_HEEL, RIGHT_FOOT_INDEX);
+
+    // Off-frame + ankle-visibility check FIRST so we can short-circuit
+    // phase updates and IK for feet the camera literally can't see.
+    // MediaPipe will happily extrapolate ankle landmarks past the image
+    // edges (often with surprisingly high visibility scores) and the
+    // tracker would otherwise capture a "planted" anchor against that
+    // ghost position, holding the avatar foot to a phantom point. Pre-
+    // condition for any planted state: feetVisible must be true.
+    const lOnFrame = lFoot.x >= -0.05 && lFoot.x <= 1.05 && lFoot.y >= -0.05 && lFoot.y <= 1.05;
+    const rOnFrame = rFoot.x >= -0.05 && rFoot.x <= 1.05 && rFoot.y >= -0.05 && rFoot.y <= 1.05;
+    const lAnkleVis = (landmarks[LEFT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
+    const rAnkleVis = (landmarks[RIGHT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
+    const leftVisible = lOnFrame && lAnkleVis;
+    const rightVisible = rOnFrame && rAnkleVis;
+
     const maxY = Math.max(lFoot.y, rFoot.y);
 
     // Update absolute floor baseline. React quickly when a foot lands
@@ -235,8 +266,29 @@ export class FootLockTracker {
       this.baselineFloorY += (maxY - this.baselineFloorY) * BASELINE_FLOOR_RISE;
     }
 
-    this.updateFoot(this.left, lFoot, lVis, maxY);
-    this.updateFoot(this.right, rFoot, rVis, maxY);
+    if (leftVisible) {
+      this.updateFoot(this.left, lFoot, lVis, maxY);
+    } else {
+      // Force swinging + drop anchor + reset velocity history origin so
+      // when the foot reappears we don't read a giant velocity from the
+      // off-frame gap and accidentally re-plant on the wrong frame.
+      this.left.phase = 'swinging';
+      this.left.framesInPhase = 0;
+      this.left.anchor = null;
+      this.left.prevPos = null;
+      this.left.velocityHistory = [];
+      this.left.visibilityHistory = [];
+    }
+    if (rightVisible) {
+      this.updateFoot(this.right, rFoot, rVis, maxY);
+    } else {
+      this.right.phase = 'swinging';
+      this.right.framesInPhase = 0;
+      this.right.anchor = null;
+      this.right.prevPos = null;
+      this.right.velocityHistory = [];
+      this.right.visibilityHistory = [];
+    }
 
     // Airborne guard: if BOTH feet are clearly above the baseline floor,
     // force both to 'swinging' so the avatar falls back to hip-driven
@@ -277,21 +329,13 @@ export class FootLockTracker {
       dxRaw /= count; dyRaw /= count; dzRaw /= count;
     }
 
-    // Off-frame check: an ankle whose normalized x/y exits the visible
-    // image range is being extrapolated by MediaPipe and shouldn't be
-    // treated as "visible" even if its visibility score is high.
-    const lOnFrame = lFoot.x >= -0.05 && lFoot.x <= 1.05 && lFoot.y >= -0.05 && lFoot.y <= 1.05;
-    const rOnFrame = rFoot.x >= -0.05 && rFoot.x <= 1.05 && rFoot.y >= -0.05 && rFoot.y <= 1.05;
-    const lAnkleVis = (landmarks[LEFT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
-    const rAnkleVis = (landmarks[RIGHT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
-
     return {
       support: { left: this.left.phase, right: this.right.phase },
       hipOffset: { x: dxRaw, y: -dyRaw, z: -dzRaw },
       hasAnchor: count > 0,
       leftAnchor: this.left.anchor ? { ...this.left.anchor } : null,
       rightAnchor: this.right.anchor ? { ...this.right.anchor } : null,
-      feetVisible: { left: lOnFrame && lAnkleVis, right: rOnFrame && rAnkleVis },
+      feetVisible: { left: leftVisible, right: rightVisible },
     };
   }
 

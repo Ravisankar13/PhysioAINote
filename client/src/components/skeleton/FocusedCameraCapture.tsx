@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, BodyVisibility } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, computeBodyVisibility, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, BodyVisibility } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -94,8 +94,59 @@ export default function FocusedCameraCapture({
   const footLockEnabledRef = useRef(true);
   const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
   const [bodyVisibility, setBodyVisibility] = useState<BodyVisibility | null>(null);
+  // `displayedFramingHint` is the *UI-only* version of bodyVisibility used to
+  // decide whether the amber "step back" banner is shown. The raw
+  // `bodyVisibility` state still drives per-joint write gating in
+  // PhysioGPT (which must stay immediate so we don't write garbage during
+  // the grace period), but the banner gets a 1s "hide" hysteresis: it
+  // shows the moment landmarks go off-frame, but only disappears after
+  // the body has stayed fully observed for ≥1s. Without the delay the
+  // banner flickers in and out on every borderline frame.
+  const [displayedFramingHint, setDisplayedFramingHint] = useState<BodyVisibility | null>(null);
+  const hintHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { footLockEnabledRef.current = footLockEnabled; }, [footLockEnabled]);
+
+  useEffect(() => {
+    if (!bodyVisibility) {
+      // No tracking yet — clear any pending hide and show nothing.
+      if (hintHideTimerRef.current) {
+        clearTimeout(hintHideTimerRef.current);
+        hintHideTimerRef.current = null;
+      }
+      setDisplayedFramingHint(null);
+      return;
+    }
+    const fullyVisible = bodyVisibility.upperBody && bodyVisibility.lowerBody;
+    if (!fullyVisible) {
+      // Show banner immediately on bad framing; cancel any pending hide.
+      if (hintHideTimerRef.current) {
+        clearTimeout(hintHideTimerRef.current);
+        hintHideTimerRef.current = null;
+      }
+      setDisplayedFramingHint(bodyVisibility);
+    } else {
+      // Schedule the hide if not already pending. If a fresh "good" frame
+      // arrives while the timer is still running, the timer keeps going
+      // (we don't reset it) — this enforces "≥1s of fully visible
+      // landmarks before the banner clears."
+      if (!hintHideTimerRef.current) {
+        hintHideTimerRef.current = setTimeout(() => {
+          setDisplayedFramingHint({ upperBody: true, lowerBody: true });
+          hintHideTimerRef.current = null;
+        }, 1000);
+      }
+    }
+  }, [bodyVisibility]);
+
+  // Clean up the hide timer on unmount so it can't fire after the
+  // component is gone (would call setState on an unmounted component).
+  useEffect(() => () => {
+    if (hintHideTimerRef.current) {
+      clearTimeout(hintHideTimerRef.current);
+      hintHideTimerRef.current = null;
+    }
+  }, []);
   useEffect(() => {
     if (!footLockEnabled) {
       footLockTrackerRef.current.reset();
@@ -384,6 +435,15 @@ export default function FocusedCameraCapture({
       angles['Left Ankle Dorsiflexion'] = Math.round(angle3D(landmarks[25], landmarks[27], landmarks[31]) - 90);
     }
     if (region.includes('hip') || region.includes('leg') || region === 'full_body') {
+      // Hip flexion uses `180 - angle3D(shoulder, hip, knee)` because at
+      // upright standing the shoulder is *above* the hip while the knee
+      // is *below* — those two vectors point in opposite directions
+      // (angle ≈ 180°), so `180 − 180 ≈ 0°` correctly reads "neutral
+      // hip". Bringing the thigh forward to horizontal collapses the
+      // shoulder/knee vectors to ~90° apart → reads ~90° flexion.
+      // Contrast with shoulder flexion above, where hip and elbow are
+      // BOTH below the shoulder when arms hang at the side (vectors
+      // parallel, angle ≈ 0°), so the `180 −` term must NOT be applied.
       angles['Right Hip Flexion'] = Math.round(180 - angle3D(landmarks[12], landmarks[24], landmarks[26]));
       angles['Left Hip Flexion'] = Math.round(180 - angle3D(landmarks[11], landmarks[23], landmarks[25]));
     }
@@ -466,10 +526,16 @@ export default function FocusedCameraCapture({
           }
 
           if (regionId === 'full_body') {
-            const allVisible = results.poseLandmarks.filter((lm: any) =>
-              lm.visibility === undefined || lm.visibility >= 0.3
-            ).length;
-            if (allVisible >= 15) {
+            // Replace the old "≥15 landmarks above 0.3 visibility" gate
+            // with a per-region body-visibility check that ALSO requires
+            // each landmark to be on-frame. The old gate cleared 15
+            // easily even when only the torso was in the camera (because
+            // MediaPipe extrapolates off-frame landmarks with high
+            // visibility), so the avatar started tracking against
+            // ghost legs. Full-body tracking should require both halves
+            // of the body to be genuinely observed.
+            const rawVisibility = computeBodyVisibility(results.poseLandmarks);
+            if (rawVisibility.upperBody && rawVisibility.lowerBody) {
               setPoseDetected(true);
               if (onPoseUpdate) {
                 const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
@@ -644,6 +710,14 @@ export default function FocusedCameraCapture({
     smootherRef.current.reset();
     setFootSupport(null);
     setBodyVisibility(null);
+    // Also reset the framing-hint hysteresis state so a new camera
+    // session doesn't carry over a stale "off-frame" banner from the
+    // previous one (and cancel any pending 1s hide timer).
+    if (hintHideTimerRef.current) {
+      clearTimeout(hintHideTimerRef.current);
+      hintHideTimerRef.current = null;
+    }
+    setDisplayedFramingHint(null);
     setIsLoading(true);
     setError('');
 
@@ -1039,16 +1113,16 @@ export default function FocusedCameraCapture({
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-0" playsInline muted />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
 
-          {isActive && poseDetected && bodyVisibility && (!bodyVisibility.upperBody || !bodyVisibility.lowerBody) && (
+          {isActive && poseDetected && displayedFramingHint && (!displayedFramingHint.upperBody || !displayedFramingHint.lowerBody) && (
             <div
               className="absolute top-2 left-1/2 -translate-x-1/2 bg-amber-900/85 border border-amber-600 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-lg backdrop-blur-sm"
               data-testid="framing-hint-focused"
             >
               <AlertCircle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
               <span className="text-[11px] text-amber-100 font-medium">
-                {!bodyVisibility.upperBody && !bodyVisibility.lowerBody
+                {!displayedFramingHint.upperBody && !displayedFramingHint.lowerBody
                   ? 'Step back so the full body is in frame'
-                  : !bodyVisibility.lowerBody
+                  : !displayedFramingHint.lowerBody
                   ? 'Lower body off-frame — step back to track legs'
                   : 'Upper body off-frame — adjust camera to track torso/arms'}
               </span>

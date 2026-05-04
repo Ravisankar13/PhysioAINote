@@ -512,28 +512,53 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   };
 
   // === TORSO COORDINATE FRAME ===
-  let torsoUp = normalize({
+  // Raw vectors first (pre-normalize) so we can measure their magnitude for
+  // a degeneracy check. A near-zero up-vector means shoulderMid ≈ hipMid
+  // (torso landmarks collapsed onto each other) and a tiny cross-product
+  // magnitude means torsoUp and torsoRight are near-parallel — both
+  // produce wildly unstable bases that flip the avatar around. In either
+  // case we want to hold the previous filtered basis instead of writing
+  // garbage into it, otherwise a single bad frame propagates through
+  // every shoulder/hip dot-product downstream.
+  const upRaw: Vec3 = {
     x: shoulderMid.x - hipMid.x,
     y: shoulderMid.y - hipMid.y,
     z: shoulderMid.z - hipMid.z
-  });
+  };
+  const upMag = Math.sqrt(upRaw.x * upRaw.x + upRaw.y * upRaw.y + upRaw.z * upRaw.z);
   const shoulderVec: Vec3 = {
     x: (rightShoulder.x - leftShoulder.x),
     y: -(rightShoulder.y - leftShoulder.y),
     z: -(rightShoulder.z - leftShoulder.z)
   };
+  const rightMag = Math.sqrt(shoulderVec.x * shoulderVec.x + shoulderVec.y * shoulderVec.y + shoulderVec.z * shoulderVec.z);
+  let torsoUp = normalize(upRaw);
   let torsoRight = normalize(shoulderVec);
-  let torsoForward = normalize({
+  const fwdRaw: Vec3 = {
     x: torsoUp.y * torsoRight.z - torsoUp.z * torsoRight.y,
     y: torsoUp.z * torsoRight.x - torsoUp.x * torsoRight.z,
     z: torsoUp.x * torsoRight.y - torsoUp.y * torsoRight.x
-  });
+  };
+  const fwdMag = Math.sqrt(fwdRaw.x * fwdRaw.x + fwdRaw.y * fwdRaw.y + fwdRaw.z * fwdRaw.z);
+  let torsoForward = normalize(fwdRaw);
+
+  // Validity: shoulders + hips must each be visible AND on-frame, the
+  // torso must have non-trivial extent (>5% of normalized image), and
+  // the up/right cross product must produce a meaningful forward axis
+  // (>0.10 — roughly 6° away from parallel). Anything less and we
+  // hold the previous filtered basis.
+  const torsoLandmarksOK =
+    (leftShoulder.visibility ?? 1) >= 0.4 && isOnFrame(leftShoulder) &&
+    (rightShoulder.visibility ?? 1) >= 0.4 && isOnFrame(rightShoulder) &&
+    (leftHip.visibility ?? 1) >= 0.4 && isOnFrame(leftHip) &&
+    (rightHip.visibility ?? 1) >= 0.4 && isOnFrame(rightHip);
+  const torsoBasisValid = torsoLandmarksOK && upMag > 0.05 && rightMag > 0.05 && fwdMag > 0.10;
 
   // Foot lock: optionally low-pass filter the torso basis to absorb torso wobble
   // before it propagates into hip/knee/shoulder dot-product calculations.
   let footLockUpdate: ReturnType<FootLockTracker['update']> | null = null;
   if (footLockTracker) {
-    const smoothed = footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight);
+    const smoothed = footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight, torsoBasisValid);
     torsoUp = smoothed.up;
     torsoForward = smoothed.forward;
     torsoRight = smoothed.right;
@@ -1106,7 +1131,7 @@ export type PartialSkeleton3DPose = {
  * extrapolated landmarks don't falsely report "visible". Used by the
  * avatar-driver to skip writes for body regions that aren't really there.
  */
-function computeBodyVisibility(landmarks: NormalizedLandmark[]): BodyVisibility {
+export function computeBodyVisibility(landmarks: NormalizedLandmark[]): BodyVisibility {
   const upperIds = [
     LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER,
     LANDMARKS.LEFT_ELBOW, LANDMARKS.RIGHT_ELBOW,

@@ -29,12 +29,18 @@ export interface FootLockOffset {
   z: number;
 }
 
+export interface FootVisibilityState {
+  left: boolean;
+  right: boolean;
+}
+
 export interface FootLockUpdate {
   support: FootSupportState;
   hipOffset: FootLockOffset;
   hasAnchor: boolean;
   leftAnchor: Vec3 | null;
   rightAnchor: Vec3 | null;
+  feetVisible: FootVisibilityState;
 }
 
 export interface IKLandmarks {
@@ -202,6 +208,7 @@ export class FootLockTracker {
         hasAnchor: false,
         leftAnchor: this.left.anchor ? { ...this.left.anchor } : null,
         rightAnchor: this.right.anchor ? { ...this.right.anchor } : null,
+        feetVisible: { left: false, right: false },
       };
     }
 
@@ -270,12 +277,21 @@ export class FootLockTracker {
       dxRaw /= count; dyRaw /= count; dzRaw /= count;
     }
 
+    // Off-frame check: an ankle whose normalized x/y exits the visible
+    // image range is being extrapolated by MediaPipe and shouldn't be
+    // treated as "visible" even if its visibility score is high.
+    const lOnFrame = lFoot.x >= -0.05 && lFoot.x <= 1.05 && lFoot.y >= -0.05 && lFoot.y <= 1.05;
+    const rOnFrame = rFoot.x >= -0.05 && rFoot.x <= 1.05 && rFoot.y >= -0.05 && rFoot.y <= 1.05;
+    const lAnkleVis = (landmarks[LEFT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
+    const rAnkleVis = (landmarks[RIGHT_ANKLE]?.visibility ?? 0) >= VISIBILITY_MIN;
+
     return {
       support: { left: this.left.phase, right: this.right.phase },
       hipOffset: { x: dxRaw, y: -dyRaw, z: -dzRaw },
       hasAnchor: count > 0,
       leftAnchor: this.left.anchor ? { ...this.left.anchor } : null,
       rightAnchor: this.right.anchor ? { ...this.right.anchor } : null,
+      feetVisible: { left: lOnFrame && lAnkleVis, right: rOnFrame && rAnkleVis },
     };
   }
 

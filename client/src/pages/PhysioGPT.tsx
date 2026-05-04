@@ -4584,28 +4584,44 @@ ${ddxList}`;
       setPoseTrackingQuality({ overall: avgConfidence, estimatedJoints: estimated as string[] });
     }
 
+    // Per-joint write gating: when MediaPipe can't really see a joint (low
+    // confidence) or the camera is missing whole halves of the body, hold
+    // the previous angle instead of writing the smoother's stale guess —
+    // otherwise the avatar contorts to chase noise from off-frame parts.
+    const conf = pose.jointConfidence;
+    const JOINT_CONF_GATE = 0.45;
+    const allow = (joint: keyof NonNullable<typeof conf>) =>
+      !conf || (conf[joint] ?? 0.7) >= JOINT_CONF_GATE;
+    const upperOK = pose.bodyVisibility?.upperBody !== false;
+    const lowerOK = pose.bodyVisibility?.lowerBody !== false;
+    const allowUpperJoint = (joint: keyof NonNullable<typeof conf>) => upperOK && allow(joint);
+    const allowLowerJoint = (joint: keyof NonNullable<typeof conf>) => lowerOK && allow(joint);
+
     setModelConfig(prev => ({
       ...prev,
-      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) },
-      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) },
-      leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion), pronation: rad2deg(smoothed.leftElbow.pronation) },
-      rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion), pronation: rad2deg(smoothed.rightElbow.pronation) },
-      leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
-      rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
-      leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
-      rightKnee: { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) },
-      leftAnkle: { ...prev.leftAnkle, dorsiflexion: rad2deg(smoothed.leftAnkle.dorsiflexion), inversion: rad2deg(smoothed.leftAnkle.inversion) },
-      rightAnkle: { ...prev.rightAnkle, dorsiflexion: rad2deg(smoothed.rightAnkle.dorsiflexion), inversion: rad2deg(smoothed.rightAnkle.inversion) },
-      leftWrist: { ...prev.leftWrist, flexion: rad2deg(smoothed.leftWrist.flexion), deviation: rad2deg(smoothed.leftWrist.deviation) },
-      rightWrist: { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) },
+      leftShoulder: allowUpperJoint('leftShoulder') ? { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) } : prev.leftShoulder,
+      rightShoulder: allowUpperJoint('rightShoulder') ? { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) } : prev.rightShoulder,
+      leftElbow: allowUpperJoint('leftElbow') ? { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion), pronation: rad2deg(smoothed.leftElbow.pronation) } : prev.leftElbow,
+      rightElbow: allowUpperJoint('rightElbow') ? { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion), pronation: rad2deg(smoothed.rightElbow.pronation) } : prev.rightElbow,
+      leftHip: allowLowerJoint('leftHip') ? { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) } : prev.leftHip,
+      rightHip: allowLowerJoint('rightHip') ? { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) } : prev.rightHip,
+      leftKnee: allowLowerJoint('leftKnee') ? { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) } : prev.leftKnee,
+      rightKnee: allowLowerJoint('rightKnee') ? { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) } : prev.rightKnee,
+      leftAnkle: allowLowerJoint('leftAnkle') ? { ...prev.leftAnkle, dorsiflexion: rad2deg(smoothed.leftAnkle.dorsiflexion), inversion: rad2deg(smoothed.leftAnkle.inversion) } : prev.leftAnkle,
+      rightAnkle: allowLowerJoint('rightAnkle') ? { ...prev.rightAnkle, dorsiflexion: rad2deg(smoothed.rightAnkle.dorsiflexion), inversion: rad2deg(smoothed.rightAnkle.inversion) } : prev.rightAnkle,
+      leftWrist: allowUpperJoint('leftWrist') ? { ...prev.leftWrist, flexion: rad2deg(smoothed.leftWrist.flexion), deviation: rad2deg(smoothed.leftWrist.deviation) } : prev.leftWrist,
+      rightWrist: allowUpperJoint('rightWrist') ? { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) } : prev.rightWrist,
       pelvis: {
         ...prev.pelvis,
         tilt: rad2deg(smoothed.pelvis.tilt),
         obliquity: rad2deg(smoothed.pelvis.obliquity),
         rotation: rad2deg(smoothed.pelvis.rotation),
-        zShift: pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
-        yShift: pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
-        xShift: pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
+        // Pelvis translation is only trustworthy when the lower body is
+        // actually being tracked — otherwise the foot lock is anchoring
+        // off extrapolated landmarks and the avatar hops every frame.
+        zShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
+        yShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
+        xShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
       },
       spine: {
         ...prev.spine,

@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, FootLockTracker, FootSupportState, BodyVisibility } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -93,6 +93,7 @@ export default function FocusedCameraCapture({
   const [footLockEnabled, setFootLockEnabled] = useState(true);
   const footLockEnabledRef = useRef(true);
   const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
+  const [bodyVisibility, setBodyVisibility] = useState<BodyVisibility | null>(null);
 
   useEffect(() => { footLockEnabledRef.current = footLockEnabled; }, [footLockEnabled]);
   useEffect(() => {
@@ -387,8 +388,13 @@ export default function FocusedCameraCapture({
       angles['Left Hip Flexion'] = Math.round(180 - angle3D(landmarks[11], landmarks[23], landmarks[25]));
     }
     if (region.includes('shoulder') || region === 'full_body') {
-      angles['Right Shoulder Flexion'] = Math.round(180 - angle3D(landmarks[24], landmarks[12], landmarks[14]));
-      angles['Left Shoulder Flexion'] = Math.round(180 - angle3D(landmarks[23], landmarks[11], landmarks[13]));
+      // Shoulder flexion = angle between torso-down (hip→shoulder) and arm
+      // (shoulder→elbow). Arm hanging at side ⇒ vectors point the same way
+      // ⇒ small angle ⇒ 0° flexion. Arm overhead ⇒ vectors opposite ⇒ ~180°.
+      // (Earlier `180 - angle3D(...)` inverted this and reported 173° when
+      // the arm was actually at the side.)
+      angles['Right Shoulder Flexion'] = Math.round(angle3D(landmarks[24], landmarks[12], landmarks[14]));
+      angles['Left Shoulder Flexion'] = Math.round(angle3D(landmarks[23], landmarks[11], landmarks[13]));
       angles['Right Elbow Flexion'] = Math.round(180 - angle3D(landmarks[12], landmarks[14], landmarks[16]));
       angles['Left Elbow Flexion'] = Math.round(180 - angle3D(landmarks[11], landmarks[13], landmarks[15]));
     }
@@ -472,6 +478,10 @@ export default function FocusedCameraCapture({
                 if (fullSmoothed.footSupport) {
                   const next = fullSmoothed.footSupport;
                   setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+                }
+                if (fullSmoothed.bodyVisibility) {
+                  const nextVis = fullSmoothed.bodyVisibility;
+                  setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
                 }
                 onPoseUpdate(fullSmoothed);
               }
@@ -633,6 +643,7 @@ export default function FocusedCameraCapture({
     phoneFootLockTrackerRef.current.reset();
     smootherRef.current.reset();
     setFootSupport(null);
+    setBodyVisibility(null);
     setIsLoading(true);
     setError('');
 
@@ -699,6 +710,10 @@ export default function FocusedCameraCapture({
             if (smoothedPose.footSupport) {
               const next = smoothedPose.footSupport;
               setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+            }
+            if (smoothedPose.bodyVisibility) {
+              const nextVis = smoothedPose.bodyVisibility;
+              setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
             }
             onPoseUpdate(smoothedPose);
           }
@@ -1024,6 +1039,22 @@ export default function FocusedCameraCapture({
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-0" playsInline muted />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
 
+          {isActive && poseDetected && bodyVisibility && (!bodyVisibility.upperBody || !bodyVisibility.lowerBody) && (
+            <div
+              className="absolute top-2 left-1/2 -translate-x-1/2 bg-amber-900/85 border border-amber-600 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-lg backdrop-blur-sm"
+              data-testid="framing-hint-focused"
+            >
+              <AlertCircle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+              <span className="text-[11px] text-amber-100 font-medium">
+                {!bodyVisibility.upperBody && !bodyVisibility.lowerBody
+                  ? 'Step back so the full body is in frame'
+                  : !bodyVisibility.lowerBody
+                  ? 'Lower body off-frame — step back to track legs'
+                  : 'Upper body off-frame — adjust camera to track torso/arms'}
+              </span>
+            </div>
+          )}
+
           {!isActive && !isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
               {cameraType === 'focused' ? (
@@ -1142,7 +1173,7 @@ export default function FocusedCameraCapture({
               <Footprints className="h-3 w-3" /> Foot lock
             </Label>
           </div>
-          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && (
+          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && bodyVisibility?.lowerBody && (
             <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
               <Badge
                 variant="outline"

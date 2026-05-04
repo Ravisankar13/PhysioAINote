@@ -94,6 +94,11 @@ export interface BodyProportions {
   shinRatio: number;
 }
 
+export interface BodyVisibility {
+  upperBody: boolean;
+  lowerBody: boolean;
+}
+
 export interface SmoothedPoseOutput extends Skeleton3DPose {
   pelvisTilt: number;
   pelvisObliquity: number;
@@ -105,6 +110,7 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
   legDepthConfidence?: number;
+  bodyVisibility?: BodyVisibility;
 }
 
 // MediaPipe landmark indices
@@ -255,11 +261,27 @@ function calculateHipAbduction(
 }
 
 const MIN_VISIBILITY = 0.5;
+// Off-frame margin: MediaPipe still emits landmark coordinates outside [0,1]
+// for body parts that have left the camera view, frequently with surprisingly
+// high visibility scores (it "extrapolates" from the visible torso). Treat
+// any landmark whose normalized x/y exits this padded range as not really
+// observed, regardless of MediaPipe's own visibility number.
+const ON_FRAME_MIN = -0.05;
+const ON_FRAME_MAX = 1.05;
+
+function isOnFrame(lm: NormalizedLandmark | undefined): boolean {
+  if (!lm) return false;
+  return lm.x >= ON_FRAME_MIN && lm.x <= ON_FRAME_MAX
+      && lm.y >= ON_FRAME_MIN && lm.y <= ON_FRAME_MAX;
+}
 
 function landmarksVisible(landmarks: NormalizedLandmark[], indices: number[]): boolean {
   return indices.every(i => {
     const lm = landmarks[i];
-    return lm && (lm.visibility === undefined || lm.visibility >= MIN_VISIBILITY);
+    if (!lm) return false;
+    if (lm.visibility !== undefined && lm.visibility < MIN_VISIBILITY) return false;
+    if (!isOnFrame(lm)) return false;
+    return true;
   });
 }
 
@@ -269,7 +291,12 @@ function getLandmarkConfidence(landmarks: NormalizedLandmark[], indices: number[
   for (const i of indices) {
     const lm = landmarks[i];
     if (lm) {
-      totalVis += lm.visibility ?? 0.5;
+      let v = lm.visibility ?? 0.5;
+      // Heavily penalise off-frame extrapolations so the smoother's
+      // CONFIDENCE_GATE_THRESHOLD trips and holds the previous value
+      // instead of contorting the avatar onto MediaPipe's guess.
+      if (!isOnFrame(lm)) v = Math.min(v, 0.1);
+      totalVis += v;
       count++;
     }
   }
@@ -926,6 +953,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
       footSupport: mirroredFootSupport,
       legDepthConfidence: legDepthConf,
+      bodyVisibility: computeBodyVisibility(landmarks),
       spineSegments: {
         ...spineSegments,
         cervicalRotation: -spineSegments.cervicalRotation,
@@ -970,6 +998,7 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     globalTranslation,
     footSupport,
     legDepthConfidence: legDepthConf,
+    bodyVisibility: computeBodyVisibility(landmarks),
     spineSegments,
     bodyProportions,
   };
@@ -1068,7 +1097,38 @@ export type PartialSkeleton3DPose = {
   bodyProportions?: BodyProportions;
   footSupport?: FootSupportState;
   legDepthConfidence?: number;
+  bodyVisibility?: BodyVisibility;
 };
+
+/**
+ * Determine which halves of the body are actually observed by the camera.
+ * Combines MediaPipe visibility scores with on-frame coordinate checks so
+ * extrapolated landmarks don't falsely report "visible". Used by the
+ * avatar-driver to skip writes for body regions that aren't really there.
+ */
+function computeBodyVisibility(landmarks: NormalizedLandmark[]): BodyVisibility {
+  const upperIds = [
+    LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER,
+    LANDMARKS.LEFT_ELBOW, LANDMARKS.RIGHT_ELBOW,
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+  ];
+  const lowerIds = [
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+    LANDMARKS.LEFT_KNEE, LANDMARKS.RIGHT_KNEE,
+    LANDMARKS.LEFT_ANKLE, LANDMARKS.RIGHT_ANKLE,
+  ];
+  const visibleCount = (ids: number[]) => ids.reduce((n, i) => {
+    const lm = landmarks[i];
+    if (!lm) return n;
+    if (lm.visibility !== undefined && lm.visibility < 0.4) return n;
+    if (!isOnFrame(lm)) return n;
+    return n + 1;
+  }, 0);
+  return {
+    upperBody: visibleCount(upperIds) >= 4,
+    lowerBody: visibleCount(lowerIds) >= 4,
+  };
+}
 
 function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
   const lShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
@@ -1830,6 +1890,7 @@ export class Posesmoother {
         bodyProportions: this.prevBodyProportions,
         footSupport: newPose.footSupport,
         legDepthConfidence: newPose.legDepthConfidence,
+        bodyVisibility: newPose.bodyVisibility,
       };
     }
     
@@ -1981,6 +2042,7 @@ export class Posesmoother {
       bodyProportions: this.prevBodyProportions,
       footSupport: newPose.footSupport,
       legDepthConfidence: newPose.legDepthConfidence,
+      bodyVisibility: newPose.bodyVisibility,
     };
   }
   

@@ -9,6 +9,7 @@ import { Camera, CameraOff, RefreshCw, AlertCircle, User, Footprints } from 'luc
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
 import { convertMediaPipeTo3D, Posesmoother, SmoothedPoseOutput, FootLockTracker, FootSupportState } from '@/utils/mediapipeTo3D';
+import { defaultTorsoBasisSmoother } from '@/utils/footLock';
 
 interface CameraPoseCaptureProps {
   onPoseUpdate?: (pose: SmoothedPoseOutput) => void;

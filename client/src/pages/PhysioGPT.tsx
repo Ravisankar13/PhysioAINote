@@ -1115,6 +1115,28 @@ export default function PhysioGPT() {
   }, []);
   const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
   const [sfvPanelPosition, setSfvPanelPosition] = useState<{ left: number; top: number } | null>(null);
+  // Movement Findings panel position — lifted so the panel keeps its
+  // dragged spot across skeleton-mode re-mounts within the session.
+  const [movementFindingsPosition, setMovementFindingsPosition] = useState<{ left: number; top: number } | null>(null);
+  // Master on/off for the currently-active sling's on-skeleton
+  // visualization (pathway tube, weak-link highlight, intended/actual
+  // ghost layer, reroute arrow, hotspot pulse). When the user activates
+  // a different sling card we reset this to true so the new sling shows
+  // its visualization by default. (Task #358)
+  const [sfvSlingVisualizationVisible, setSfvSlingVisualizationVisible] = useState(true);
+  const lastSfvActiveSlingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = activeFailureSel?.sling.slingId ?? null;
+    if (currentId !== lastSfvActiveSlingIdRef.current) {
+      lastSfvActiveSlingIdRef.current = currentId;
+      setSfvSlingVisualizationVisible(true);
+    }
+  }, [activeFailureSel]);
+  // True when the SFV is currently driving overlays on the 3D skeleton —
+  // i.e. the panel is open, a sling card is active, and the user has not
+  // toggled the per-sling eye off. Used to hide pain markers so the sling
+  // visualization isn't visually drowned out (Task #358).
+  const sfvOverlayActive = !!(slingFailureVisualizerOpen && activeFailureSel && sfvSlingVisualizationVisible);
   // Last bone the clinician interacted with via Pose / Auto-pose. Drives
   // a "focus bonus" in the spotlight selector so dragging a bone that
   // belongs to a sling's pathway nudges the spotlight toward it.
@@ -10494,9 +10516,9 @@ ${ddxList}`;
               tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
-              pulseAtFailureBeat={sfvAtBeat}
-              failureBoneSet={sfvFailureBoneSet}
-              painMarkers={painMarkers}
+              pulseAtFailureBeat={sfvOverlayActive ? sfvAtBeat : false}
+              failureBoneSet={sfvOverlayActive ? sfvFailureBoneSet : undefined}
+              painMarkers={sfvOverlayActive ? [] : painMarkers}
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
@@ -10665,7 +10687,7 @@ ${ddxList}`;
                 <div
                   className="absolute inset-0"
                   style={{
-                    opacity: (activeFailureSel?.ghostMode === 'compare' && !sfvActualVisible) ? 0.12 : 1,
+                    opacity: (sfvSlingVisualizationVisible && activeFailureSel?.ghostMode === 'compare' && !sfvActualVisible) ? 0.12 : 1,
                     transition: 'opacity 180ms ease',
                   }}
                   data-testid="sfv-actual-layer"
@@ -10739,7 +10761,7 @@ ${ddxList}`;
                 {/* Sling failure visualizer SVG overlay anchored to live
                     bone screen positions: continuous tube + tension pulse +
                     failure-frame badge + reroute arrow for the active scenario. */}
-                {skeletonMode === 'movement' && activeFailureSel && activeFailureSel.ghostMode === 'compare' && sfvIntendedVisible && (
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && activeFailureSel.ghostMode === 'compare' && sfvIntendedVisible && (
                   <div
                     className="absolute inset-0 z-10 pointer-events-none"
                     style={{ opacity: sfvGhostOpacity, mixBlendMode: 'screen' }}
@@ -10758,7 +10780,7 @@ ${ddxList}`;
                     />
                   </div>
                 )}
-                {skeletonMode === 'movement' && activeFailureSel && activeFailureSel.ghostMode === 'compare' && (
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && activeFailureSel.ghostMode === 'compare' && (
                   <div
                     className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-900/85 border border-gray-700/60 shadow-lg backdrop-blur text-[10px] text-gray-200"
                     style={{ top: 'calc(3.5rem + 310px)', right: '0.75rem' }}
@@ -10793,7 +10815,7 @@ ${ddxList}`;
                     <span className="font-mono text-emerald-300 w-7 text-right">{Math.round(sfvGhostOpacity * 100)}%</span>
                   </div>
                 )}
-                {skeletonMode === 'movement' && activeFailureSel && (
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && (
                   <SlingFailureVisualizerOverlay
                     scenario={activeFailureSel.scenario}
                     bonePathway={getSlingBonePathway(activeFailureSel.sling.slingId)}
@@ -10840,6 +10862,8 @@ ${ddxList}`;
                     pathologyCompensation={pathologyCompensation}
                     position={sfvPanelPosition}
                     onPositionChange={setSfvPanelPosition}
+                    slingVisualizationVisible={sfvSlingVisualizationVisible}
+                    onSlingVisualizationToggle={() => setSfvSlingVisualizationVisible(v => !v)}
                   />
                 )}
               </div>
@@ -17073,6 +17097,8 @@ ${ddxList}`;
           <MovementFindingsStream
             findings={movementFindings}
             onClear={() => setMovementFindings([])}
+            position={movementFindingsPosition}
+            onPositionChange={setMovementFindingsPosition}
           />
         </div>
       )}

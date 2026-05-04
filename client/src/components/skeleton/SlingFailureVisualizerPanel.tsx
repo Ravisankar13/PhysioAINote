@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Play, Pause, RefreshCw, AlertTriangle, Activity, ChevronDown, ChevronUp, Sparkles, X, Loader2, GitCompare } from 'lucide-react';
+import { Play, Pause, RefreshCw, AlertTriangle, Activity, ChevronDown, ChevronUp, Sparkles, X, Loader2, GitCompare, Eye, EyeOff } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type { SlingAnalysisResult, SlingId, SlingResult } from '@/lib/slingEngine';
@@ -46,6 +46,13 @@ interface Props {
    *  so the panel keeps its position across close/reopen within a session. */
   position?: { left: number; top: number } | null;
   onPositionChange?: (p: { left: number; top: number } | null) => void;
+  /** Master on/off for the active sling's on-skeleton visualization
+   *  (pathway tube, weak-link highlight, intended/actual ghost layer,
+   *  reroute arrow, hotspot pulse). When false, the panel keeps its
+   *  scenario state but the parent skips rendering the overlays so the
+   *  clinician can see the bare skeleton. */
+  slingVisualizationVisible?: boolean;
+  onSlingVisualizationToggle?: () => void;
 }
 
 const STATUS_COLOR: Record<SlingResult['status'], string> = {
@@ -60,6 +67,7 @@ export default function SlingFailureVisualizerPanel(props: Props) {
     caseId, condition, patientFactors, analysis, markers,
     animationState, onAnimationStateChange, onActiveScenarioChange, onClose,
     pathologyCompensation, position, onPositionChange,
+    slingVisualizationVisible = true, onSlingVisualizationToggle,
   } = props;
 
   const [collapsed, setCollapsed] = useState(false);
@@ -354,6 +362,30 @@ export default function SlingFailureVisualizerPanel(props: Props) {
                   >
                     {isPlayingThis ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
                   </button>
+                  {/* Eye / EyeOff toggle — only meaningful (and only
+                      visible) on the currently-active card. Master on/off
+                      for the on-skeleton sling visualization (pathway,
+                      ghost, reroute, hotspot pulse). The card stays
+                      selected so scrubber, deltas and narration remain. */}
+                  {isActive && onSlingVisualizationToggle && (
+                    <button
+                      onClick={() => onSlingVisualizationToggle()}
+                      className={`mt-0.5 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
+                        slingVisualizationVisible
+                          ? 'bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
+                          : 'bg-gray-800/80 text-gray-500 hover:bg-gray-700 hover:text-gray-300'
+                      }`}
+                      title={slingVisualizationVisible
+                        ? 'Hide this sling on the skeleton'
+                        : 'Show this sling on the skeleton'}
+                      aria-pressed={slingVisualizationVisible}
+                      data-testid={`sfv-toggle-skeleton-${scenario.slingId}`}
+                    >
+                      {slingVisualizationVisible
+                        ? <Eye className="w-3.5 h-3.5" />
+                        : <EyeOff className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: sling.color }} />

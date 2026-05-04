@@ -846,9 +846,20 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     y: -((leftHip.y + rightHip.y) / 2),
     z: -((leftHip.z + rightHip.z) / 2)
   };
-  // Note: foot lock re-anchors via the 2-bone IK pass above (which forces
-  // FK from hip to land at the captured anchor), not via hipMidNorm offset.
-  // Applying both would double-correct the planted foot.
+  // Foot lock root anchoring: the 2-bone IK above pins the leg vector so
+  // FK from hip lands on the anchor, but the avatar root itself is still
+  // driven by the raw hip midpoint and would jitter with hipRaw noise.
+  // Apply the planted-foot hipOffset (in hipMidNorm coord space — x raw,
+  // y negated, z negated) before computing globalTranslation. For rigid-body
+  // motion this cancels root drift; for articulated motion the IK absorbs
+  // the residual. Mirror mode negates lateralShift downstream, which
+  // correctly mirrors the offset since the offset has already been folded
+  // into hipMidNorm.x.
+  if (footLockUpdate && footLockUpdate.hasAnchor) {
+    hipMidNorm.x += footLockUpdate.hipOffset.x;
+    hipMidNorm.y += footLockUpdate.hipOffset.y;
+    hipMidNorm.z += footLockUpdate.hipOffset.z;
+  }
   const globalTranslation: GlobalTranslation = {
     lateralShift: clamp((hipMidNorm.x - 0.0) * 2.0, -0.3, 0.3),
     forwardShift: clamp(hipMidNorm.z * 2.0, -0.3, 0.3),

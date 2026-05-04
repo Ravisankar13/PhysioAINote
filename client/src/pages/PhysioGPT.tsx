@@ -1795,6 +1795,11 @@ export default function PhysioGPT() {
     slingPartMuscleAdjustments,
     movementSpotlightEnabled,
     bodyWeightKg,
+    // Task #364: persist hand-held external load (kg) + which hand carries
+    // it inside the case snapshot itself, so loaded-carry scenarios survive
+    // a save / reopen round trip.
+    externalLoadKg,
+    externalLoadHand,
     clinicalHighlights,
     subjectiveHistoryInput,
     patientContextState,

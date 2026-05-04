@@ -5,7 +5,7 @@ import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/mus
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { BiomechanicsOutput } from '@/lib/unifiedBiomechanicsEngine';
 import type { ForceTimeMetrics } from '@/lib/forceTimeBuffer';
-import { citationFor, getThresholdsFor, type PatientState } from '@/lib/forceCitations';
+import { citationsFor, getThresholdsFor, type PatientState } from '@/lib/forceCitations';
 
 interface ChainIntegrityEntry {
   score: number;
@@ -345,7 +345,11 @@ export default function BiomechanicsHUD({
       // force readout carries provenance (the trust-layer requirement).
       tooltip: (() => {
         if (!topJoint) return 'Forces';
-        const cit = citationFor(topJoint.id);
+        // Task #364: surface every citation on the joint's category — primary
+        // *and* secondary refs (e.g. lumbar shows NIOSH + Marras 1995, shoulder
+        // shows Veeger 2007 + de Leva 1996) so the chip carries the full
+        // provenance of the new segment-chain physics.
+        const cits = citationsFor(topJoint.id);
         const band = patientForceState ? getThresholdsFor(topJoint.id, patientForceState) : null;
         const bw = topJoint.totalForce;
         const bwLow = bw * 0.93;
@@ -368,8 +372,14 @@ export default function BiomechanicsHUD({
             `Safe < ${fmt(safeBw, band.safeN)} · Warn ${fmt(warnBw, band.warnN)} — ${band.note}`
           );
         }
-        if (cit) {
-          lines.push(`Source: ${cit.authors} (${cit.year}). ${cit.title}. ${cit.source}`);
+        if (cits.length > 0) {
+          const label = cits.length === 1 ? 'Source' : 'Sources';
+          lines.push(
+            `${label}:\n` +
+            cits
+              .map((c, i) => `  ${i + 1}. ${c.authors} (${c.year}). ${c.title}. ${c.source}`)
+              .join('\n')
+          );
         }
         return lines.join('\n');
       })(),

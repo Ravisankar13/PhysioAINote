@@ -362,28 +362,36 @@ export default function SlingFailureVisualizerPanel(props: Props) {
                   >
                     {isPlayingThis ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
                   </button>
-                  {/* Eye / EyeOff toggle — only meaningful (and only
-                      visible) on the currently-active card. Master on/off
+                  {/* Eye / EyeOff toggle — present on every sling card.
+                      For the currently-active card it's the master on/off
                       for the on-skeleton sling visualization (pathway,
-                      ghost, reroute, hotspot pulse). The card stays
-                      selected so scrubber, deltas and narration remain. */}
-                  {isActive && onSlingVisualizationToggle && (
+                      ghost, reroute, hotspot pulse) and toggling off
+                      does NOT deselect the sling. For inactive cards
+                      it's disabled (there's no overlay to toggle until
+                      the sling is activated). */}
+                  {onSlingVisualizationToggle && (
                     <button
-                      onClick={() => onSlingVisualizationToggle()}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); if (isActive) onSlingVisualizationToggle(); }}
+                      disabled={!isActive}
                       className={`mt-0.5 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
-                        slingVisualizationVisible
-                          ? 'bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
-                          : 'bg-gray-800/80 text-gray-500 hover:bg-gray-700 hover:text-gray-300'
+                        !isActive
+                          ? 'bg-gray-800/40 text-gray-600 cursor-not-allowed'
+                          : slingVisualizationVisible
+                            ? 'bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
+                            : 'bg-gray-800/80 text-gray-500 hover:bg-gray-700 hover:text-gray-300'
                       }`}
-                      title={slingVisualizationVisible
-                        ? 'Hide this sling on the skeleton'
-                        : 'Show this sling on the skeleton'}
-                      aria-pressed={slingVisualizationVisible}
+                      title={!isActive
+                        ? 'Activate this sling to toggle its on-skeleton overlay'
+                        : slingVisualizationVisible
+                          ? 'Hide this sling on the skeleton'
+                          : 'Show this sling on the skeleton'}
+                      aria-pressed={isActive ? slingVisualizationVisible : false}
                       data-testid={`sfv-toggle-skeleton-${scenario.slingId}`}
                     >
-                      {slingVisualizationVisible
-                        ? <Eye className="w-3.5 h-3.5" />
-                        : <EyeOff className="w-3.5 h-3.5" />}
+                      {(isActive && !slingVisualizationVisible)
+                        ? <EyeOff className="w-3.5 h-3.5" />
+                        : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   )}
                   <div className="min-w-0 flex-1">

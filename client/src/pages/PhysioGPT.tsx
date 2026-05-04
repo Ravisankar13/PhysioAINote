@@ -10866,6 +10866,19 @@ ${ddxList}`;
                     onSlingVisualizationToggle={() => setSfvSlingVisualizationVisible(v => !v)}
                   />
                 )}
+                {/* Movement Findings panel — mounted inside the
+                    movement-mode frame so its DraggableShell uses the
+                    viewer container as offsetParent (viewer-relative
+                    clamping, never escapes the viewer). Hidden when the
+                    sidebar is open to mirror the right-rail behavior. */}
+                {!sidebarOpen && (
+                  <MovementFindingsStream
+                    findings={movementFindings}
+                    onClear={() => setMovementFindings([])}
+                    position={movementFindingsPosition}
+                    onPositionChange={setMovementFindingsPosition}
+                  />
+                )}
               </div>
             ); return __viewer; })()}
 
@@ -17093,12 +17106,6 @@ ${ddxList}`;
             onResult={handleMovementSimResult}
             onReset={handleMovementSimReset}
             expandSignal={movementSimExpandSignal}
-          />
-          <MovementFindingsStream
-            findings={movementFindings}
-            onClear={() => setMovementFindings([])}
-            position={movementFindingsPosition}
-            onPositionChange={setMovementFindingsPosition}
           />
         </div>
       )}

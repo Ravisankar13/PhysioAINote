@@ -514,7 +514,8 @@ type OverlayKey =
   | 'scarAdhesion'
   | 'dermatomeNerve'
   | 'slingPathways'
-  | 'boneGlow';
+  | 'boneGlow'
+  | 'compensationGlow';
 
 const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: string; description: string }> = [
   { key: 'tissueIntelligence', label: 'Tissue intelligence', chipColor: '#eab308', description: 'Inflamed / at-risk tissue overlays (rings, tubes, glow spheres)' },
@@ -523,7 +524,8 @@ const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: st
   { key: 'scarAdhesion',       label: 'Scar / adhesion',     chipColor: '#f97316', description: 'Scar markers and adhesion bands' },
   { key: 'forceArrows',        label: 'Forces / GRF',        chipColor: '#22d3ee', description: 'Joint reaction force arrows and ground reaction force' },
   { key: 'muscleGlow',         label: 'Muscle glow',         chipColor: '#84cc16', description: 'Muscle-state highlights and manual-therapy targets' },
-  { key: 'boneGlow',           label: 'Bone glow',           chipColor: '#fbbf24', description: 'Joint / bone highlights from chains, mechanism, compensations' },
+  { key: 'boneGlow',           label: 'Bone glow',           chipColor: '#fbbf24', description: 'Joint highlights from kinetic chains, injury mechanism & biomechanics faults' },
+  { key: 'compensationGlow',   label: 'Compensating-joint glow', chipColor: '#fb7185', description: 'Causal-chain compensation highlights and Influence Ripple bone glow' },
   { key: 'dermatomeNerve',     label: 'Dermatome / nerve',   chipColor: '#60a5fa', description: 'Dermatome shading, nerve-root labels, referral zones' },
   { key: 'slingPathways',      label: 'Sling pathways',      chipColor: '#f59e0b', description: 'Functional sling pathways and cross-sling compensations' },
 ];
@@ -10637,14 +10639,20 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={overlayVisibility.boneGlow && (chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0) ? [
-                ...(chainHighlightBones || []),
-                ...muscleOverrideHighlights,
-                ...influenceHighlights,
-                ...visualizationBoneHighlights,
-                ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
-                ...causalChainHighlights,
-              ] : undefined}
+              highlightBoneNames={(() => {
+                const boneSources = overlayVisibility.boneGlow ? [
+                  ...(chainHighlightBones || []),
+                  ...muscleOverrideHighlights,
+                  ...visualizationBoneHighlights,
+                  ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
+                ] : [];
+                const compensationSources = overlayVisibility.compensationGlow ? [
+                  ...influenceHighlights,
+                  ...causalChainHighlights,
+                ] : [];
+                const merged = [...boneSources, ...compensationSources];
+                return merged.length > 0 ? merged : undefined;
+              })()}
               tissueIntelligenceHighlights={overlayVisibility.tissueIntelligence && tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}

@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   MessageCircle,
@@ -81,6 +83,7 @@ import {
   Copy,
   Save,
   FilePlus2,
+  Layers3,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -502,6 +505,36 @@ interface ModelConfig {
   rightWrist: { deviation: number; flexion: number };
 }
 
+type OverlayKey =
+  | 'tissueIntelligence'
+  | 'fascialChains'
+  | 'painMarkers'
+  | 'forceArrows'
+  | 'muscleGlow'
+  | 'scarAdhesion'
+  | 'dermatomeNerve'
+  | 'slingPathways'
+  | 'boneGlow';
+
+const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: string; description: string }> = [
+  { key: 'tissueIntelligence', label: 'Tissue intelligence', chipColor: '#eab308', description: 'Inflamed / at-risk tissue overlays (rings, tubes, glow spheres)' },
+  { key: 'fascialChains',      label: 'Fascial chains',      chipColor: '#a855f7', description: 'Myofascial chain lines, nodes & propagation glow' },
+  { key: 'painMarkers',        label: 'Pain markers',        chipColor: '#ef4444', description: 'User-placed and AI-predicted pain spots' },
+  { key: 'scarAdhesion',       label: 'Scar / adhesion',     chipColor: '#f97316', description: 'Scar markers and adhesion bands' },
+  { key: 'forceArrows',        label: 'Forces / GRF',        chipColor: '#22d3ee', description: 'Joint reaction force arrows and ground reaction force' },
+  { key: 'muscleGlow',         label: 'Muscle glow',         chipColor: '#84cc16', description: 'Muscle-state highlights and manual-therapy targets' },
+  { key: 'boneGlow',           label: 'Bone glow',           chipColor: '#fbbf24', description: 'Joint / bone highlights from chains, mechanism, compensations' },
+  { key: 'dermatomeNerve',     label: 'Dermatome / nerve',   chipColor: '#60a5fa', description: 'Dermatome shading, nerve-root labels, referral zones' },
+  { key: 'slingPathways',      label: 'Sling pathways',      chipColor: '#f59e0b', description: 'Functional sling pathways and cross-sling compensations' },
+];
+
+const DEFAULT_OVERLAY_VISIBILITY: Record<OverlayKey, boolean> = OVERLAY_DEFINITIONS.reduce(
+  (acc, d) => { acc[d.key] = true; return acc; },
+  {} as Record<OverlayKey, boolean>,
+);
+
+const OVERLAY_VISIBILITY_STORAGE_KEY = 'physiogpt:overlayVisibility:v1';
+
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   limbScales: { upperArm: 0, forearm: 0, thigh: 0, shin: 0, overall: 1 },
   spine: { cervicalLordosis: 0, thoracicKyphosis: 0, lumbarLordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0, cervicalRotation: 0, cervicalLateralFlexion: 0, thoracicRotation: 0, lumbarRotation: 0, flexion: 0, lateralFlexion: 0, lumbarScoliosis: 0, thoracicScoliosis: 0, cervicalScoliosis: 0 },
@@ -777,6 +810,27 @@ export default function PhysioGPT() {
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
   const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement'>('posture');
+  const [overlayVisibility, setOverlayVisibility] = useState<Record<OverlayKey, boolean>>(() => {
+    if (typeof window === 'undefined') return DEFAULT_OVERLAY_VISIBILITY;
+    try {
+      const raw = sessionStorage.getItem(OVERLAY_VISIBILITY_STORAGE_KEY);
+      if (!raw) return DEFAULT_OVERLAY_VISIBILITY;
+      const parsed = JSON.parse(raw);
+      const merged = { ...DEFAULT_OVERLAY_VISIBILITY };
+      for (const k of Object.keys(merged) as OverlayKey[]) {
+        if (typeof parsed?.[k] === 'boolean') merged[k] = parsed[k];
+      }
+      return merged;
+    } catch { return DEFAULT_OVERLAY_VISIBILITY; }
+  });
+  const [showOverlayPopover, setShowOverlayPopover] = useState(false);
+  useEffect(() => {
+    try { sessionStorage.setItem(OVERLAY_VISIBILITY_STORAGE_KEY, JSON.stringify(overlayVisibility)); } catch {}
+  }, [overlayVisibility]);
+  const overlayHiddenCount = useMemo(
+    () => OVERLAY_DEFINITIONS.reduce((n, d) => n + (overlayVisibility[d.key] ? 0 : 1), 0),
+    [overlayVisibility],
+  );
   const [movementFindings, setMovementFindings] = useState<MovementFinding[]>([]);
   /** When the Recovery Sim dashboard is mounted with its Skeleton View tab,
    *  it gives us a DOM container into which we portal the SAME live
@@ -10583,7 +10637,7 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0 ? [
+              highlightBoneNames={overlayVisibility.boneGlow && (chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 || causalChainHighlights.length > 0) ? [
                 ...(chainHighlightBones || []),
                 ...muscleOverrideHighlights,
                 ...influenceHighlights,
@@ -10591,12 +10645,12 @@ ${ddxList}`;
                 ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
                 ...causalChainHighlights,
               ] : undefined}
-              tissueIntelligenceHighlights={tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
+              tissueIntelligenceHighlights={overlayVisibility.tissueIntelligence && tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
               pulseAtFailureBeat={sfvOverlayActive ? sfvAtBeat : false}
               failureBoneSet={sfvOverlayActive ? sfvFailureBoneSet : undefined}
-              painMarkers={sfvOverlayActive ? [] : painMarkers}
+              painMarkers={overlayVisibility.painMarkers ? (sfvOverlayActive ? [] : painMarkers) : []}
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
@@ -10617,6 +10671,7 @@ ${ddxList}`;
               enableZoomTool={zoomToolMode}
               onLandmarkSelect={handleLandmarkSelect}
               forceOverlay={(() => {
+                if (!overlayVisibility.forceArrows) return null;
                 if (showMechanicsAnalyser && !mechanicsOverlay.jointReactionArrows) return null;
                 const activeForceData = hudForceAnalysis ?? (forceMode && forceAnalysis ? forceAnalysis : null);
                 if (forceMode && activeForceData) {
@@ -10640,33 +10695,33 @@ ${ddxList}`;
               bodyWeightKg={bodyWeightKg}
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
-              muscleStates={muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
+              muscleStates={overlayVisibility.muscleGlow && muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
               enableMuscleInteraction={muscleMode}
               onMuscleGroupClick={(groupId, screenX, screenY) => {
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
-              highlightMuscleGroups={mergedHighlightMuscleGroups}
-              muscleHighlightColors={mergedMuscleHighlightColors}
+              highlightMuscleGroups={overlayVisibility.muscleGlow ? mergedHighlightMuscleGroups : []}
+              muscleHighlightColors={overlayVisibility.muscleGlow ? mergedMuscleHighlightColors : {}}
               animationState={animationState}
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
               environmentPreset={environmentPreset}
-              fascialChainVisualization={fascialChainVizProp}
+              fascialChainVisualization={overlayVisibility.fascialChains ? fascialChainVizProp : undefined}
               onChainNodeClick={handleChainNodeClick}
-              scarMarkers={scarMarkers}
-              adhesionBands={adhesionBands}
+              scarMarkers={overlayVisibility.scarAdhesion ? scarMarkers : []}
+              adhesionBands={overlayVisibility.scarAdhesion ? adhesionBands : []}
               onScarMarkerClick={(id) => setEditingScar(id)}
               treatmentBoneNames={treatmentBoneNames}
               onBoneScreenPositions={handleBoneScreenPositions}
-              dermatomeHighlightBones={dermatomeHighlightBones}
-              nerveRootLabels={nerveRootLabels}
-              referralZoneBones={referralZoneBones}
-              tissueViewOverlay={tissueViewOverlay}
-              biomechanicsFaultHighlights={biomechanicsFaultHighlights}
+              dermatomeHighlightBones={overlayVisibility.dermatomeNerve ? dermatomeHighlightBones : []}
+              nerveRootLabels={overlayVisibility.dermatomeNerve ? nerveRootLabels : []}
+              referralZoneBones={overlayVisibility.dermatomeNerve ? referralZoneBones : []}
+              tissueViewOverlay={overlayVisibility.tissueIntelligence ? tissueViewOverlay : null}
+              biomechanicsFaultHighlights={overlayVisibility.boneGlow ? biomechanicsFaultHighlights : []}
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
               onModelLoadError={handleModelLoadError}
-              slingPathwayVisualization={(slingsOverlayPinned || (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)) && slingAnalysis ? {
+              slingPathwayVisualization={overlayVisibility.slingPathways && (slingsOverlayPinned || (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)) && slingAnalysis ? {
                 enabled: true,
                 // In Movement Mode the spotlight pick drives the on-skeleton
                 // highlight only when the spotlight is enabled — otherwise
@@ -14166,6 +14221,69 @@ ${ddxList}`;
                 <SlidersHorizontal className="h-3 w-3 mr-1" />
                 Controls
               </Button>
+              <Popover open={showOverlayPopover} onOpenChange={setShowOverlayPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={`h-7 text-xs shadow-sm ${overlayHiddenCount > 0 ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                    title={overlayHiddenCount > 0 ? `${overlayHiddenCount} overlay${overlayHiddenCount === 1 ? '' : 's'} hidden` : 'Show / hide individual skeleton overlays'}
+                    data-testid="toggle-overlay-popover"
+                  >
+                    <Layers3 className="h-3 w-3 mr-1" />
+                    Overlays
+                    {overlayHiddenCount > 0 && (
+                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded-full bg-white/25 min-w-[14px] text-center inline-block">{overlayHiddenCount}</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  className="w-72 p-3 bg-gray-900/95 backdrop-blur-sm border-gray-700/50 text-gray-100"
+                  data-testid="overlay-popover-content"
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-semibold text-white">Skeleton overlays</span>
+                    <button
+                      onClick={() => setOverlayVisibility({ ...DEFAULT_OVERLAY_VISIBILITY })}
+                      className="text-[10px] text-gray-400 hover:text-white underline-offset-2 hover:underline"
+                      data-testid="overlay-reset-all"
+                    >
+                      show all
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                    {OVERLAY_DEFINITIONS.map(def => {
+                      const on = overlayVisibility[def.key];
+                      return (
+                        <label
+                          key={def.key}
+                          className={`flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer border transition-colors ${on ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-800/90' : 'bg-gray-800/20 border-gray-800/40 hover:bg-gray-800/40'}`}
+                          data-testid={`overlay-toggle-${def.key}`}
+                        >
+                          <span
+                            className={`mt-0.5 h-3 w-3 rounded-sm shrink-0 ${on ? '' : 'opacity-30'}`}
+                            style={{ backgroundColor: def.chipColor, boxShadow: on ? `0 0 6px ${def.chipColor}80` : 'none' }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-[11px] font-medium leading-tight ${on ? 'text-white' : 'text-gray-400'}`}>{def.label}</div>
+                            <div className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate">{def.description}</div>
+                          </div>
+                          <Switch
+                            checked={on}
+                            onCheckedChange={(checked) => setOverlayVisibility(prev => ({ ...prev, [def.key]: checked }))}
+                            className="mt-0.5 scale-75 origin-right"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-gray-700/50 text-[9px] text-gray-500 leading-snug">
+                    Toggling a layer off hides it instantly. Choices last for the session and reset on hard refresh.
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="relative">
                 <Button
                   variant="secondary"

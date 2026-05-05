@@ -7,7 +7,7 @@ export async function loadMediaPipeLibraries() {
   console.log('[MediaPipeLoader] Starting MediaPipe libraries load...');
   
   // Check if MediaPipe is already loaded
-  if (window.Pose && window.Camera) {
+  if (window.Pose && window.Hands && window.Camera) {
     console.log('[MediaPipeLoader] MediaPipe already loaded');
     return true;
   }
@@ -39,23 +39,31 @@ async function loadFromCDN(): Promise<boolean> {
       console.log('[MediaPipeLoader] Camera Utils loaded');
     }
     
-    // Load Pose last (depends on drawing utils)
+    // Load Pose
     if (!window.Pose) {
       console.log('[MediaPipeLoader] Loading Pose from CDN...');
       await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js');
       console.log('[MediaPipeLoader] Pose loaded');
+    }
+
+    // Load Hands
+    if (!window.Hands) {
+      console.log('[MediaPipeLoader] Loading Hands from CDN...');
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js');
+      console.log('[MediaPipeLoader] Hands loaded');
     }
     
     // Wait a moment for scripts to initialize
     await new Promise(resolve => setTimeout(resolve, 500));
     
     // Verify everything loaded
-    if (window.Pose && window.Camera && window.drawConnectors) {
+    if (window.Pose && window.Hands && window.Camera && window.drawConnectors) {
       console.log('[MediaPipeLoader] All MediaPipe libraries loaded successfully from CDN');
       return true;
     } else {
       console.error('[MediaPipeLoader] Some MediaPipe libraries failed to load:', {
         Pose: !!window.Pose,
+        Hands: !!window.Hands,
         Camera: !!window.Camera,
         drawConnectors: !!window.drawConnectors
       });
@@ -101,7 +109,9 @@ function loadScript(src: string): Promise<void> {
 declare global {
   interface Window {
     Pose: any;
+    Hands: any;
     POSE_CONNECTIONS: any;
+    HAND_CONNECTIONS: any;
     Camera: any;
     drawConnectors: any;
     drawLandmarks: any;

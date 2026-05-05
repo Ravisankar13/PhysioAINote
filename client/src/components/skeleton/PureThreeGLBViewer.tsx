@@ -14,7 +14,7 @@ import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEn
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
-import { Skeleton3DPose } from '@/utils/mediapipeTo3D';
+import { Skeleton3DPose, SmoothedPoseOutput, HandBoneRotations } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
 
 interface JointConfig {
@@ -1607,6 +1607,7 @@ interface PureThreeGLBViewerProps {
   compensatingJoints?: CompensatingJointInfo[];
   animationConstraints?: AnimationConstraint[];
   livePose?: Skeleton3DPose | null;
+  handBoneRotations?: HandBoneRotations | null;
   fixedCameraPosition?: { x: number; y: number; z: number };
   fixedCameraLookAt?: { x: number; y: number; z: number };
   showLoadingSpinner?: boolean;
@@ -2140,6 +2141,7 @@ export default function PureThreeGLBViewer({
   compensatingJoints = [],
   animationConstraints = [],
   livePose = null,
+  handBoneRotations = null,
   fixedCameraPosition,
   fixedCameraLookAt,
   showLoadingSpinner = true,
@@ -6246,6 +6248,49 @@ export default function PureThreeGLBViewer({
 
   }, [livePose, status]);
   
+  // === HAND BONE ROTATIONS from MediaPipe Hands (with smoothing) ===
+  // Track previous hand bone rotations for exponential smoothing
+  const prevHandBoneRotRef = useRef<Record<string, { x: number; y: number; z: number }>>({});
+  const HAND_SMOOTH_FACTOR = 0.4; // Lower = smoother but more lag; 0.4 balances responsiveness with stability
+
+  useEffect(() => {
+    if (status !== 'ready' || !handBoneRotations) return;
+    const bones = bonesRef.current;
+    const initialRotations = initialRotationsRef.current;
+    if (Object.keys(bones).length === 0) return;
+
+    const prev = prevHandBoneRotRef.current;
+
+    for (const [boneName, rot] of Object.entries(handBoneRotations)) {
+      const bone = bones[boneName] as THREE.Bone | undefined;
+      const initial = initialRotations[boneName];
+      if (!bone || !initial) continue;
+
+      // Smooth each axis using exponential moving average
+      const p = prev[boneName] || { x: rot.x, y: rot.y, z: rot.z };
+      const smoothedX = p.x + (rot.x - p.x) * HAND_SMOOTH_FACTOR;
+      const smoothedY = p.y + (rot.y - p.y) * HAND_SMOOTH_FACTOR;
+      const smoothedZ = p.z + (rot.z - p.z) * HAND_SMOOTH_FACTOR;
+
+      // Dead zone: suppress tiny jitter when fingers are still
+      const applyDZ = (val: number, threshold: number = 0.02): number => {
+        return Math.abs(val) < threshold ? 0 : val;
+      };
+
+      const finalX = applyDZ(smoothedX);
+      const finalY = applyDZ(smoothedY);
+      const finalZ = applyDZ(smoothedZ);
+
+      prev[boneName] = { x: smoothedX, y: smoothedY, z: smoothedZ };
+
+      bone.rotation.set(
+        initial.x + finalX,
+        initial.y + finalY,
+        initial.z + finalZ
+      );
+    }
+  }, [handBoneRotations, status]);
+
   // Track if live pose is active (to disable slider conflicts)
   const isLivePoseActive = livePose !== null;
   

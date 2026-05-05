@@ -786,7 +786,8 @@ export async function populateElbowCourse() {
       .limit(1);
     
     if (elbowCourse.length === 0) {
-      throw new Error('Elbow Rehabilitation Strategies course not found');
+      console.log('⚠️ Elbow Rehabilitation Strategies course not found in database - skipping population');
+      return;
     }
     
     // Get all modules for the elbow course

@@ -99,7 +99,24 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   globalTranslation?: GlobalTranslation;
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
+  handBoneRotations?: HandBoneRotations;
 }
+
+/**
+ * Map of GLB bone names to {x,y,z} Euler rotations (radians).
+ * Used to drive finger bones from MediaPipe Hands landmarks.
+ */
+export type HandBoneRotations = Record<string, { x: number; y: number; z: number }>;
+
+// MediaPipe Hand landmark indices
+const HAND_LM = {
+  WRIST: 0,
+  THUMB_CMC: 1, THUMB_MCP: 2, THUMB_IP: 3, THUMB_TIP: 4,
+  INDEX_MCP: 5, INDEX_PIP: 6, INDEX_DIP: 7, INDEX_TIP: 8,
+  MIDDLE_MCP: 9, MIDDLE_PIP: 10, MIDDLE_DIP: 11, MIDDLE_TIP: 12,
+  RING_MCP: 13, RING_PIP: 14, RING_DIP: 15, RING_TIP: 16,
+  PINKY_MCP: 17, PINKY_PIP: 18, PINKY_DIP: 19, PINKY_TIP: 20,
+};
 
 // MediaPipe landmark indices
 const LANDMARKS = {
@@ -1536,6 +1553,8 @@ export class PartialPoseSmoother {
   private previousPose: PartialSkeleton3DPose | null = null;
   private velocityHistory: Map<string, number[]> = new Map();
 
+  constructor(_smoothingFactor?: number) {}
+
   private static readonly VELOCITY_HISTORY_SIZE = 3;
   private static readonly FAST_THRESHOLD = 0.15;
   private static readonly SLOW_THRESHOLD = 0.01;
@@ -1657,14 +1676,14 @@ export class Posesmoother {
   }
 
   private static readonly JOINT_NOISE_PROFILE: Record<string, number> = {
-    leftWrist: 1.4,
-    rightWrist: 1.4,
+    leftWrist: 1.8,
+    rightWrist: 1.8,
     leftAnkle: 1.3,
     rightAnkle: 1.3,
-    leftElbow: 1.1,
-    rightElbow: 1.1,
-    leftShoulder: 1.0,
-    rightShoulder: 1.0,
+    leftElbow: 1.5,
+    rightElbow: 1.5,
+    leftShoulder: 1.3,
+    rightShoulder: 1.3,
     leftHip: 0.8,
     rightHip: 0.8,
     leftKnee: 0.85,
@@ -1858,4 +1877,144 @@ export class Posesmoother {
     };
     this.prevBodyProportions = undefined;
   }
+}
+
+/**
+ * Compute the curl (flexion) angle at a joint given three consecutive landmarks.
+ * Returns angle in radians: 0 = straight, positive = curled/flexed.
+ */
+function fingerJointCurl(
+  parent: { x: number; y: number; z: number },
+  joint: { x: number; y: number; z: number },
+  child: { x: number; y: number; z: number }
+): number {
+  const v1 = { x: parent.x - joint.x, y: parent.y - joint.y, z: parent.z - joint.z };
+  const v2 = { x: child.x - joint.x, y: child.y - joint.y, z: child.z - joint.z };
+  const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z) || 0.0001;
+  const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z) || 0.0001;
+  const dot = (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z) / (len1 * len2);
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+  return Math.max(0, Math.PI - angle);
+}
+
+/**
+ * Build per-bone rotation map from MediaPipe Hands landmarks.
+ * `landmarks` is the 21-point hand array (world or normalized).
+ * `label` is 'Left' or 'Right' (from MediaPipe handedness — camera perspective).
+ */
+export function buildHandBoneRotations(
+  landmarks: { x: number; y: number; z: number }[],
+  label: 'Left' | 'Right'
+): HandBoneRotations {
+  if (!landmarks || landmarks.length < 21) return {};
+
+  const side = label === 'Left' ? '_L' : '_R';
+  const result: HandBoneRotations = {};
+
+  const clampCurl = (v: number, max: number = 1.6) => Math.max(0, Math.min(max, v));
+  const lm = (i: number) => landmarks[i];
+
+  // === INDEX FINGER ===
+  const indexMCP = fingerJointCurl(lm(HAND_LM.WRIST), lm(HAND_LM.INDEX_MCP), lm(HAND_LM.INDEX_PIP));
+  const indexPIP = fingerJointCurl(lm(HAND_LM.INDEX_MCP), lm(HAND_LM.INDEX_PIP), lm(HAND_LM.INDEX_DIP));
+  const indexDIP = fingerJointCurl(lm(HAND_LM.INDEX_PIP), lm(HAND_LM.INDEX_DIP), lm(HAND_LM.INDEX_TIP));
+  result[`IndexFinger1${side}`] = { x: 0, y: 0, z: clampCurl(indexMCP) };
+  result[`IndexFinger2${side}`] = { x: 0, y: 0, z: clampCurl(indexPIP) };
+  result[`IndexFinger3${side}`] = { x: 0, y: 0, z: clampCurl(indexDIP) };
+
+  // === MIDDLE FINGER ===
+  const middleMCP = fingerJointCurl(lm(HAND_LM.WRIST), lm(HAND_LM.MIDDLE_MCP), lm(HAND_LM.MIDDLE_PIP));
+  const middlePIP = fingerJointCurl(lm(HAND_LM.MIDDLE_MCP), lm(HAND_LM.MIDDLE_PIP), lm(HAND_LM.MIDDLE_DIP));
+  const middleDIP = fingerJointCurl(lm(HAND_LM.MIDDLE_PIP), lm(HAND_LM.MIDDLE_DIP), lm(HAND_LM.MIDDLE_TIP));
+  result[`MiddleFinger1${side}`] = { x: 0, y: 0, z: clampCurl(middleMCP) };
+  result[`MiddleFinger2${side}`] = { x: 0, y: 0, z: clampCurl(middlePIP) };
+  result[`MiddleFinger3${side}`] = { x: 0, y: 0, z: clampCurl(middleDIP) };
+
+  // === RING FINGER ===
+  const ringMCP = fingerJointCurl(lm(HAND_LM.WRIST), lm(HAND_LM.RING_MCP), lm(HAND_LM.RING_PIP));
+  const ringPIP = fingerJointCurl(lm(HAND_LM.RING_MCP), lm(HAND_LM.RING_PIP), lm(HAND_LM.RING_DIP));
+  const ringDIP = fingerJointCurl(lm(HAND_LM.RING_PIP), lm(HAND_LM.RING_DIP), lm(HAND_LM.RING_TIP));
+  result[`RingFinger1${side}`] = { x: 0, y: 0, z: clampCurl(ringMCP) };
+  result[`RingFinger2${side}`] = { x: 0, y: 0, z: clampCurl(ringPIP) };
+  result[`RingFinger3${side}`] = { x: 0, y: 0, z: clampCurl(ringDIP) };
+
+  // === PINKY FINGER ===
+  const pinkyMCP = fingerJointCurl(lm(HAND_LM.WRIST), lm(HAND_LM.PINKY_MCP), lm(HAND_LM.PINKY_PIP));
+  const pinkyPIP = fingerJointCurl(lm(HAND_LM.PINKY_MCP), lm(HAND_LM.PINKY_PIP), lm(HAND_LM.PINKY_DIP));
+  const pinkyDIP = fingerJointCurl(lm(HAND_LM.PINKY_PIP), lm(HAND_LM.PINKY_DIP), lm(HAND_LM.PINKY_TIP));
+  result[`PinkyFinger1${side}`] = { x: 0, y: 0, z: clampCurl(pinkyMCP) };
+  result[`PinkyFinger2${side}`] = { x: 0, y: 0, z: clampCurl(pinkyPIP) };
+  result[`PinkyFinger3${side}`] = { x: 0, y: 0, z: clampCurl(pinkyDIP) };
+
+  // === THUMB ===
+  const thumbMCP = fingerJointCurl(lm(HAND_LM.THUMB_CMC), lm(HAND_LM.THUMB_MCP), lm(HAND_LM.THUMB_IP));
+  const thumbIP = fingerJointCurl(lm(HAND_LM.THUMB_MCP), lm(HAND_LM.THUMB_IP), lm(HAND_LM.THUMB_TIP));
+
+  const wristPt = lm(HAND_LM.WRIST);
+  const thumbCMC = lm(HAND_LM.THUMB_CMC);
+  const middleMCPt = lm(HAND_LM.MIDDLE_MCP);
+  const toThumb = { x: thumbCMC.x - wristPt.x, y: thumbCMC.y - wristPt.y, z: thumbCMC.z - wristPt.z };
+  const toMiddle = { x: middleMCPt.x - wristPt.x, y: middleMCPt.y - wristPt.y, z: middleMCPt.z - wristPt.z };
+  const tLen = Math.sqrt(toThumb.x ** 2 + toThumb.y ** 2 + toThumb.z ** 2) || 0.001;
+  const mLen = Math.sqrt(toMiddle.x ** 2 + toMiddle.y ** 2 + toMiddle.z ** 2) || 0.001;
+  const thumbOppositionDot = (toThumb.x * toMiddle.x + toThumb.y * toMiddle.y + toThumb.z * toMiddle.z) / (tLen * mLen);
+  const thumbOpposition = Math.acos(Math.max(-1, Math.min(1, thumbOppositionDot)));
+  const oppositionNorm = Math.max(0, Math.min(1.2, (thumbOpposition - 0.3) * 1.5));
+
+  result[`ThumbFinger1${side}`] = { x: 0, y: oppositionNorm * 0.6, z: clampCurl(thumbMCP, 1.2) };
+  result[`ThumbFinger2${side}`] = { x: 0, y: 0, z: clampCurl(thumbIP, 1.0) };
+
+  // === WRIST (from hand landmarks) ===
+  const wristRot = computeWristRotation(landmarks, label);
+  if (wristRot) {
+    result[`Wrist${side}`] = wristRot;
+  }
+
+  return result;
+}
+
+/**
+ * Compute wrist rotation from MediaPipe Hand landmarks.
+ * Uses palm plane normal to derive flexion/extension and deviation.
+ */
+export function computeWristRotation(
+  landmarks: { x: number; y: number; z: number }[],
+  label: 'Left' | 'Right'
+): { x: number; y: number; z: number } | null {
+  if (!landmarks || landmarks.length < 21) return null;
+
+  const wrist = landmarks[HAND_LM.WRIST];
+  const indexMCP = landmarks[HAND_LM.INDEX_MCP];
+  const pinkyMCP = landmarks[HAND_LM.PINKY_MCP];
+  const middleMCP = landmarks[HAND_LM.MIDDLE_MCP];
+
+  // Palm forward direction: wrist → middle MCP
+  const palmFwd = {
+    x: middleMCP.x - wrist.x,
+    y: middleMCP.y - wrist.y,
+    z: middleMCP.z - wrist.z,
+  };
+  const fwdLen = Math.sqrt(palmFwd.x ** 2 + palmFwd.y ** 2 + palmFwd.z ** 2) || 0.001;
+  palmFwd.x /= fwdLen; palmFwd.y /= fwdLen; palmFwd.z /= fwdLen;
+
+  // Flexion: angle of palm forward relative to forearm axis (approximated by -Y in hand space)
+  const flexion = Math.atan2(-palmFwd.z, -palmFwd.y) * 0.5;
+
+  // Deviation: lateral tilt of palm
+  const lateral = {
+    x: indexMCP.x - pinkyMCP.x,
+    y: indexMCP.y - pinkyMCP.y,
+    z: indexMCP.z - pinkyMCP.z,
+  };
+  const latLen = Math.sqrt(lateral.x ** 2 + lateral.y ** 2 + lateral.z ** 2) || 0.001;
+  lateral.x /= latLen; lateral.y /= latLen; lateral.z /= latLen;
+
+  const deviation = Math.atan2(lateral.z, Math.abs(lateral.x) + 0.001) * 0.4;
+  const sign = label === 'Left' ? 1 : -1;
+
+  return {
+    x: Math.max(-1.2, Math.min(1.2, flexion)),
+    y: 0,
+    z: Math.max(-0.5, Math.min(0.5, deviation * sign)),
+  };
 }

@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, buildHandBoneRotations, HandBoneRotations } from '@/utils/mediapipeTo3D';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -45,6 +45,7 @@ interface FocusedCameraCaptureProps {
   onPartialPoseUpdate?: (pose: PartialSkeleton3DPose) => void;
   onRawLandmarks?: (landmarks: any[]) => void;
   onPosturalMetrics?: (metrics: PosturalMetrics) => void;
+  onHandBoneRotations?: (rotations: HandBoneRotations) => void;
   onFocusedAnalysisComplete?: (result: FocusedCameraResult) => void;
   onRegionChange?: (region: FocusedRegion) => void;
   className?: string;
@@ -56,6 +57,7 @@ export default function FocusedCameraCapture({
   onPartialPoseUpdate,
   onRawLandmarks,
   onPosturalMetrics,
+  onHandBoneRotations,
   onFocusedAnalysisComplete,
   onRegionChange,
   className,
@@ -65,6 +67,7 @@ export default function FocusedCameraCapture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const poseRef = useRef<any>(null);
+  const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
   const animationFrameRef = useRef<number | null>(null);
@@ -320,6 +323,10 @@ export default function FocusedCameraCapture({
     if (analysisTimerRef.current) {
       clearTimeout(analysisTimerRef.current);
       analysisTimerRef.current = null;
+    }
+    if (handsRef.current) {
+      handsRef.current.close?.();
+      handsRef.current = null;
     }
     setIsActive(false);
     setPoseDetected(false);
@@ -771,10 +778,50 @@ export default function FocusedCameraCapture({
       await pose.initialize();
       poseRef.current = pose;
 
+      // Initialize MediaPipe Hands for finger tracking
+      if (onHandBoneRotations && window.Hands) {
+        try {
+          const hands = new window.Hands({
+            locateFile: MEDIAPIPE_CONFIG.hands.locateFile
+          });
+          hands.setOptions(MEDIAPIPE_CONFIG.hands.options);
+          hands.onResults((handResults: any) => {
+            if (handResults.multiHandLandmarks && handResults.multiHandedness) {
+              let combined: HandBoneRotations = {};
+              for (let i = 0; i < handResults.multiHandLandmarks.length; i++) {
+                const landmarks = handResults.multiHandLandmarks[i];
+                const classification = handResults.multiHandedness[i];
+                // MediaPipe mirrors labels when using front camera, so we flip
+                const rawLabel = classification?.label || 'Right';
+                const label: 'Left' | 'Right' = rawLabel === 'Left' ? 'Right' : 'Left';
+                const rotations = buildHandBoneRotations(landmarks, label);
+                combined = { ...combined, ...rotations };
+              }
+              if (Object.keys(combined).length > 0) {
+                onHandBoneRotations(combined);
+              }
+            }
+          });
+          await hands.initialize();
+          handsRef.current = hands;
+          console.log('[Camera] MediaPipe Hands initialized for finger tracking');
+        } catch (handErr) {
+          console.warn('[Camera] Hand tracking init failed (non-critical):', handErr);
+        }
+      }
+
+      let handFrameSkip = 0;
       const camera = new window.Camera(videoRef.current, {
         onFrame: async () => {
           if (poseRef.current && videoRef.current) {
             await poseRef.current.send({ image: videoRef.current });
+          }
+          // Send every 3rd frame to hands to reduce CPU load
+          if (handsRef.current && videoRef.current) {
+            handFrameSkip++;
+            if (handFrameSkip % 3 === 0) {
+              handsRef.current.send({ image: videoRef.current }).catch(() => {});
+            }
           }
         },
         width: 1280,

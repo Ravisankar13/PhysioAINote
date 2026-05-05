@@ -5,6 +5,7 @@
 
 // Use a specific version to ensure consistency across deployments
 export const MEDIAPIPE_VERSION = '0.5.1675469404';
+export const MEDIAPIPE_HANDS_VERSION = '0.4.1675469240';
 
 // Helper to detect if device is mobile/tablet
 export function isMobileDevice(): boolean {
@@ -30,6 +31,20 @@ export const MEDIAPIPE_CONFIG = {
       minDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5,
       selfieMode: false // Don't mirror for back camera
+    }
+  },
+
+  hands: {
+    locateFile: (file: string) => {
+      const baseUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/hands@${MEDIAPIPE_HANDS_VERSION}`;
+      console.log(`[MediaPipe] Loading hand model: ${file} from ${baseUrl}`);
+      return `${baseUrl}/${file}`;
+    },
+    options: {
+      maxNumHands: 2,
+      modelComplexity: 1 as 0 | 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
     }
   },
   

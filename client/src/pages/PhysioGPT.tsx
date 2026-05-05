@@ -92,7 +92,7 @@ import { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { ExtendedPoseInput } from "@/utils/poseToControllerMap";
-import type { Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, CameraViewType, SpineSegmentation, BodyProportions } from "@/utils/mediapipeTo3D";
+import type { Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, CameraViewType, SpineSegmentation, BodyProportions, HandBoneRotations } from "@/utils/mediapipeTo3D";
 import { ROM_JOINT_DEFINITIONS, ANATOMICAL_VIRTUAL_POINTS } from "@/components/skeleton/PureThreeGLBViewer";
 import type { ClinicalReasoningData, BiomechanicalLink, VisualizationRequest, ClinicalHypothesis } from "@/components/skeleton/ClinicalReasoningPanel";
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
@@ -587,6 +587,8 @@ export default function PhysioGPT() {
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
+  const [livePoseData, setLivePoseData] = useState<Skeleton3DPose | null>(null);
+  const [handBoneRotations, setHandBoneRotations] = useState<HandBoneRotations | null>(null);
   const [poseTrackingQuality, setPoseTrackingQuality] = useState<{ overall: number; estimatedJoints: string[] }>({ overall: 1, estimatedJoints: [] });
   const [posturalMetrics, setPosturalMetrics] = useState<PosturalMetrics | null>(null);
   const [focusedCameraResult, setFocusedCameraResult] = useState<FocusedCameraResult | null>(null);
@@ -2417,6 +2419,8 @@ ${ddxList}`;
 
   const handleCameraPoseUpdate = useCallback((pose: SmoothedPoseOutput) => {
     if (!cameraPoseActive) return;
+    // Store raw pose for direct GLB viewer live pose control
+    setLivePoseData(pose);
     const extendedPose: ExtendedPoseInput = {
       ...pose,
       pelvisTilt: pose.pelvisTilt,
@@ -2569,6 +2573,7 @@ ${ddxList}`;
       toast({ title: "Camera Capture", description: "Position the patient in frame. The skeleton will mirror their posture in real-time." });
     } else {
       setCameraPoseActive(false);
+      setLivePoseData(null);
       setPosturalMetrics(null);
     }
   }, [cameraMode, toast]);
@@ -5006,6 +5011,7 @@ ${ddxList}`;
                   onPoseUpdate={handleCameraPoseUpdate}
                   onPartialPoseUpdate={handlePartialPoseUpdate}
                   onPosturalMetrics={handlePosturalMetricsUpdate}
+                  onHandBoneRotations={setHandBoneRotations}
                   isActive={cameraMode}
                   onFocusedAnalysisComplete={handleFocusedAnalysisComplete}
                   onRegionChange={(region) => setFocusedRegion(region)}
@@ -5175,6 +5181,7 @@ ${ddxList}`;
             <PureThreeGLBViewer
               modelPath="/models/skeleton_character.glb"
               modelConfig={finalModelConfig as any}
+              livePose={cameraPoseActive ? livePoseData : undefined}
               zoomToRegion={zoomToRegion}
               className="w-full h-full"
               highlightRegions={[
@@ -5234,6 +5241,7 @@ ${ddxList}`;
               bodyWeightKg={bodyWeightKg}
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
+              handBoneRotations={handBoneRotations}
               muscleStates={muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
               enableMuscleInteraction={muscleMode}
               onMuscleGroupClick={(groupId, screenX, screenY) => {

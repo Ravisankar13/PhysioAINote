@@ -188,7 +188,10 @@ function applyDeadZone(value: number, threshold: number = 0.03): number {
   return sign * abs * t * t;
 }
 
-const ARM_DEAD_ZONE = 0.02;
+const ARM_DEAD_ZONE = 0.035;
+const SHOULDER_ROTATION_DEAD_ZONE = 0.06;
+const ELBOW_PRONATION_DEAD_ZONE = 0.05;
+const WRIST_DEAD_ZONE = 0.04;
 const SPINE_DEAD_ZONE = 0.025;
 const HIP_DEAD_ZONE = 0.06;
 const KNEE_DEAD_ZONE = 0.05;
@@ -217,13 +220,13 @@ export function poseToControllerValues(pose: ExtendedPoseInput): ControllerValue
   const rightShoulderFlexion = applyDeadZone(clamp(pose.rightShoulder.x, shoulder.flexion.min, shoulder.flexion.max), ARM_DEAD_ZONE);
   const rightShoulderAbduction = applyDeadZone(clamp(pose.rightShoulder.z, shoulder.abduction.min, shoulder.abduction.max), ARM_DEAD_ZONE);
 
-  const leftShoulderInternalRotation = applyDeadZone(clamp(pose.leftShoulder.y, -1.2, 1.2), ARM_DEAD_ZONE);
-  const rightShoulderInternalRotation = applyDeadZone(clamp(pose.rightShoulder.y, -1.2, 1.2), ARM_DEAD_ZONE);
+  const leftShoulderInternalRotation = applyDeadZone(clamp(pose.leftShoulder.y, -1.2, 1.2), SHOULDER_ROTATION_DEAD_ZONE);
+  const rightShoulderInternalRotation = applyDeadZone(clamp(pose.rightShoulder.y, -1.2, 1.2), SHOULDER_ROTATION_DEAD_ZONE);
   
   const leftElbowFlexion = applyDeadZone(clamp(pose.leftElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
   const rightElbowFlexion = applyDeadZone(clamp(pose.rightElbow.x, elbow.flexion.min, elbow.flexion.max), ARM_DEAD_ZONE);
-  const leftElbowPronation = applyDeadZone(clamp(pose.leftElbow.y, -1.5, 1.5), ARM_DEAD_ZONE);
-  const rightElbowPronation = applyDeadZone(clamp(pose.rightElbow.y, -1.5, 1.5), ARM_DEAD_ZONE);
+  const leftElbowPronation = applyDeadZone(clamp(pose.leftElbow.y, -1.5, 1.5), ELBOW_PRONATION_DEAD_ZONE);
+  const rightElbowPronation = applyDeadZone(clamp(pose.rightElbow.y, -1.5, 1.5), ELBOW_PRONATION_DEAD_ZONE);
   
   const leftHipFlexion = applyDeadZone(clamp(pose.leftHip.x, hip.flexion.min, hip.flexion.max), HIP_DEAD_ZONE);
   const leftHipAbduction = applyDeadZone(clamp(pose.leftHip.z, hip.abduction.min, hip.abduction.max), HIP_DEAD_ZONE);
@@ -320,11 +323,23 @@ export class ControllerSmoother {
   private smoothingFactor: number;
   private noiseThreshold: number;
 
+  // Neck/Spine Kalman filters
   private neckFlexionKF = new KalmanFilter1D(0.0008, 0.015);
   private neckRotationKF = new KalmanFilter1D(0.001, 0.012);
   private neckLateralKF = new KalmanFilter1D(0.0008, 0.015);
   private spineFlexionKF = new KalmanFilter1D(0.0015, 0.01);
   private spineLateralKF = new KalmanFilter1D(0.001, 0.012);
+
+  // Arm Kalman filters - shoulder rotation & elbow pronation are depth-sensitive and very noisy
+  private leftShoulderRotKF = new KalmanFilter1D(0.002, 0.025);
+  private rightShoulderRotKF = new KalmanFilter1D(0.002, 0.025);
+  private leftElbowPronKF = new KalmanFilter1D(0.0015, 0.02);
+  private rightElbowPronKF = new KalmanFilter1D(0.0015, 0.02);
+  // Wrist Kalman filters
+  private leftWristFlexKF = new KalmanFilter1D(0.002, 0.018);
+  private rightWristFlexKF = new KalmanFilter1D(0.002, 0.018);
+  private leftWristDevKF = new KalmanFilter1D(0.0015, 0.02);
+  private rightWristDevKF = new KalmanFilter1D(0.0015, 0.02);
 
   private neckFlexionDZ = new AdaptiveDeadZone(0.035, 0.012, 0.06);
   private neckRotationDZ = new AdaptiveDeadZone(0.03, 0.01, 0.08);
@@ -332,11 +347,21 @@ export class ControllerSmoother {
   private spineFlexionDZ = new AdaptiveDeadZone(0.04, 0.015, 0.07);
   private spineLateralDZ = new AdaptiveDeadZone(0.04, 0.015, 0.07);
 
+  // Arm adaptive dead zones - suppress jitter when arm is still
+  private leftShoulderRotDZ = new AdaptiveDeadZone(0.06, 0.02, 0.1);
+  private rightShoulderRotDZ = new AdaptiveDeadZone(0.06, 0.02, 0.1);
+  private leftElbowPronDZ = new AdaptiveDeadZone(0.05, 0.018, 0.08);
+  private rightElbowPronDZ = new AdaptiveDeadZone(0.05, 0.018, 0.08);
+
   private prevNeckFlexion = 0;
   private prevNeckRotation = 0;
   private prevNeckLateral = 0;
   private prevSpineFlexion = 0;
   private prevSpineLateral = 0;
+  private prevLeftShoulderRot = 0;
+  private prevRightShoulderRot = 0;
+  private prevLeftElbowPron = 0;
+  private prevRightElbowPron = 0;
   
   constructor(smoothingFactor: number = 0.6, noiseThreshold: number = 0.015) {
     this.smoothingFactor = smoothingFactor;
@@ -344,6 +369,7 @@ export class ControllerSmoother {
   }
   
   smooth(current: ControllerValues): ControllerValues {
+    // === Neck/Spine Kalman + adaptive dead zone filtering ===
     const neckFlexionFiltered = this.neckFlexionKF.update(current.neck.flexion);
     const neckRotationFiltered = this.neckRotationKF.update(current.neck.rotation);
     const neckLateralFiltered = this.neckLateralKF.update(current.neck.lateralFlexion);
@@ -362,9 +388,38 @@ export class ControllerSmoother {
     this.prevSpineFlexion = spineFlexionFiltered;
     this.prevSpineLateral = spineLateralFiltered;
 
+    // === Arm Kalman + adaptive dead zone filtering ===
+    // Shoulder internal rotation is extremely noisy (depends on depth estimation of forearm)
+    const leftShoulderRotFiltered = this.leftShoulderRotKF.update(current.leftShoulder.internalRotation);
+    const rightShoulderRotFiltered = this.rightShoulderRotKF.update(current.rightShoulder.internalRotation);
+    const leftShoulderRotFinal = this.leftShoulderRotDZ.apply(leftShoulderRotFiltered, this.prevLeftShoulderRot);
+    const rightShoulderRotFinal = this.rightShoulderRotDZ.apply(rightShoulderRotFiltered, this.prevRightShoulderRot);
+    this.prevLeftShoulderRot = leftShoulderRotFiltered;
+    this.prevRightShoulderRot = rightShoulderRotFiltered;
+
+    // Elbow pronation depends on index finger landmark (noisy)
+    const leftElbowPronFiltered = this.leftElbowPronKF.update(current.leftElbow.pronation);
+    const rightElbowPronFiltered = this.rightElbowPronKF.update(current.rightElbow.pronation);
+    const leftElbowPronFinal = this.leftElbowPronDZ.apply(leftElbowPronFiltered, this.prevLeftElbowPron);
+    const rightElbowPronFinal = this.rightElbowPronDZ.apply(rightElbowPronFiltered, this.prevRightElbowPron);
+    this.prevLeftElbowPron = leftElbowPronFiltered;
+    this.prevRightElbowPron = rightElbowPronFiltered;
+
+    // Wrist Kalman filtering
+    const leftWristFlexFiltered = this.leftWristFlexKF.update(current.leftWrist.flexion);
+    const rightWristFlexFiltered = this.rightWristFlexKF.update(current.rightWrist.flexion);
+    const leftWristDevFiltered = this.leftWristDevKF.update(current.leftWrist.deviation);
+    const rightWristDevFiltered = this.rightWristDevKF.update(current.rightWrist.deviation);
+
     if (!this.previous) {
       const result: ControllerValues = {
         ...current,
+        leftShoulder: { ...current.leftShoulder, internalRotation: leftShoulderRotFinal },
+        rightShoulder: { ...current.rightShoulder, internalRotation: rightShoulderRotFinal },
+        leftElbow: { ...current.leftElbow, pronation: leftElbowPronFinal },
+        rightElbow: { ...current.rightElbow, pronation: rightElbowPronFinal },
+        leftWrist: { flexion: leftWristFlexFiltered, deviation: leftWristDevFiltered },
+        rightWrist: { flexion: rightWristFlexFiltered, deviation: rightWristDevFiltered },
         neck: { flexion: neckFlexionFinal, rotation: neckRotationFinal, lateralFlexion: neckLateralFinal },
         spine: { ...current.spine, flexion: spineFlexionFinal, lateralFlexion: spineLateralFinal }
       };
@@ -376,25 +431,31 @@ export class ControllerSmoother {
       const delta = curr - prev;
       return prev + delta * this.smoothingFactor;
     };
+
+    // Slower smoothing factor for noisy depth-dependent channels
+    const armRotSmoothFactor = this.smoothingFactor * 0.6; // 60% of normal = more lag but much less jitter
+    const smoothArmRot = (curr: number, prev: number): number => {
+      return prev + (curr - prev) * armRotSmoothFactor;
+    };
     
     const smoothed: ControllerValues = {
       leftShoulder: {
         flexion: smoothValue(current.leftShoulder.flexion, this.previous.leftShoulder.flexion),
         abduction: smoothValue(current.leftShoulder.abduction, this.previous.leftShoulder.abduction),
-        internalRotation: smoothValue(current.leftShoulder.internalRotation, this.previous.leftShoulder.internalRotation)
+        internalRotation: smoothArmRot(leftShoulderRotFinal, this.previous.leftShoulder.internalRotation)
       },
       rightShoulder: {
         flexion: smoothValue(current.rightShoulder.flexion, this.previous.rightShoulder.flexion),
         abduction: smoothValue(current.rightShoulder.abduction, this.previous.rightShoulder.abduction),
-        internalRotation: smoothValue(current.rightShoulder.internalRotation, this.previous.rightShoulder.internalRotation)
+        internalRotation: smoothArmRot(rightShoulderRotFinal, this.previous.rightShoulder.internalRotation)
       },
       leftElbow: {
         flexion: smoothValue(current.leftElbow.flexion, this.previous.leftElbow.flexion),
-        pronation: smoothValue(current.leftElbow.pronation, this.previous.leftElbow.pronation)
+        pronation: smoothArmRot(leftElbowPronFinal, this.previous.leftElbow.pronation)
       },
       rightElbow: {
         flexion: smoothValue(current.rightElbow.flexion, this.previous.rightElbow.flexion),
-        pronation: smoothValue(current.rightElbow.pronation, this.previous.rightElbow.pronation)
+        pronation: smoothArmRot(rightElbowPronFinal, this.previous.rightElbow.pronation)
       },
       leftHip: {
         flexion: smoothValue(current.leftHip.flexion, this.previous.leftHip.flexion),
@@ -470,6 +531,7 @@ export class ControllerSmoother {
   
   reset(): void {
     this.previous = null;
+    // Neck/Spine
     this.neckFlexionKF.reset();
     this.neckRotationKF.reset();
     this.neckLateralKF.reset();
@@ -485,5 +547,22 @@ export class ControllerSmoother {
     this.prevNeckLateral = 0;
     this.prevSpineFlexion = 0;
     this.prevSpineLateral = 0;
+    // Arm filters
+    this.leftShoulderRotKF.reset();
+    this.rightShoulderRotKF.reset();
+    this.leftElbowPronKF.reset();
+    this.rightElbowPronKF.reset();
+    this.leftWristFlexKF.reset();
+    this.rightWristFlexKF.reset();
+    this.leftWristDevKF.reset();
+    this.rightWristDevKF.reset();
+    this.leftShoulderRotDZ.reset();
+    this.rightShoulderRotDZ.reset();
+    this.leftElbowPronDZ.reset();
+    this.rightElbowPronDZ.reset();
+    this.prevLeftShoulderRot = 0;
+    this.prevRightShoulderRot = 0;
+    this.prevLeftElbowPron = 0;
+    this.prevRightElbowPron = 0;
   }
 }

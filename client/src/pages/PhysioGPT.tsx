@@ -99,7 +99,8 @@ import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
 import ActiveCapacitiesPanel from "@/components/skeleton/ActiveCapacitiesPanel";
-import MovementFindingsStream, { type MovementFinding } from "@/components/skeleton/MovementFindingsStream";
+import MovementFindingsStream, { type MovementFinding, type MovementFindingVerdict } from "@/components/skeleton/MovementFindingsStream";
+import MovementReEducationPanel from "@/components/skeleton/MovementReEducationPanel";
 import MovementAiSimulatorPanel, { describeIntervention, type Intervention as MovementSimIntervention, type MovementSimResult, type MovementSimContext } from "@/components/skeleton/MovementAiSimulatorPanel";
 import { useActiveCapacities } from "@/hooks/useActiveCapacities";
 import type {
@@ -1161,6 +1162,10 @@ export default function PhysioGPT() {
   // be toggled from the toolbar pill or dismissed via the panel X. Persists
   // in the case snapshot.
   const [movementSpotlightEnabled, setMovementSpotlightEnabled] = useState(true);
+  // Compensation Re-Education panel visibility (Task #373). Mirrors the
+  // Sling Spotlight enable flag — hidden when the panel is closed or
+  // when there are no enriched compensations to render.
+  const [movementReEdPanelEnabled, setMovementReEdPanelEnabled] = useState(true);
   // Sling Failure Movement Visualizer: which sling+scenario
   // is currently being played (drives the SVG overlay over the 3D viewer).
   const [activeFailureSel, setActiveFailureSel] = useState<SlingFailureVisualizerSelection | null>(null);
@@ -7787,6 +7792,20 @@ ${ddxList}`;
     return out;
   }, [compensationDataState, pathologyCompensation, slingAnalysis, painMarkers, patientContextPayload, derivedDrivers]);
 
+  // joint+movement → verdict map for the Movement Findings Stream so
+  // findings created before the latest enrichment cycle still pick up
+  // verdict-coloring (Task #373).
+  const reEdVerdictByMovementId = useMemo<Record<string, MovementFindingVerdict>>(() => {
+    const map: Record<string, MovementFindingVerdict> = {};
+    for (const c of reEducationCompensations.compensations) {
+      const key = `${c.joint}:${c.movement}`;
+      // Keep the highest-cost verdict for any duplicate joint+movement.
+      const existing = map[key];
+      if (!existing) map[key] = c.verdict as MovementFindingVerdict;
+    }
+    return map;
+  }, [reEducationCompensations]);
+
   // Re-derive muscle adjustments from the active per-part treatments.
   // Routes link/attachment treatments through weak-link muscles so the
   // engine's weak-link detector recomputes downstream of the treatment.
@@ -8452,6 +8471,13 @@ ${ddxList}`;
     const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
     const condition = (summary && summary.length <= 240 ? summary : desc).slice(0, 240) || 'Unspecified condition';
     const id = `mf-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Stamp the Re-Ed verdict onto the finding at creation time so the
+    // Findings Stream can render verdict-coloring even after the
+    // enrichment memo recomputes. Falls back to the live map prop when
+    // unavailable.
+    const reEdMatch = reEducationCompensationsRef.current?.compensations.find(
+      c => c.joint === attempt.joint && c.movement === attempt.movement,
+    );
     const placeholder: MovementFinding = {
       id,
       timestamp: Date.now(),
@@ -8462,6 +8488,7 @@ ${ddxList}`;
       exceededActiveLimit: attempt.exceededActiveLimit,
       sentence: '',
       loading: true,
+      verdict: reEdMatch?.verdict as MovementFindingVerdict | undefined,
     };
     // Cap stream at 12 most-recent findings.
     setMovementFindings(prev => [placeholder, ...prev].slice(0, 12));
@@ -11089,6 +11116,19 @@ ${ddxList}`;
                     onClear={() => setMovementFindings([])}
                     position={movementFindingsPosition}
                     onPositionChange={setMovementFindingsPosition}
+                    verdictByMovementId={reEdVerdictByMovementId}
+                  />
+                )}
+                {/* Compensation Re-Education panel (Task #373) — surfaces
+                    driver / verdict / cost / better-pattern / phased plan
+                    for the highest-cost compensation on the active case.
+                    Hidden when no enriched compensations exist or when
+                    the clinician has closed it for this session. */}
+                {skeletonMode === 'movement' && movementReEdPanelEnabled && reEducationCompensations.compensations.length > 0 && (
+                  <MovementReEducationPanel
+                    enrichment={reEducationCompensations}
+                    movementTaskId={unifiedBiomechanicsMovementTask ?? null}
+                    onClose={() => setMovementReEdPanelEnabled(false)}
                   />
                 )}
               </div>

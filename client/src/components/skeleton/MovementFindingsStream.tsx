@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Activity, Trash2, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 
+export type MovementFindingVerdict = 'necessary' | 'optimizable' | 'phase_out' | 'harmful';
+
 export interface MovementFinding {
   id: string;
   timestamp: number;
@@ -28,6 +30,10 @@ export interface MovementFinding {
   exceededActiveLimit: boolean;
   sentence: string;
   loading?: boolean;
+  /** Optional verdict from the Compensation Re-Ed engine. When present
+   *  the row uses verdict-coloring instead of the legacy in/out-of-arc
+   *  coloring. (Task #373) */
+  verdict?: MovementFindingVerdict;
 }
 
 interface DragHandlers {
@@ -45,6 +51,11 @@ interface Props {
    *  default top-right slot. */
   position?: { left: number; top: number } | null;
   onPositionChange?: (p: { left: number; top: number } | null) => void;
+  /** Optional joint+movement → verdict map from the Re-Ed engine. The
+   *  row's verdict color falls back to this map when a finding doesn't
+   *  carry its own `verdict` field (e.g. older findings or the AI sim
+   *  rows). Key shape: `${joint}:${movement}` (raw, untouched). */
+  verdictByMovementId?: Record<string, MovementFindingVerdict>;
 }
 
 const JOINT_LABEL: Record<string, string> = {
@@ -56,7 +67,23 @@ const JOINT_LABEL: Record<string, string> = {
   leftElbow: 'L Elbow', rightElbow: 'R Elbow',
 };
 
-export default function MovementFindingsStream({ findings, onClear, className = '', position, onPositionChange }: Props) {
+const VERDICT_TAG_STYLE: Record<MovementFindingVerdict, string> = {
+  necessary: 'bg-emerald-500/30 text-emerald-100 border-emerald-400/50',
+  optimizable: 'bg-amber-500/30 text-amber-100 border-amber-400/50',
+  harmful: 'bg-rose-500/30 text-rose-100 border-rose-400/50',
+  phase_out: 'bg-slate-500/25 text-slate-100 border-slate-400/40',
+};
+const VERDICT_ROW_STYLE: Record<MovementFindingVerdict, string> = {
+  necessary: 'border-emerald-700/60 bg-emerald-950/40',
+  optimizable: 'border-amber-700/60 bg-amber-950/40',
+  harmful: 'border-rose-700/60 bg-rose-950/40',
+  phase_out: 'border-slate-700/60 bg-slate-900/50',
+};
+const VERDICT_LABEL: Record<MovementFindingVerdict, string> = {
+  necessary: 'Necessary', optimizable: 'Optimizable', harmful: 'Harmful', phase_out: 'Phase out',
+};
+
+export default function MovementFindingsStream({ findings, onClear, className = '', position, onPositionChange, verdictByMovementId }: Props) {
   const [now, setNow] = useState(Date.now());
   const intervalRef = useRef<number>();
   useEffect(() => {
@@ -145,22 +172,43 @@ export default function MovementFindingsStream({ findings, onClear, className = 
                 )}
                 {findings.map(f => {
                   const ago = Math.max(0, Math.round((now - f.timestamp) / 1000));
-                  const tagColor = f.exceededActiveLimit
+                  // Verdict coloring (Task #373): row + tag inherit from
+                  // the Re-Ed verdict when available. Legacy in/out-of-arc
+                  // coloring is used as a fallback when the engine hasn't
+                  // classified this movement yet.
+                  const verdict = f.verdict ?? verdictByMovementId?.[`${f.joint}:${f.movement}`];
+                  const tagColor = verdict
+                    ? VERDICT_TAG_STYLE[verdict]
+                    : f.exceededActiveLimit
                     ? 'bg-rose-500/30 text-rose-200 border-rose-400/40'
                     : f.inPainfulArc
                     ? 'bg-amber-500/30 text-amber-200 border-amber-400/40'
                     : 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30';
+                  const rowColor = verdict
+                    ? VERDICT_ROW_STYLE[verdict]
+                    : 'border-emerald-800/50 bg-emerald-900/40';
                   return (
                     <div
                       key={f.id}
-                      className="rounded border border-emerald-800/50 bg-emerald-900/40 px-2 py-1.5 text-[11px] animate-in fade-in slide-in-from-top-1 duration-200"
+                      className={`rounded border px-2 py-1.5 text-[11px] animate-in fade-in slide-in-from-top-1 duration-200 ${rowColor}`}
                       data-testid={`finding-${f.id}`}
+                      data-verdict={verdict ?? 'none'}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className={`text-[9px] uppercase tracking-wide rounded border px-1 py-0.5 ${tagColor}`}>
                           {(JOINT_LABEL[f.joint] ?? f.joint)} · {f.movement} · {Math.round(f.achievedAngle)}°
                         </span>
-                        <span className="text-[9px] text-emerald-300/70">{ago}s ago</span>
+                        <div className="flex items-center gap-1">
+                          {verdict && (
+                            <span
+                              className={`text-[8.5px] px-1 py-px rounded border ${VERDICT_TAG_STYLE[verdict]}`}
+                              data-testid={`finding-verdict-${f.id}`}
+                            >
+                              {VERDICT_LABEL[verdict]}
+                            </span>
+                          )}
+                          <span className="text-[9px] text-emerald-300/70">{ago}s ago</span>
+                        </div>
                       </div>
                       <div className="text-emerald-50">
                         {f.loading ? (

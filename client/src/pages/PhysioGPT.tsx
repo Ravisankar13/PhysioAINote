@@ -7748,18 +7748,24 @@ ${ddxList}`;
       nearestBone: pm.nearestBone,
       anatomicalLabel: pm.anatomicalLabel,
       type: pm.type,
-      severity: (pm as any).severity ?? 5,
+      severity: typeof pm.severity === 'number' ? pm.severity : 5,
     }));
-    const ctx = patientContextPayload as any;
-    const chronicityWord = (ctx?.chronicity ?? '').toString().toLowerCase();
-    const chronicityMonths = chronicityWord.includes('chronic') ? 12
-      : chronicityWord.includes('subacute') ? 2
-      : chronicityWord.includes('acute') ? 0.25
+    // PCP carries chronicity / structural-diagnosis info as free-text answers.
+    // Sniff the combined text for keywords rather than expecting structured fields.
+    const ctxText = [
+      patientContextPayload.free_form ?? '',
+      ...patientContextPayload.answers.map(a => a.answer ?? ''),
+    ].join(' ').toLowerCase();
+    const chronicityMonths = /\bchronic\b/.test(ctxText) ? 12
+      : /\bsubacute\b/.test(ctxText) ? 2
+      : /\bacute\b/.test(ctxText) ? 0.25
       : undefined;
+    const structuralDiagnosis = /\b(surger|surgical|post[- ]?op|osteoarthrit|frozen shoulder|adhesive capsulit|fracture|labral tear|tear)\b/.test(ctxText);
+    const fa = derivedDrivers?.fearAvoidance;
     const flags: ReEdPatientFlags = {
       chronicityMonths,
-      structuralDiagnosis: !!(ctx?.structuralDiagnosis ?? ctx?.surgicalHistory),
-      fearAvoidance: !!derivedDrivers?.fearAvoidance && (derivedDrivers.fearAvoidance as number) >= 0.5,
+      structuralDiagnosis,
+      fearAvoidance: typeof fa === 'number' && fa >= 0.5,
     };
     const out = enrichCompensations({
       jointConstraints: compensationDataState.result,

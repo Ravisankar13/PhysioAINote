@@ -62,6 +62,22 @@ export interface ReEdPatientFlags {
   fearAvoidance?: boolean;
 }
 
+/**
+ * Optional enrichment payload that the Re-Education engine attaches to
+ * existing detector outputs (CompensationPattern, ClinicalFinding,
+ * SlingResult). Detectors leave this undefined; the post-processor
+ * populates it. Anything that consumes a detector output can read
+ * `.enrichment` if present without coupling to this module's full type.
+ */
+export interface CompensationEnrichment {
+  driver: CompensationDriver;
+  verdict: CompensationVerdict;
+  cost: CompensationCostProfile;
+  costScore: number;
+  betterPatternId: string | null;
+  retrainingPlanId: string | null;
+}
+
 export interface EnrichedCompensation {
   /** Stable id for React keys / cart linkage. */
   id: string;
@@ -121,6 +137,7 @@ export interface EnrichmentOutput {
 const COST_WEIGHTS: Record<keyof CompensationCostProfile, number> = {
   cervical: 1.2,
   acJoint: 1.0,
+  lumbar: 1.3,
   energy: 0.6,
   secondaryRisk: 1.5,
 };
@@ -129,11 +146,13 @@ function weightedCostScore(cost: CompensationCostProfile): number {
   const total =
     cost.cervical * COST_WEIGHTS.cervical +
     cost.acJoint * COST_WEIGHTS.acJoint +
+    cost.lumbar * COST_WEIGHTS.lumbar +
     cost.energy * COST_WEIGHTS.energy +
     cost.secondaryRisk * COST_WEIGHTS.secondaryRisk;
   const max =
     COST_WEIGHTS.cervical +
     COST_WEIGHTS.acJoint +
+    COST_WEIGHTS.lumbar +
     COST_WEIGHTS.energy +
     COST_WEIGHTS.secondaryRisk;
   return Math.round((total / max) * 100) / 100;
@@ -143,6 +162,7 @@ function costFlags(cost: CompensationCostProfile): string[] {
   const out: string[] = [];
   if (cost.cervical >= 0.6) out.push('High cervical load');
   if (cost.acJoint >= 0.6) out.push('AC joint at risk');
+  if (cost.lumbar >= 0.6) out.push('High lumbar load');
   if (cost.energy >= 0.6) out.push('High metabolic cost');
   if (cost.secondaryRisk >= 0.6) out.push('Downstream injury risk');
   return out;
@@ -393,6 +413,7 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
     const baseCost: CompensationCostProfile = matched?.cost ?? {
       cervical: 0.2,
       acJoint: 0.2,
+      lumbar: 0.2,
       energy: Math.min(1, f.additionalLoadPct / 100),
       secondaryRisk: Math.min(1, f.additionalLoadPct / 80),
     };
@@ -403,6 +424,7 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
     const cost: CompensationCostProfile = {
       cervical: Math.min(1, baseCost.cervical + (matched?.cost.cervical ?? 0) * liveLoad * 0.3),
       acJoint: Math.min(1, baseCost.acJoint + (matched?.cost.acJoint ?? 0) * liveLoad * 0.3),
+      lumbar: Math.min(1, baseCost.lumbar + (matched?.cost.lumbar ?? 0) * liveLoad * 0.3),
       energy: Math.min(1, baseCost.energy * 0.6 + liveLoad * 0.4),
       secondaryRisk: Math.min(1, baseCost.secondaryRisk * 0.7 + liveLoad * 0.3),
     };

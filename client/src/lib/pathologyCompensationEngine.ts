@@ -28,6 +28,9 @@ export interface ClinicalFinding {
   description: string;
   muscleSource: string;
   pathology: PathologyType;
+  /** Optional enrichment populated by the Compensation Re-Education engine
+   *  (see `client/src/lib/compensationReEducation.ts`). */
+  enrichment?: import('./compensationReEducation').CompensationEnrichment;
 }
 
 export interface PathologyCompensationResult {

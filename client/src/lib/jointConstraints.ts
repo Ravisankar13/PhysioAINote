@@ -39,6 +39,10 @@ export interface CompensationPattern {
   compensationRatio: number; // How much the compensating joint takes over (0-1)
   additionalLoad: number; // Percentage increase in load
   clinicalNote: string;
+  /** Optional enrichment populated by the Compensation Re-Education engine
+   *  (see `client/src/lib/compensationReEducation.ts`). Detectors must leave
+   *  this undefined; only the post-processor sets it. */
+  enrichment?: import('./compensationReEducation').CompensationEnrichment;
 }
 
 export type WarningSeverity = 'moderate' | 'severe';

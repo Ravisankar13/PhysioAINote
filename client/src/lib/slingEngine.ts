@@ -82,6 +82,9 @@ export interface SlingResult {
   activationLevelPct: number;
   activationBand: SlingActivationBand;
   clinicalConsequences: string[];
+  /** Optional enrichment populated by the Compensation Re-Education engine
+   *  (see `client/src/lib/compensationReEducation.ts`). */
+  enrichment?: import('./compensationReEducation').CompensationEnrichment;
 }
 
 export type SlingActivationBand =

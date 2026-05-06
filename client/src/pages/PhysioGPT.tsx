@@ -517,7 +517,8 @@ type OverlayKey =
   | 'dermatomeNerve'
   | 'slingPathways'
   | 'boneGlow'
-  | 'compensationGlow';
+  | 'compensationGlow'
+  | 'compensationReEd';
 
 const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: string; description: string }> = [
   { key: 'tissueIntelligence', label: 'Tissue intelligence', chipColor: '#eab308', description: 'Inflamed / at-risk tissue overlays (rings, tubes, glow spheres)' },
@@ -530,6 +531,7 @@ const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: st
   { key: 'compensationGlow',   label: 'Compensating-joint glow', chipColor: '#fb7185', description: 'Causal-chain compensation highlights and Influence Ripple bone glow' },
   { key: 'dermatomeNerve',     label: 'Dermatome / nerve',   chipColor: '#60a5fa', description: 'Dermatome shading, nerve-root labels, referral zones' },
   { key: 'slingPathways',      label: 'Sling pathways',      chipColor: '#f59e0b', description: 'Functional sling pathways and cross-sling compensations' },
+  { key: 'compensationReEd',   label: 'Comp re-education',   chipColor: '#10b981', description: 'Movement-mode compensation re-education panel (driver chips, cost dashboard, retraining plans)' },
 ];
 
 const DEFAULT_OVERLAY_VISIBILITY: Record<OverlayKey, boolean> = OVERLAY_DEFINITIONS.reduce(
@@ -11124,7 +11126,7 @@ ${ddxList}`;
                     for the highest-cost compensation on the active case.
                     Hidden when no enriched compensations exist or when
                     the clinician has closed it for this session. */}
-                {skeletonMode === 'movement' && movementReEdPanelEnabled && reEducationCompensations.compensations.length > 0 && (
+                {skeletonMode === 'movement' && movementReEdPanelEnabled && overlayVisibility.compensationReEd && reEducationCompensations.compensations.length > 0 && (
                   <MovementReEducationPanel
                     enrichment={reEducationCompensations}
                     movementTaskId={unifiedBiomechanicsMovementTask ?? null}

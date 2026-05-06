@@ -7808,6 +7808,45 @@ ${ddxList}`;
     return map;
   }, [reEducationCompensations]);
 
+  // Skeleton overlay (Task #373 — Phase 2 Step 3): per-compensation
+  // bone "cost halo" rendered on the compensating joint. Verdict drives
+  // the color (rose/amber/emerald/slate); costScore drives intensity.
+  // Gated externally by `overlayVisibility.compensationReEd` so the
+  // existing Overlays popover toggle controls these visuals without
+  // touching detection. Joint string handles both snake_case
+  // (jointConstraints) and camelCase (pathology) formats.
+  const reEdCostHaloHighlights = useMemo<Array<{ boneName: string; color: number; intensity: number; label: string }>>(() => {
+    if (skeletonMode !== 'movement') return [];
+    const JOINT_TO_BONE: Record<string, string> = {
+      left_hip: 'Hip_L', right_hip: 'Hip_R', leftHip: 'Hip_L', rightHip: 'Hip_R',
+      left_knee: 'Knee_L', right_knee: 'Knee_R', leftKnee: 'Knee_L', rightKnee: 'Knee_R',
+      left_ankle: 'Ankle_L', right_ankle: 'Ankle_R', leftAnkle: 'Ankle_L', rightAnkle: 'Ankle_R',
+      left_shoulder: 'Shoulder_L', right_shoulder: 'Shoulder_R', leftShoulder: 'Shoulder_L', rightShoulder: 'Shoulder_R',
+      left_elbow: 'Elbow_L', right_elbow: 'Elbow_R', leftElbow: 'Elbow_L', rightElbow: 'Elbow_R',
+      left_scapula: 'Scapula_L', right_scapula: 'Scapula_R',
+      lumbar_spine: 'RootPart1_M', thoracic_spine: 'Spine1_M', cervical_spine: 'Neck_M',
+      pelvis: 'Root_M', spine: 'Spine1_M', neck: 'Neck_M',
+    };
+    const VERDICT_COLOR: Record<string, number> = {
+      harmful: 0xfb7185,     // rose-400
+      optimizable: 0xfbbf24, // amber-400
+      necessary: 0x34d399,   // emerald-400
+      phase_out: 0x94a3b8,   // slate-400
+    };
+    const seen = new Map<string, { color: number; intensity: number; label: string }>();
+    for (const c of reEducationCompensations.compensations) {
+      const bone = JOINT_TO_BONE[c.compensator] ?? JOINT_TO_BONE[c.joint];
+      if (!bone) continue;
+      const color = VERDICT_COLOR[c.verdict] ?? VERDICT_COLOR.optimizable;
+      const intensity = Math.max(0.35, Math.min(0.95, 0.4 + c.costScore * 0.6));
+      const prior = seen.get(bone);
+      if (!prior || intensity > prior.intensity) {
+        seen.set(bone, { color, intensity, label: `Re-ed: ${c.verdict}` });
+      }
+    }
+    return Array.from(seen.entries()).map(([boneName, v]) => ({ boneName, ...v }));
+  }, [skeletonMode, reEducationCompensations]);
+
   // Re-derive muscle adjustments from the active per-part treatments.
   // Routes link/attachment treatments through weak-link muscles so the
   // engine's weak-link detector recomputes downstream of the treatment.
@@ -10817,7 +10856,10 @@ ${ddxList}`;
               nerveRootLabels={overlayVisibility.dermatomeNerve ? nerveRootLabels : []}
               referralZoneBones={overlayVisibility.dermatomeNerve ? referralZoneBones : []}
               tissueViewOverlay={overlayVisibility.tissueIntelligence ? tissueViewOverlay : null}
-              biomechanicsFaultHighlights={overlayVisibility.boneGlow ? biomechanicsFaultHighlights : []}
+              biomechanicsFaultHighlights={[
+                ...(overlayVisibility.boneGlow ? (biomechanicsFaultHighlights ?? []) : []),
+                ...(overlayVisibility.compensationReEd ? reEdCostHaloHighlights : []),
+              ]}
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
               onModelLoadError={handleModelLoadError}

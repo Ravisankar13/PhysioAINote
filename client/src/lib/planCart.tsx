@@ -88,7 +88,27 @@ export function PlanCartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<PlanCartItem[]>([]);
 
   const add = useCallback((item: PlanCartItem) => {
-    setItems(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]);
+    setItems(prev => {
+      // Task #376 — for manual_therapy items with structured
+      // treatmentParams, dedupe by (jointKey, directionId) so re-performing
+      // the same technique upserts the cart entry (latest dose wins) rather
+      // than appending duplicates. All other modalities keep id-based dedupe.
+      const tp = item.treatmentParams;
+      if (item.modality === 'manual_therapy' && tp) {
+        const existingIdx = prev.findIndex(i =>
+          i.modality === 'manual_therapy' &&
+          i.treatmentParams?.jointKey === tp.jointKey &&
+          i.treatmentParams?.directionId === tp.directionId
+        );
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = { ...prev[existingIdx], ...item, id: prev[existingIdx].id };
+          return next;
+        }
+        return [...prev, item];
+      }
+      return prev.some(i => i.id === item.id) ? prev : [...prev, item];
+    });
   }, []);
   const remove = useCallback((id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));

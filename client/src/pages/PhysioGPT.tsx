@@ -7182,15 +7182,84 @@ ${ddxList}`;
     if (skeletonMode !== 'treatment') return undefined;
     const bone = TREATMENT_JOINT_TO_BONE[treatmentJointKey];
     if (!bone) return undefined;
+    // Convert engine outputs (mm) → metres for the viewer's world space.
+    const tMm = treatmentMechanical?.translationMm;
+    const translationM = tMm ? { x: tMm.x / 1000, y: tMm.y / 1000, z: tMm.z / 1000 } : undefined;
+    // Capsular saturation: peak strain across regions (0..1+ clamped).
+    let sat = 0;
+    if (treatmentMechanical?.capsularStrain) {
+      for (const region of Object.values(treatmentMechanical.capsularStrain)) {
+        if (region && typeof region.value === 'number') {
+          sat = Math.max(sat, Math.min(1, region.value));
+        }
+      }
+    }
     return {
       active: true,
       boneName: bone,
       axis: { ...treatmentTechnique.liveAxis },
       grade: treatmentTechnique.grade,
       gradeSystem: treatmentTechnique.gradeSystem,
+      translationM,
+      capsularSaturation: sat,
+      frequencyHz: treatmentTechnique.frequencyHz,
+      amplitudeM: treatmentTechnique.amplitudeMm / 1000,
       label: treatmentDirection?.label,
     };
-  }, [skeletonMode, treatmentJointKey, treatmentTechnique.liveAxis, treatmentTechnique.grade, treatmentTechnique.gradeSystem, treatmentDirection]);
+  }, [
+    skeletonMode, treatmentJointKey,
+    treatmentTechnique.liveAxis, treatmentTechnique.grade, treatmentTechnique.gradeSystem,
+    treatmentTechnique.frequencyHz, treatmentTechnique.amplitudeMm,
+    treatmentDirection, treatmentMechanical,
+  ]);
+
+  // Task #376 — Patient-position preset → modelConfig pose application.
+  // When the clinician chooses Supine/Prone/Side-lying/Sitting/Loose-packed,
+  // apply a coarse skeleton pose (hip flexion etc.) so the avatar visibly
+  // adopts the position, exactly the way other modes update modelConfig.
+  const TREATMENT_POSITION_POSE: Record<string, Partial<Record<string, Record<string, number>>>> = {
+    supine: {
+      leftHip: { flexion: 0 }, rightHip: { flexion: 0 },
+      leftKnee: { flexion: 0 }, rightKnee: { flexion: 0 },
+    },
+    prone: {
+      leftHip: { flexion: 0 }, rightHip: { flexion: 0 },
+      leftKnee: { flexion: 0 }, rightKnee: { flexion: 0 },
+    },
+    sitting: {
+      leftHip: { flexion: 90 }, rightHip: { flexion: 90 },
+      leftKnee: { flexion: 90 }, rightKnee: { flexion: 90 },
+    },
+    'side-lying': {
+      leftHip: { flexion: 30 }, rightHip: { flexion: 30 },
+      leftKnee: { flexion: 60 }, rightKnee: { flexion: 60 },
+    },
+    'loose-packed': {
+      leftHip: { flexion: 30 }, rightHip: { flexion: 30 },
+      leftKnee: { flexion: 25 }, rightKnee: { flexion: 25 },
+      leftShoulder: { flexion: 55, abduction: 55 } as any,
+      rightShoulder: { flexion: 55, abduction: 55 } as any,
+    },
+  };
+  const lastAppliedPositionPresetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (skeletonMode !== 'treatment') {
+      lastAppliedPositionPresetRef.current = null;
+      return;
+    }
+    if (lastAppliedPositionPresetRef.current === treatmentPositionPreset) return;
+    const pose = TREATMENT_POSITION_POSE[treatmentPositionPreset];
+    if (!pose) return;
+    for (const [joint, params] of Object.entries(pose)) {
+      if (!params) continue;
+      for (const [param, value] of Object.entries(params)) {
+        if (typeof value === 'number') {
+          updateModelConfig(`${joint}.${param}`, value);
+        }
+      }
+    }
+    lastAppliedPositionPresetRef.current = treatmentPositionPreset;
+  }, [skeletonMode, treatmentPositionPreset, updateModelConfig]);
 
   const treatmentSimulationContextValue = useMemo(
     () => ({ requestTreatmentSimulation }),
@@ -11437,7 +11506,7 @@ ${ddxList}`;
                     onClose={() => setSkeletonMode('posture')}
                     log={persistedTreatmentState.log.map(e => ({
                       id: e.id,
-                      technique: e.techniqueString,
+                      technique: e.technique,
                       performedAt: e.performedAt,
                       clinicalDelta: {
                         romDeltaDeg: e.clinicalDelta?.romDeltaDeg ?? 0,

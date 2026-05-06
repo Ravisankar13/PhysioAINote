@@ -34,6 +34,7 @@ export interface ClinicalFinding {
    *  downstream consumers can read either form. */
   enrichment?: import('./compensationReEducation').CompensationEnrichment;
   driver?: import('./compensationReEducation').CompensationDriver;
+  drivers?: import('./compensationReEducation').CompensationDriver[];
   verdict?: import('./compensationReEducation').CompensationVerdict;
   cost?: import('./compensationLibrary').CompensationCostProfile;
   betterPatternId?: string | null;

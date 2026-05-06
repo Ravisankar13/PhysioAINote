@@ -57,8 +57,12 @@ if (out.compensations.length === 0) fail('expected at least one enriched compens
 const shrug = out.compensations.find(c => c.matchedPatternId === 'left_shoulder_flexion__upper_trap_shrug');
 if (!shrug) fail(`expected matched pattern left_shoulder_flexion__upper_trap_shrug; got ${out.compensations.map(c => c.matchedPatternId).join(', ')}`);
 
-const allowedDrivers = ['motor_planning', 'mechanical_block', 'weakness'];
-if (!allowedDrivers.includes(shrug!.driver)) fail(`expected driver in {${allowedDrivers.join(',')}}, got ${shrug!.driver}`);
+// Multi-driver attribution: canonical case must surface BOTH
+// mechanical_block (source joint can't reach target) AND motor_planning
+// (compensation is a learned, retrainable pattern).
+if (!shrug!.drivers.includes('mechanical_block')) fail(`expected drivers to include mechanical_block, got ${shrug!.drivers.join(', ')}`);
+if (!shrug!.drivers.includes('motor_planning')) fail(`expected drivers to include motor_planning, got ${shrug!.drivers.join(', ')}`);
+if (shrug!.driver !== shrug!.drivers[0]) fail(`primary driver should equal drivers[0], got driver=${shrug!.driver} drivers[0]=${shrug!.drivers[0]}`);
 if (shrug!.verdict !== 'optimizable') fail(`expected verdict optimizable, got ${shrug!.verdict} (cost=${shrug!.costScore})`);
 if (!shrug!.betterPatternId) fail('expected non-empty betterPatternId');
 if (shrug!.cost.cervical < 0.6) fail(`expected cost.cervical >= 0.6, got ${shrug!.cost.cervical}`);
@@ -76,6 +80,7 @@ console.log('SMOKE OK ✔');
 console.log(JSON.stringify({
   matched: shrug!.matchedPatternId,
   driver: shrug!.driver,
+  drivers: shrug!.drivers,
   verdict: shrug!.verdict,
   betterPatternId: shrug!.betterPatternId,
   cost: shrug!.cost,

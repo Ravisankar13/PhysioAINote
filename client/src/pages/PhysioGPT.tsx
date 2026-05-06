@@ -7873,15 +7873,20 @@ ${ddxList}`;
   }, [painMarkers, scarMarkers, adhesionBands]);
   const spotlightPick = useMemo<SpotlightPick | null>(() => {
     if (skeletonMode !== 'movement') return null;
-    if (!slingAnalysis) return null;
-    return pickSpotlightSling(slingAnalysis, spotlightBiasMarkers, {
+    // Prefer the Re-Ed-enriched sling result so the spotlight sees
+    // driver / verdict / cost / betterPatternId on each sling row,
+    // falling back to the raw sling analysis when enrichment hasn't
+    // computed yet (first frame).
+    const slingForSpotlight = reEducationCompensations.enrichedDetectorOutputs.sling ?? slingAnalysis;
+    if (!slingForSpotlight) return null;
+    return pickSpotlightSling(slingForSpotlight, spotlightBiasMarkers, {
       pinnedSlingId: pinnedSpotlightSlingId,
       movementTaskId: unifiedBiomechanicsMovementTask ?? null,
       lastInteractedBone,
       previousSpotlightId: previousSpotlightIdRef.current,
       primaryPainRegion,
     });
-  }, [skeletonMode, slingAnalysis, spotlightBiasMarkers, pinnedSpotlightSlingId, unifiedBiomechanicsMovementTask, lastInteractedBone, primaryPainRegion]);
+  }, [skeletonMode, slingAnalysis, reEducationCompensations, spotlightBiasMarkers, pinnedSpotlightSlingId, unifiedBiomechanicsMovementTask, lastInteractedBone, primaryPainRegion]);
   useEffect(() => {
     if (spotlightPick) previousSpotlightIdRef.current = spotlightPick.slingId;
   }, [spotlightPick?.slingId]);

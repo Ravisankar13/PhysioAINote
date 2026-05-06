@@ -70,7 +70,12 @@ export interface ReEdPatientFlags {
  * `.enrichment` if present without coupling to this module's full type.
  */
 export interface CompensationEnrichment {
+  /** Primary driver for back-compat. Equivalent to `drivers[0]`. */
   driver: CompensationDriver;
+  /** Ordered list of contributing drivers, primary first. The canonical
+   *  shoulder-flexion + trap-shrug case returns
+   *  `['mechanical_block', 'motor_planning']` for example. */
+  drivers: CompensationDriver[];
   verdict: CompensationVerdict;
   cost: CompensationCostProfile;
   costScore: number;
@@ -95,8 +100,9 @@ export interface EnrichedCompensation {
   clinicalNote: string;
 
   // --- Re-ed enrichment ---
-  driver: CompensationDriver;
-  driverConfidence: number;          // 0-1
+  driver: CompensationDriver;        // primary (= drivers[0]), kept for back-compat
+  drivers: CompensationDriver[];     // ordered list of contributing drivers
+  driverConfidence: number;          // 0-1, confidence in primary
   driverEvidence: string[];          // human-readable bullets
   verdict: CompensationVerdict;
   verdictReason: string;             // single sentence
@@ -143,11 +149,106 @@ export interface EnrichmentOutput {
 export function toEnrichmentPayload(c: EnrichedCompensation): CompensationEnrichment {
   return {
     driver: c.driver,
+    drivers: c.drivers,
     verdict: c.verdict,
     cost: c.cost,
     costScore: c.costScore,
     betterPatternId: c.betterPatternId,
     retrainingPlanId: c.retrainingPlanId,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reusable classifier-style functions — exported so callers (UI panel,
+// Plan Cart, exports) can run any one stage standalone without re-running
+// the full pipeline.
+// ---------------------------------------------------------------------------
+
+/** Blend the library baseline cost with the live additionalLoad signal.
+ *  Pure function; safe to call repeatedly. */
+export function computeCompensationCost(
+  baseCost: CompensationCostProfile,
+  additionalLoadPct: number,
+): CompensationCostProfile {
+  const liveLoad = Math.min(1, Math.max(0, additionalLoadPct) / 100);
+  return {
+    cervical: Math.min(1, baseCost.cervical + baseCost.cervical * liveLoad * 0.3),
+    acJoint: Math.min(1, baseCost.acJoint + baseCost.acJoint * liveLoad * 0.3),
+    lumbar: Math.min(1, baseCost.lumbar + baseCost.lumbar * liveLoad * 0.3),
+    energy: Math.min(1, baseCost.energy * 0.6 + liveLoad * 0.4),
+    secondaryRisk: Math.min(1, baseCost.secondaryRisk * 0.7 + liveLoad * 0.3),
+  };
+}
+
+/** Default cost profile used when no library pattern matches. */
+export function defaultCostProfile(additionalLoadPct: number): CompensationCostProfile {
+  return {
+    cervical: 0.2,
+    acJoint: 0.2,
+    lumbar: 0.2,
+    energy: Math.min(1, additionalLoadPct / 100),
+    secondaryRisk: Math.min(1, additionalLoadPct / 80),
+  };
+}
+
+export interface ClassifyInput {
+  source: CompensationSourceDetector;
+  joint: string;
+  movement: string;
+  additionalLoadPct: number;
+  pathology: PathologyCompensationResult | null;
+  painMarkers: ReEdPainMarker[];
+  patientFlags: ReEdPatientFlags;
+  cost: CompensationCostProfile;
+  betterPatternId: string | null;
+}
+
+/** Classify a single compensation finding — pure, reusable. Returns the
+ *  multi-driver attribution + verdict + reasons in one call. */
+export function classifyCompensation(input: ClassifyInput): {
+  drivers: CompensationDriver[];
+  driverConfidence: number;
+  driverEvidence: string[];
+  verdict: CompensationVerdict;
+  verdictReason: string;
+  costScore: number;
+} {
+  const driverInfo = inferDriver({
+    joint: input.joint,
+    movement: input.movement,
+    pathology: input.pathology,
+    painMarkers: input.painMarkers,
+    patientFlags: input.patientFlags,
+  });
+  // Layer in source-implied drivers. The joint-constraints detector only
+  // fires when a movement target couldn't be reached at the source joint
+  // — so by construction there is at least *some* mechanical limitation
+  // at the source AND a learned compensatory motor pattern, even when no
+  // structural finding is on file. We surface both so the canonical
+  // shoulder-flexion + trap-shrug case returns
+  // `['mechanical_block', 'motor_planning']` rather than a single label.
+  const drivers: CompensationDriver[] = [driverInfo.driver];
+  if (input.source === 'joint_constraints') {
+    if (!drivers.includes('mechanical_block')) drivers.push('mechanical_block');
+    if (!drivers.includes('motor_planning')) drivers.push('motor_planning');
+  } else if (input.source === 'sling') {
+    if (!drivers.includes('weakness')) drivers.push('weakness');
+  }
+  const costScore = weightedCostScore(input.cost);
+  const pain = painNearJoint(input.joint, input.painMarkers);
+  const v = computeVerdict({
+    driver: driverInfo.driver,
+    costScore,
+    betterPatternId: input.betterPatternId,
+    pain,
+  });
+  return {
+    drivers,
+    driverConfidence: driverInfo.confidence,
+    driverEvidence: driverInfo.evidence,
+    verdict: v.verdict,
+    verdictReason: v.reason,
+    costScore,
   };
 }
 
@@ -456,47 +557,30 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
       ?? null;
 
     const matched = target ? matchPatternFromKeywords(target, f.matchHaystack) : null;
-    const baseCost: CompensationCostProfile = matched?.cost ?? {
-      cervical: 0.2,
-      acJoint: 0.2,
-      lumbar: 0.2,
-      energy: Math.min(1, f.additionalLoadPct / 100),
-      secondaryRisk: Math.min(1, f.additionalLoadPct / 80),
-    };
+    const baseCost: CompensationCostProfile = matched?.cost ?? defaultCostProfile(f.additionalLoadPct);
+    const cost = computeCompensationCost(baseCost, f.additionalLoadPct);
 
-    // Blend library baseline with live additionalLoad signal so a pattern
-    // that the detector says is loading the system harder reflects in cost.
-    const liveLoad = Math.min(1, f.additionalLoadPct / 100);
-    const cost: CompensationCostProfile = {
-      cervical: Math.min(1, baseCost.cervical + (matched?.cost.cervical ?? 0) * liveLoad * 0.3),
-      acJoint: Math.min(1, baseCost.acJoint + (matched?.cost.acJoint ?? 0) * liveLoad * 0.3),
-      lumbar: Math.min(1, baseCost.lumbar + (matched?.cost.lumbar ?? 0) * liveLoad * 0.3),
-      energy: Math.min(1, baseCost.energy * 0.6 + liveLoad * 0.4),
-      secondaryRisk: Math.min(1, baseCost.secondaryRisk * 0.7 + liveLoad * 0.3),
-    };
+    // Pick the better-pattern target first so the classifier can use its id.
+    const tentativeDriver = inferDriver({
+      joint: f.joint, movement: f.movement,
+      pathology: input.pathology, painMarkers: input.painMarkers, patientFlags: input.patientFlags,
+    }).driver;
+    const better = target
+      ? pickBetterPattern(target, matched, tentativeDriver)
+      : { id: null, label: null, planId: null };
 
-    const driverInfo = inferDriver({
+    const cls = classifyCompensation({
+      source: f.source,
       joint: f.joint,
       movement: f.movement,
+      additionalLoadPct: f.additionalLoadPct,
       pathology: input.pathology,
       painMarkers: input.painMarkers,
       patientFlags: input.patientFlags,
-    });
-
-    const better = target
-      ? pickBetterPattern(target, matched, driverInfo.driver)
-      : { id: null, label: null, planId: null };
-
-    const costScore = weightedCostScore(cost);
-    const flags = costFlags(cost);
-
-    const pain = painNearJoint(f.joint, input.painMarkers);
-    const verdictInfo = computeVerdict({
-      driver: driverInfo.driver,
-      costScore,
+      cost,
       betterPatternId: better.id,
-      pain,
     });
+    const flags = costFlags(cost);
 
     return {
       id: f.id,
@@ -509,14 +593,15 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
       ratio: f.ratio,
       clinicalNote: f.clinicalNote,
 
-      driver: driverInfo.driver,
-      driverConfidence: driverInfo.confidence,
-      driverEvidence: driverInfo.evidence,
-      verdict: verdictInfo.verdict,
-      verdictReason: verdictInfo.reason,
+      driver: cls.drivers[0],
+      drivers: cls.drivers,
+      driverConfidence: cls.driverConfidence,
+      driverEvidence: cls.driverEvidence,
+      verdict: cls.verdict,
+      verdictReason: cls.verdictReason,
 
       cost,
-      costScore,
+      costScore: cls.costScore,
       costFlags: flags,
 
       matchedPatternId: matched?.id ?? null,
@@ -550,7 +635,7 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
           const c = byId.get(id);
           if (!c) return p;
           const e = toEnrichmentPayload(c);
-          return { ...p, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+          return { ...p, enrichment: e, driver: e.driver, drivers: e.drivers, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
         }),
       }
     : null;
@@ -562,7 +647,7 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
           const c = byId.get(id);
           if (!c) return f;
           const e = toEnrichmentPayload(c);
-          return { ...f, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+          return { ...f, enrichment: e, driver: e.driver, drivers: e.drivers, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
         }),
       }
     : null;
@@ -576,7 +661,7 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
           const c = byId.get(id);
           if (!c) return s;
           const e = toEnrichmentPayload(c);
-          return { ...s, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+          return { ...s, enrichment: e, driver: e.driver, drivers: e.drivers, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
         }),
       }
     : null;

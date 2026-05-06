@@ -182,6 +182,7 @@ import { pickSpotlightSling, type SpotlightPick, type SpotlightInputMarker } fro
 import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
+import { enrichCompensations, type EnrichedCompensation, type EnrichmentOutput, type ReEdPainMarker, type ReEdPatientFlags } from "@/lib/compensationReEducation";
 
 // Maps modelConfig group keys (e.g. `leftHip`, `rightShoulder`) to the
 // corresponding GLB bone name. Used to translate Pose / Auto-pose
@@ -1494,6 +1495,13 @@ export default function PhysioGPT() {
   // reasoning entry point.
   const lastMaterialSignatureRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
+  // Mirror of compensationDataRef as state so memoised re-ed enrichment
+  // re-runs when the joint-constraints detector reports a new pattern.
+  const [compensationDataState, setCompensationDataState] = useState<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
+  // Live enrichment output for the Movement-Mode Re-Ed UI panel
+  // (Task #373 will read this). Kept in a ref alongside the memo so any
+  // non-reactive consumer (cart, exports) can read the current snapshot.
+  const reEducationCompensationsRef = useRef<EnrichmentOutput | null>(null);
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
 
@@ -6434,6 +6442,7 @@ ${ddxList}`;
 
   const handleCompensationChange = useCallback((result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => {
     compensationDataRef.current = { result, movementName, restrictions };
+    setCompensationDataState({ result, movementName, restrictions });
     if (!result || result.patterns.length === 0) return;
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
@@ -7728,6 +7737,41 @@ ${ddxList}`;
   }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, slingPartMuscleAdjustments, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides, isPoseDragging]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  // Compensation Re-Education enrichment (Task #372). Post-processes the
+  // three existing detectors (joint-constraints, pathology compensation,
+  // sling engine) into a unified list of EnrichedCompensation records
+  // tagged with driver / verdict / cost / better pattern / retraining plan.
+  // Consumed by the Movement-Mode Re-Ed UI panel (Task #373).
+  const reEducationCompensations = useMemo<EnrichmentOutput>(() => {
+    const reEdPainMarkers: ReEdPainMarker[] = painMarkers.map(pm => ({
+      nearestBone: pm.nearestBone,
+      anatomicalLabel: pm.anatomicalLabel,
+      type: pm.type,
+      severity: (pm as any).severity ?? 5,
+    }));
+    const ctx = patientContextPayload as any;
+    const chronicityWord = (ctx?.chronicity ?? '').toString().toLowerCase();
+    const chronicityMonths = chronicityWord.includes('chronic') ? 12
+      : chronicityWord.includes('subacute') ? 2
+      : chronicityWord.includes('acute') ? 0.25
+      : undefined;
+    const flags: ReEdPatientFlags = {
+      chronicityMonths,
+      structuralDiagnosis: !!(ctx?.structuralDiagnosis ?? ctx?.surgicalHistory),
+      fearAvoidance: !!derivedDrivers?.fearAvoidance && (derivedDrivers.fearAvoidance as number) >= 0.5,
+    };
+    const out = enrichCompensations({
+      jointConstraints: compensationDataState.result,
+      pathology: pathologyCompensation,
+      sling: slingAnalysis,
+      painMarkers: reEdPainMarkers,
+      patientFlags: flags,
+      activeMovementId: compensationDataState.movementName,
+    });
+    reEducationCompensationsRef.current = out;
+    return out;
+  }, [compensationDataState, pathologyCompensation, slingAnalysis, painMarkers, patientContextPayload, derivedDrivers]);
 
   // Re-derive muscle adjustments from the active per-part treatments.
   // Routes link/attachment treatments through weak-link muscles so the
@@ -14457,6 +14501,8 @@ ${ddxList}`;
                   slingAnalysisRef.current = null;
                   setSlingActivationOverrides({});
                   compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
+                  setCompensationDataState({ result: null, movementName: null, restrictions: {} });
+                  reEducationCompensationsRef.current = null;
                   subjectiveHistoryRef.current = '';
                   if (clinicalReasoningTimerRef.current) {
                     clearTimeout(clinicalReasoningTimerRef.current);

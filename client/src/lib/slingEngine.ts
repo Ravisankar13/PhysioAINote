@@ -83,8 +83,15 @@ export interface SlingResult {
   activationBand: SlingActivationBand;
   clinicalConsequences: string[];
   /** Optional enrichment populated by the Compensation Re-Education engine
-   *  (see `client/src/lib/compensationReEducation.ts`). */
+   *  (see `client/src/lib/compensationReEducation.ts`). The grouped
+   *  `enrichment` object and the top-level fields are written together so
+   *  downstream consumers can read either form. */
   enrichment?: import('./compensationReEducation').CompensationEnrichment;
+  driver?: import('./compensationReEducation').CompensationDriver;
+  verdict?: import('./compensationReEducation').CompensationVerdict;
+  cost?: import('./compensationLibrary').CompensationCostProfile;
+  betterPatternId?: string | null;
+  retrainingPlanId?: string | null;
 }
 
 export type SlingActivationBand =

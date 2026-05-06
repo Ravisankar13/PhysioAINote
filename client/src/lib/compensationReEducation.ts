@@ -128,6 +128,27 @@ export interface EnrichmentOutput {
   countsByVerdict: Record<CompensationVerdict, number>;
   /** Total cost across all compensations (0-N). */
   totalCostScore: number;
+  /** Detector outputs cloned and stamped with `enrichment` + top-level
+   *  optional fields, so existing consumers (Findings Stream, Sling
+   *  Spotlight, Plan Cart) can read enrichment without changing how they
+   *  iterate the underlying detector arrays. Null when input was null. */
+  enrichedDetectorOutputs: {
+    jointConstraints: CompensationResult | null;
+    pathology: PathologyCompensationResult | null;
+    sling: SlingAnalysisResult | null;
+  };
+}
+
+/** Convert an EnrichedCompensation into the slim CompensationEnrichment payload. */
+export function toEnrichmentPayload(c: EnrichedCompensation): CompensationEnrichment {
+  return {
+    driver: c.driver,
+    verdict: c.verdict,
+    cost: c.cost,
+    costScore: c.costScore,
+    betterPatternId: c.betterPatternId,
+    retrainingPlanId: c.retrainingPlanId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -180,14 +201,38 @@ interface DriverInferenceContext {
   patientFlags: ReEdPatientFlags;
 }
 
+/**
+ * Normalize joint / region labels so that "left_shoulder", "leftShoulder",
+ * "Left Shoulder" and "left-shoulder" all compare equal. Returns an array
+ * of tokens (lower-case, alpha-only) so we can do partial / token-overlap
+ * matching against pain markers and pathology findings.
+ */
+function normalizeLabelTokens(s: string | undefined | null): string[] {
+  if (!s) return [];
+  return s
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase → camel Case
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(t => t.length >= 3); // drop noise like "l", "of", "to"
+}
+
+function tokensOverlap(a: string[], b: string[]): boolean {
+  if (a.length === 0 || b.length === 0) return false;
+  const set = new Set(a);
+  for (const t of b) if (set.has(t)) return true;
+  return false;
+}
+
 function painNearJoint(joint: string, painMarkers: ReEdPainMarker[]): ReEdPainMarker | null {
-  const lc = joint.toLowerCase();
+  const jointTokens = normalizeLabelTokens(joint);
   let best: ReEdPainMarker | null = null;
   let bestSev = 0;
   for (const pm of painMarkers) {
-    const fields = [pm.nearestBone, pm.anatomicalLabel].filter(Boolean).map(s => s!.toLowerCase());
-    const matched = fields.some(f => f.includes(lc) || lc.includes(f));
-    if (matched && (pm.severity ?? 0) >= bestSev) {
+    const markerTokens = [
+      ...normalizeLabelTokens(pm.nearestBone),
+      ...normalizeLabelTokens(pm.anatomicalLabel),
+    ];
+    if (tokensOverlap(jointTokens, markerTokens) && (pm.severity ?? 0) >= bestSev) {
       best = pm;
       bestSev = pm.severity ?? 0;
     }
@@ -197,19 +242,20 @@ function painNearJoint(joint: string, painMarkers: ReEdPainMarker[]): ReEdPainMa
 
 function pathologyRomRestrictionFor(joint: string, movement: string, pathology: PathologyCompensationResult | null): RomRestriction | null {
   if (!pathology) return null;
-  const lc = joint.toLowerCase();
-  const mv = movement.toLowerCase();
+  const jointTokens = normalizeLabelTokens(joint);
+  const mvTokens = normalizeLabelTokens(movement);
   return pathology.romRestrictions.find(r =>
-    r.joint.toLowerCase().includes(lc.split('_')[0]) && r.parameter.toLowerCase().includes(mv),
+    tokensOverlap(jointTokens, normalizeLabelTokens(r.joint)) &&
+    tokensOverlap(mvTokens, normalizeLabelTokens(r.parameter)),
   ) ?? null;
 }
 
 function pathologyFindingsFor(joint: string, pathology: PathologyCompensationResult | null): ClinicalFinding[] {
   if (!pathology) return [];
-  const lc = joint.toLowerCase();
+  const jointTokens = normalizeLabelTokens(joint);
   return pathology.clinicalFindings.filter(f =>
-    f.muscleSource.toLowerCase().includes(lc.split('_').pop() ?? '') ||
-    f.title.toLowerCase().includes(lc.split('_').pop() ?? ''),
+    tokensOverlap(jointTokens, normalizeLabelTokens(f.muscleSource)) ||
+    tokensOverlap(jointTokens, normalizeLabelTokens(f.title)),
   );
 }
 
@@ -485,12 +531,62 @@ export function enrichCompensations(input: EnrichmentInput): EnrichmentOutput {
     necessary: 0, optimizable: 0, phase_out: 0, harmful: 0,
   };
   let totalCostScore = 0;
+  const byId = new Map<string, EnrichedCompensation>();
   for (const c of compensations) {
     countsByVerdict[c.verdict]++;
     totalCostScore += c.costScore;
+    byId.set(c.id, c);
   }
 
-  return { compensations, countsByVerdict, totalCostScore: Math.round(totalCostScore * 10) / 10 };
+  // Stamp enrichment back onto cloned detector outputs so downstream
+  // consumers (Findings Stream / Sling Spotlight / Plan Cart) can read
+  // `.enrichment` + top-level optional fields directly off the same
+  // arrays they already iterate.
+  const enrichedJC: CompensationResult | null = input.jointConstraints
+    ? {
+        ...input.jointConstraints,
+        patterns: input.jointConstraints.patterns.map((p, i) => {
+          const id = `jc-${p.sourceJoint}-${p.sourceMovement}-${p.compensatingJoint}-${p.compensatingMovement}-${i}`;
+          const c = byId.get(id);
+          if (!c) return p;
+          const e = toEnrichmentPayload(c);
+          return { ...p, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+        }),
+      }
+    : null;
+  const enrichedPath: PathologyCompensationResult | null = input.pathology
+    ? {
+        ...input.pathology,
+        clinicalFindings: input.pathology.clinicalFindings.map((f, i) => {
+          const id = `pa-${f.muscleSource}-${f.pathology}-${i}`;
+          const c = byId.get(id);
+          if (!c) return f;
+          const e = toEnrichmentPayload(c);
+          return { ...f, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+        }),
+      }
+    : null;
+  const enrichedSling: SlingAnalysisResult | null = input.sling
+    ? {
+        ...input.sling,
+        slings: input.sling.slings.map((s, i) => {
+          const wl = s.weakLinks[0];
+          if (!wl) return s;
+          const id = `sl-${s.slingId}-${wl.muscle}-${i}`;
+          const c = byId.get(id);
+          if (!c) return s;
+          const e = toEnrichmentPayload(c);
+          return { ...s, enrichment: e, driver: e.driver, verdict: e.verdict, cost: e.cost, betterPatternId: e.betterPatternId, retrainingPlanId: e.retrainingPlanId };
+        }),
+      }
+    : null;
+
+  return {
+    compensations,
+    countsByVerdict,
+    totalCostScore: Math.round(totalCostScore * 10) / 10,
+    enrichedDetectorOutputs: { jointConstraints: enrichedJC, pathology: enrichedPath, sling: enrichedSling },
+  };
 }
 
 export function getRetrainingPlanForCompensation(c: EnrichedCompensation): RetrainingPlan | null {

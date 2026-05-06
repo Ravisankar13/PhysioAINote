@@ -1502,6 +1502,11 @@ export default function PhysioGPT() {
   // (Task #373 will read this). Kept in a ref alongside the memo so any
   // non-reactive consumer (cart, exports) can read the current snapshot.
   const reEducationCompensationsRef = useRef<EnrichmentOutput | null>(null);
+  // Detector outputs cloned + stamped with enrichment so Findings Stream /
+  // Sling Spotlight / Plan Cart can read driver/verdict/cost/betterPatternId
+  // off the same arrays they already iterate. Refreshed on every memo run.
+  const [reEducationEnrichedOutputs, setReEducationEnrichedOutputs] = useState<EnrichmentOutput['enrichedDetectorOutputs']>({ jointConstraints: null, pathology: null, sling: null });
+  const reEducationEnrichedOutputsRef = useRef<EnrichmentOutput['enrichedDetectorOutputs']>({ jointConstraints: null, pathology: null, sling: null });
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
 
@@ -7776,6 +7781,9 @@ ${ddxList}`;
       activeMovementId: compensationDataState.movementName,
     });
     reEducationCompensationsRef.current = out;
+    reEducationEnrichedOutputsRef.current = out.enrichedDetectorOutputs;
+    // Defer the setState so it doesn't synchronously interrupt this memo.
+    queueMicrotask(() => setReEducationEnrichedOutputs(out.enrichedDetectorOutputs));
     return out;
   }, [compensationDataState, pathologyCompensation, slingAnalysis, painMarkers, patientContextPayload, derivedDrivers]);
 
@@ -14509,6 +14517,8 @@ ${ddxList}`;
                   compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
                   setCompensationDataState({ result: null, movementName: null, restrictions: {} });
                   reEducationCompensationsRef.current = null;
+                  reEducationEnrichedOutputsRef.current = { jointConstraints: null, pathology: null, sling: null };
+                  setReEducationEnrichedOutputs({ jointConstraints: null, pathology: null, sling: null });
                   subjectiveHistoryRef.current = '';
                   if (clinicalReasoningTimerRef.current) {
                     clearTimeout(clinicalReasoningTimerRef.current);

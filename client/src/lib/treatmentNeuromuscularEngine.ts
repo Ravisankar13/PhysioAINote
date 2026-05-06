@@ -48,10 +48,27 @@ export interface NeuromuscularInputs {
   sessionHistory: SessionHistoryEntry[];
   /** Whether the current pose is closer to close-packed than loose-packed. */
   closePackedRatio: number;
+  /** Deterministic clock value (caller provides; engine never reads wall clock). */
+  nowMs: number;
+  /** Deterministic seed for per-muscle micro-jitter (caller provides). */
+  noiseSeed: number;
+}
+
+/** Tiny deterministic 32-bit hash → [0, 1). No wall-clock, no Math.random. */
+function hash01(seed: number, label: string): number {
+  let h = seed | 0;
+  for (let i = 0; i < label.length; i++) {
+    h = Math.imul(h ^ label.charCodeAt(i), 0x9e3779b1) | 0;
+    h = (h << 13) | (h >>> 19);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  return ((h >>> 0) % 1_000_000) / 1_000_000;
 }
 
 export function computeNeuromuscularResponse(inputs: NeuromuscularInputs): NeuromuscularResponse {
-  const { mechanical, technique, jointEntry, irritability, sessionHistory, closePackedRatio } = inputs;
+  const { mechanical, technique, jointEntry, irritability, sessionHistory, closePackedRatio, nowMs, noiseSeed } = inputs;
   const rationale: string[] = [];
 
   // Baseline guarding from irritability + position.
@@ -59,9 +76,8 @@ export function computeNeuromuscularResponse(inputs: NeuromuscularInputs): Neuro
   if (closePackedRatio > 0.5) rationale.push('Close-packed position → baseline guarding ↑');
 
   // Habituation discount: count acceptable reps for this joint in
-  // the last 90 sec.
-  const now = Date.now();
-  const recent = sessionHistory.filter(h => h.jointKey === jointEntry.jointId && now - h.performedAt < 90_000 && h.acceptable);
+  // the last 90 sec (clock supplied by caller — engine is pure).
+  const recent = sessionHistory.filter(h => h.jointKey === jointEntry.jointId && nowMs - h.performedAt < 90_000 && h.acceptable);
   if (recent.length > 0) {
     const discount = Math.min(0.5, recent.length * 0.05);
     guarding = Math.max(0, guarding - discount);
@@ -126,7 +142,7 @@ export function computeNeuromuscularResponse(inputs: NeuromuscularInputs): Neuro
   const baseDelta = guarding * 0.4 + reflexSpike - (gating < 0 ? 0.3 : 0);
   const muscleActivationDelta = jointEntry.surroundingMuscleGroup.map(m => ({
     muscle: m,
-    delta: Math.max(-0.5, Math.min(1, baseDelta + (Math.random() - 0.5) * 0.05)),
+    delta: Math.max(-0.5, Math.min(1, baseDelta + (hash01(noiseSeed, m) - 0.5) * 0.05)),
   }));
 
   // Update guarding with reflex contribution for the next frame readout.

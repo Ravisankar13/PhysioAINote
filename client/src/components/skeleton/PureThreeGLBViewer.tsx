@@ -1668,7 +1668,10 @@ interface PureThreeGLBViewerProps {
   selectedRomJointId?: string | null;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
-  skeletonMode?: 'posture' | 'movement';
+  /** Top-level skeleton interaction mode. 'treatment' is the manual-therapy
+   *  simulation surface (Task #376) — viewers may render an amber frame /
+   *  contact dot / line-of-drive arrow and gate posture/movement input. */
+  skeletonMode?: 'posture' | 'movement' | 'treatment';
   activeCapacities?: Record<string, {
     activeRomMin?: number;
     activeRomMax: number;

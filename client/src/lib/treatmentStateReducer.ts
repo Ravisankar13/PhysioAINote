@@ -74,15 +74,23 @@ export function appendTreatmentLog(
   };
 }
 
+export interface BuildLogEntryClock {
+  /** ISO timestamp for `performedAt` (caller-provided so engine stays pure). */
+  performedAt: string;
+  /** Monotonic sequence (e.g. existing log length) used to make the id deterministic. */
+  sequence: number;
+}
+
 export function buildLogEntry(
   outcome: ClinicalOutcome,
   technique: TreatmentTechnique,
   mechanical: { translationMm: { magnitude: number }; saturated: boolean; lineOfDriveErrorDeg: number },
+  clock: BuildLogEntryClock,
 ): TreatmentLogEntry {
   const romDeltaDeg = Object.values(outcome.romDelta)[0] ?? 0;
   const extDelta = Object.values(outcome.capsularExtensibilityDelta)[0] ?? 0;
   return {
-    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `tx-${clock.sequence}-${technique.jointKey}-${technique.directionId}-${technique.grade}`,
     technique: outcome.techniqueString,
     parameters: {
       jointKey: technique.jointKey,
@@ -93,7 +101,7 @@ export function buildLogEntry(
       frequencyHz: technique.frequencyHz,
       durationSec: technique.durationSec,
     },
-    performedAt: new Date().toISOString(),
+    performedAt: clock.performedAt,
     mechanicalDelta: {
       translationMm: +mechanical.translationMm.magnitude.toFixed(2),
       saturated: mechanical.saturated,

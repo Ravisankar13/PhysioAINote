@@ -23,6 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { PlanCartItem, PlanCartModality } from "@/lib/planCart";
+import { useTreatmentSimulation } from "@/lib/treatmentSimulationContext";
 import type { TreatmentRationaleResult, TreatmentRationaleSource } from "@/lib/treatmentRationaleContext";
 import { getDriverLabelsByItemId } from "@/lib/treatmentRationaleLocal";
 
@@ -121,6 +122,10 @@ export function CartItemRow({ item, onRemove, whyText, whyAddresses }: CartItemR
   const Icon = meta.icon;
   const [whyOpen, setWhyOpen] = useState(false);
   const hasWhy = !!whyText && whyText.length > 0;
+  const treatmentSim = useTreatmentSimulation();
+  const canSimulate =
+    !!treatmentSim &&
+    (item.modality === 'manual_therapy' || item.modality === 'manual_therapy_custom');
   return (
     <div className={`group flex flex-col rounded border ${meta.border} ${meta.bg} px-2 py-1.5`}>
       <div className="flex items-start gap-2">
@@ -177,6 +182,17 @@ export function CartItemRow({ item, onRemove, whyText, whyAddresses }: CartItemR
         </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {canSimulate && (
+            <button
+              onClick={() => treatmentSim?.requestTreatmentSimulation(item)}
+              className="text-[8px] px-1 py-0.5 rounded inline-flex items-center gap-0.5 bg-amber-500/20 text-amber-100 border border-amber-400/40 hover:bg-amber-500/30 transition-colors"
+              title="Simulate this technique in Treatment Mode"
+              data-testid={`button-simulate-${item.id}`}
+            >
+              <Hand className="h-2.5 w-2.5" />
+              Simulate
+            </button>
+          )}
           {hasWhy && (
             <button
               onClick={() => setWhyOpen(o => !o)}

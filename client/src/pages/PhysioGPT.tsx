@@ -222,6 +222,7 @@ const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/Patie
 const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
 import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
 import { PlanCartProvider, usePlanCart, type PlanCartItem } from "@/lib/planCart";
+import { TreatmentSimulationProvider } from "@/lib/treatmentSimulationContext";
 // Task #376 — Treatment Mode (manual-therapy simulation) wiring.
 import {
   JOINT_ACCESSORY_CATALOG,
@@ -6883,7 +6884,7 @@ ${ddxList}`;
     return deriveIrritabilityProfile({
       painMarkers: painMarkers.map(pm => ({
         region: regionForBone(pm.nearestBone),
-        severity: ((pm as any).severity ?? 5) as number,
+        severity: pm.severity ?? 5,
         bone: pm.nearestBone,
       })),
       acuity: null,
@@ -6944,6 +6945,15 @@ ${ddxList}`;
 
   const treatmentNeuromuscular: NeuromuscularResponse | null = useMemo(() => {
     if (!treatmentMechanical || !treatmentJointEntry) return null;
+    // Engine is pure: caller supplies clock + deterministic noise seed
+    // derived from technique parameters + session length.
+    const noiseSeed =
+      (treatmentSessionHistory.length * 1009) ^
+      (treatmentJointEntry.jointId.length * 31) ^
+      (Math.round(treatmentTechnique.grade * 1000) | 0);
+    const nowMs = treatmentSessionHistory.length > 0
+      ? treatmentSessionHistory[treatmentSessionHistory.length - 1].performedAt
+      : 0;
     return computeNeuromuscularResponse({
       mechanical: treatmentMechanical,
       technique: treatmentTechnique,
@@ -6951,6 +6961,8 @@ ${ddxList}`;
       irritability: treatmentIrritabilityScalar,
       sessionHistory: treatmentSessionHistory,
       closePackedRatio: treatmentClosePackedRatio,
+      nowMs,
+      noiseSeed,
     });
   }, [treatmentMechanical, treatmentTechnique, treatmentJointEntry, treatmentIrritabilityScalar, treatmentSessionHistory, treatmentClosePackedRatio]);
 
@@ -6990,11 +7002,19 @@ ${ddxList}`;
     }
     setTreatmentPerforming(true);
     try {
-      const logEntry = buildLogEntry(treatmentClinical, treatmentTechnique, {
-        translationMm: treatmentMechanical.translationMm,
-        saturated: treatmentMechanical.saturated,
-        lineOfDriveErrorDeg: treatmentMechanical.lineOfDriveErrorDeg,
-      });
+      const logEntry = buildLogEntry(
+        treatmentClinical,
+        treatmentTechnique,
+        {
+          translationMm: treatmentMechanical.translationMm,
+          saturated: treatmentMechanical.saturated,
+          lineOfDriveErrorDeg: treatmentMechanical.lineOfDriveErrorDeg,
+        },
+        {
+          performedAt: new Date().toISOString(),
+          sequence: persistedTreatmentState.log.length + 1,
+        },
+      );
       const nextState = applyTreatmentToPatientState(persistedTreatmentState, treatmentClinical, treatmentTechnique);
       const stateWithLog: PersistedTreatmentState = { ...nextState, log: [...nextState.log, logEntry] };
       setPersistedTreatmentState(stateWithLog);
@@ -7018,6 +7038,32 @@ ${ddxList}`;
         rationale: treatmentClinical.clinicalSummary,
         patientPosition: treatmentPositionPreset,
       });
+      // Append the intervention to the simulation timeline / recovery
+      // curve. The mechanical engine returns capsular extensibility &
+      // ROM deltas keyed by the targeted joint; we forward those as a
+      // SessionApplyPayload so the recovery curve picks up the gain
+      // immediately. Pain-marker severity drops are also reflected.
+      try {
+        const romDeltaDeg = Object.values(treatmentClinical.romDelta)[0] ?? 0;
+        const jointKeyForModel = treatmentJointEntry.jointId.toLowerCase();
+        const payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload = {
+          modelConfig: romDeltaDeg !== 0
+            ? { [jointKeyForModel]: { rom_gain_deg: romDeltaDeg } }
+            : {},
+          overrides: {},
+          painMarkerUpdates: painMarkers
+            .filter(pm => regionForBone(pm.nearestBone) === treatmentRegionLabel)
+            .map(pm => ({
+              markerId: pm.id,
+              predictedSeverity: Math.max(0, Math.min(10, (pm.severity ?? 5) + treatmentClinical.painDelta)),
+            })),
+          posturalUpdates: [],
+          compensationUpdates: [],
+        };
+        handleApplySimTimelineWeekRef.current?.(payload);
+      } catch (err) {
+        console.warn('[Treatment] Failed to append to simulation timeline:', err);
+      }
       toast({
         title: 'Technique performed',
         description: treatmentClinical.clinicalSummary,
@@ -7025,7 +7071,7 @@ ${ddxList}`;
     } finally {
       setTreatmentPerforming(false);
     }
-  }, [treatmentClinical, treatmentMechanical, treatmentJointEntry, treatmentDirection, treatmentTechnique, treatmentPositionPreset, treatmentScorecard.overall, persistedTreatmentState, activeCaseId, toast]);
+  }, [treatmentClinical, treatmentMechanical, treatmentJointEntry, treatmentDirection, treatmentTechnique, treatmentPositionPreset, treatmentScorecard.overall, persistedTreatmentState, activeCaseId, toast, painMarkers, treatmentRegionLabel]);
 
   const handleResetTreatmentState = useCallback(async () => {
     if (!persistedTreatmentBaseline || !activeCaseId) return;
@@ -7061,6 +7107,11 @@ ${ddxList}`;
       setTreatmentContactRegion(dir.defaultContactRegion);
     }
   }, [treatmentJointKey]);
+
+  const treatmentSimulationContextValue = useMemo(
+    () => ({ requestTreatmentSimulation }),
+    [requestTreatmentSimulation],
+  );
 
   const handleApplyWhatIfToSkeleton = useCallback(() => {
     if (!whatIfSimulatedConfig) return;
@@ -10786,6 +10837,7 @@ ${ddxList}`;
   return (
     <Suspense fallback={<LazyPanelFallback />}>
     <PlanCartProvider>
+    <TreatmentSimulationProvider value={treatmentSimulationContextValue}>
     <PlanCartHydrationBridge
       onItemsChange={handlePlanCartItemsChange}
       registerReplaceAll={handlePlanCartRegisterReplaceAll}
@@ -11121,7 +11173,7 @@ ${ddxList}`;
               selectedRomJointId={selectedRomJoint?.id || null}
               enablePoseMode={effectiveEnablePoseMode}
               onModelConfigChange={updateModelConfig}
-              skeletonMode={skeletonMode === 'treatment' ? 'posture' : skeletonMode}
+              skeletonMode={skeletonMode}
               activeCapacities={viewerActiveCapacities}
               onActiveMovementAttempt={handleActiveMovementAttempt}
               onPainfulArcFlare={handlePainfulArcFlare}
@@ -18195,6 +18247,7 @@ ${ddxList}`;
     </div>
     </TreatmentRationaleProvider>
     </OrchestratePlanProvider>
+    </TreatmentSimulationProvider>
     </PlanCartProvider>
     </Suspense>
   );

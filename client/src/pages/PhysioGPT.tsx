@@ -7045,9 +7045,13 @@ ${ddxList}`;
         ...prev,
         { jointKey: treatmentJointEntry.jointId, acceptable: treatmentScorecard.overall >= 60, performedAt: Date.now() },
       ]);
-      // Persist to server.
+      // Persist to server: PATCH the patient state (extensibility/mobility,
+      // pre-existing log untouched) then POST the new log entry through the
+      // dedicated append endpoint so the server is the source of truth for
+      // log ordering.
       try {
-        await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', stateWithLog);
+        await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', nextState);
+        await apiRequest(`/api/treatment-state/${activeCaseId}/log`, 'POST', logEntry);
       } catch (err) {
         console.warn('[Treatment] Failed to persist state:', err);
       }
@@ -7217,7 +7221,12 @@ ${ddxList}`;
   // When the clinician chooses Supine/Prone/Side-lying/Sitting/Loose-packed,
   // apply a coarse skeleton pose (hip flexion etc.) so the avatar visibly
   // adopts the position, exactly the way other modes update modelConfig.
-  const TREATMENT_POSITION_POSE: Record<string, Partial<Record<string, Record<string, number>>>> = {
+  // Joint-key → { paramName → degrees } map (path keys mirror the
+  // dotted-path argument expected by `updateModelConfig`). The wider
+  // string-keyed shape is intentional so we can include shoulder params
+  // for the loose-packed preset without fighting ModelConfig's exact
+  // joint-name unions.
+  const TREATMENT_POSITION_POSE: Record<string, Record<string, Record<string, number>>> = {
     supine: {
       leftHip: { flexion: 0 }, rightHip: { flexion: 0 },
       leftKnee: { flexion: 0 }, rightKnee: { flexion: 0 },
@@ -7237,8 +7246,8 @@ ${ddxList}`;
     'loose-packed': {
       leftHip: { flexion: 30 }, rightHip: { flexion: 30 },
       leftKnee: { flexion: 25 }, rightKnee: { flexion: 25 },
-      leftShoulder: { flexion: 55, abduction: 55 } as any,
-      rightShoulder: { flexion: 55, abduction: 55 } as any,
+      leftShoulder: { flexion: 55, abduction: 55 },
+      rightShoulder: { flexion: 55, abduction: 55 },
     },
   };
   const lastAppliedPositionPresetRef = useRef<string | null>(null);

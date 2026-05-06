@@ -34,6 +34,10 @@ export interface TreatmentTechniqueHUDProps {
   onResetPatientState: () => void;
   onClose: () => void;
   performing: boolean;
+  /** Persisted log entries for the current patient (rendered in the
+   *  collapsible session-log block). */
+  log?: Array<{ id: string; technique: string; performedAt: string;
+    clinicalDelta: { romDeltaDeg: number; painDelta: number; effectivenessScore: number } }>;
 }
 
 const POSITION_PRESETS: PatientPositionPreset[] = ['loose-packed', 'supine', 'prone', 'side-lying', 'sitting'];
@@ -49,7 +53,7 @@ function ScoreBar({ score }: { score: number }) {
 
 export default function TreatmentTechniqueHUD(props: TreatmentTechniqueHUDProps) {
   const { jointKey, setJointKey, technique, setTechnique, positionPreset, setPositionPreset,
-    contactRegionLabel, techniqueString, scorecard, onPerform, onResetPatientState, onClose, performing } = props;
+    contactRegionLabel, techniqueString, scorecard, onPerform, onResetPatientState, onClose, performing, log } = props;
 
   const entry: JointAccessoryEntry | undefined = JOINT_ACCESSORY_CATALOG[jointKey];
   const direction = entry?.directions.find(d => d.id === technique.directionId) ?? entry?.directions[0];
@@ -255,9 +259,33 @@ export default function TreatmentTechniqueHUD(props: TreatmentTechniqueHUDProps)
           type="button"
           onClick={() => setShowLog(s => !s)}
           className="text-[10px] text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline"
+          data-testid="tx-toggle-log"
         >
-          {showLog ? 'Hide' : 'Show'} session log
+          {showLog ? 'Hide' : 'Show'} session log {log && log.length > 0 ? `(${log.length})` : ''}
         </button>
+        {showLog && (
+          <div className="rounded border border-slate-700 bg-slate-900/60 p-1.5 max-h-40 overflow-y-auto" data-testid="tx-session-log">
+            {(!log || log.length === 0) ? (
+              <div className="text-[10px] text-slate-500 italic">No techniques performed yet this session.</div>
+            ) : (
+              <ul className="space-y-1">
+                {log.slice().reverse().map(entry => (
+                  <li key={entry.id} className="text-[10px] text-slate-300 border-b border-slate-800 pb-1 last:border-b-0">
+                    <div className="font-mono text-amber-100 truncate" title={entry.technique}>{entry.technique}</div>
+                    <div className="flex items-center justify-between text-[9px] text-slate-500">
+                      <span>{new Date(entry.performedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="tabular-nums">
+                        ROM {entry.clinicalDelta.romDeltaDeg >= 0 ? '+' : ''}{entry.clinicalDelta.romDeltaDeg.toFixed(1)}° ·{' '}
+                        Pain {entry.clinicalDelta.painDelta >= 0 ? '+' : ''}{entry.clinicalDelta.painDelta.toFixed(1)} ·{' '}
+                        {Math.round(entry.clinicalDelta.effectivenessScore)}/100
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

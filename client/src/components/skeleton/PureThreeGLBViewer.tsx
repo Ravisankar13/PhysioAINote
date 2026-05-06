@@ -1672,6 +1672,18 @@ interface PureThreeGLBViewerProps {
    *  simulation surface (Task #376) — viewers may render an amber frame /
    *  contact dot / line-of-drive arrow and gate posture/movement input. */
   skeletonMode?: 'posture' | 'movement' | 'treatment';
+  /** Task #376 — 3D treatment marker. When `active` and `boneName` resolves
+   *  to a bone in the loaded GLB, the viewer renders an amber contact dot at
+   *  the bone's world position plus an ArrowHelper showing the line-of-drive
+   *  vector. Arrow length scales with grade (1..5 / 1..3). */
+  treatmentMarker?: {
+    active: boolean;
+    boneName: string;
+    axis: { x: number; y: number; z: number };
+    grade: number;
+    gradeSystem?: 'maitland' | 'kaltenborn';
+    label?: string;
+  };
   activeCapacities?: Record<string, {
     activeRomMin?: number;
     activeRomMax: number;
@@ -2783,6 +2795,7 @@ export default function PureThreeGLBViewer({
   onModelReady,
   onModelLoadError,
   goalStateOverlay = null,
+  treatmentMarker,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
@@ -3626,6 +3639,88 @@ export default function PureThreeGLBViewer({
       chainHighlightOverlaysRef.current.push(outerGlow);
     }
   }, [highlightBoneNames, biomechanicsFaultHighlights]);
+
+  // Task #376 — Treatment Mode 3D primitives: contact dot at the targeted
+  // bone + line-of-drive ArrowHelper colored by grade.
+  const treatmentOverlayRef = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+    for (const obj of treatmentOverlayRef.current) {
+      scene.remove(obj);
+      const m = obj as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose?.();
+      const mat = m.material;
+      if (mat instanceof THREE.Material) mat.dispose();
+    }
+    treatmentOverlayRef.current = [];
+    if (!treatmentMarker || !treatmentMarker.active || !model) return;
+
+    const bones = bonesRef.current;
+    const bone = bones[treatmentMarker.boneName];
+    if (!bone) return;
+    model.updateMatrixWorld(true);
+
+    const worldPos = new THREE.Vector3();
+    bone.getWorldPosition(worldPos);
+
+    const dotGeo = new THREE.SphereGeometry(0.04, 16, 12);
+    const dotMat = new THREE.MeshBasicMaterial({
+      color: 0xffb020, transparent: true, opacity: 0.95,
+      depthTest: false, depthWrite: false,
+    });
+    const dot = new THREE.Mesh(dotGeo, dotMat);
+    dot.position.copy(worldPos);
+    dot.renderOrder = 999;
+    scene.add(dot);
+    treatmentOverlayRef.current.push(dot);
+
+    const haloGeo = new THREE.SphereGeometry(0.07, 16, 12);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0xffd166, transparent: true, opacity: 0.25,
+      depthTest: false, depthWrite: false,
+    });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.copy(worldPos);
+    halo.renderOrder = 998;
+    scene.add(halo);
+    treatmentOverlayRef.current.push(halo);
+
+    const axisVec = new THREE.Vector3(
+      treatmentMarker.axis.x || 0,
+      treatmentMarker.axis.y || 0,
+      treatmentMarker.axis.z || 0,
+    );
+    if (axisVec.lengthSq() < 1e-6) axisVec.set(0, 0, 1);
+    axisVec.normalize();
+    const gradeMax = treatmentMarker.gradeSystem === 'kaltenborn' ? 3 : 5;
+    const gradeFrac = Math.max(1, Math.min(gradeMax, treatmentMarker.grade)) / gradeMax;
+    const arrowLen = 0.15 + gradeFrac * 0.25;
+    const arrowColor = new THREE.Color().lerpColors(
+      new THREE.Color(0x22c1a3),
+      new THREE.Color(0xef4444),
+      gradeFrac,
+    ).getHex();
+    const arrow = new THREE.ArrowHelper(
+      axisVec, worldPos, arrowLen, arrowColor,
+      arrowLen * 0.28, arrowLen * 0.18,
+    );
+    (arrow.line.material as THREE.LineBasicMaterial).depthTest = false;
+    (arrow.cone.material as THREE.MeshBasicMaterial).depthTest = false;
+    arrow.renderOrder = 1000;
+    arrow.traverse(o => { (o as any).renderOrder = 1000; });
+    scene.add(arrow);
+    treatmentOverlayRef.current.push(arrow);
+  }, [
+    treatmentMarker?.active,
+    treatmentMarker?.boneName,
+    treatmentMarker?.axis.x,
+    treatmentMarker?.axis.y,
+    treatmentMarker?.axis.z,
+    treatmentMarker?.grade,
+    treatmentMarker?.gradeSystem,
+    modelReadyTick,
+  ]);
 
   useEffect(() => {
     const overlays = chainHighlightOverlaysRef.current;

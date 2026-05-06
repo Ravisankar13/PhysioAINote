@@ -53,6 +53,23 @@ export interface PlanCartItem {
   partId?: string;
   partKind?: 'muscle' | 'link' | 'attachment';
   movementTaskId?: string;
+  // Task #376 — Treatment Mode structured preload. Set when an item is
+  // committed from the Treatment HUD's "Perform" so the cart's
+  // "Simulate" launcher can re-open Treatment Mode with the exact joint
+  // / direction / grade / dose instead of falling back to text inference.
+  treatmentParams?: {
+    jointKey: string;
+    directionId: string;
+    grade: number;
+    gradeSystem: 'maitland' | 'kaltenborn';
+    amplitudeMm: number;
+    frequencyHz: number;
+    durationSec: number;
+    holdSec: number;
+    liveAxis: { x: number; y: number; z: number };
+    contactRegion: string;
+    positionPreset: string;
+  };
 }
 
 interface PlanCartContextValue {

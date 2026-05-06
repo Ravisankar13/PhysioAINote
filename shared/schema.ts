@@ -6175,6 +6175,30 @@ export const caseResearchSyntheses = pgTable("case_research_syntheses", {
     confidence: 'High' | 'Moderate' | 'Low' | 'Extrapolated';
     confidenceReason: string;
   }>(),
+  // Task #376 — Treatment Mode persistent patient state. Per-joint
+  // accessory mobility (mm), per-region capsular extensibility (0–1),
+  // and the in-session log of performed manual-therapy techniques. Optional
+  // for backwards compatibility with rows persisted before Task #376.
+  treatmentState: jsonb("treatment_state").$type<{
+    accessoryMobilityMm: Record<string, number>;
+    capsularExtensibility: Record<string, number>;
+    log: Array<{
+      id: string;
+      technique: string;
+      parameters: {
+        jointKey: string;
+        directionId: string;
+        grade: number;
+        gradeSystem: 'maitland' | 'kaltenborn';
+        amplitudeMm: number;
+        frequencyHz: number;
+        durationSec: number;
+      };
+      performedAt: string;
+      mechanicalDelta: { translationMm: number; saturated: boolean; lineOfDriveErrorDeg: number };
+      clinicalDelta: { romDeltaDeg: number; painDelta: number; capsularExtensibilityDelta: number; effectivenessScore: number };
+    }>;
+  }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({
@@ -6190,6 +6214,43 @@ export const insertCaseResearchSynthesisSchema = createInsertSchema(caseResearch
 
 export type InsertCaseResearchSynthesis = z.infer<typeof insertCaseResearchSynthesisSchema>;
 export type CaseResearchSynthesis = typeof caseResearchSyntheses.$inferSelect;
+
+/** Task #376 — Treatment Mode Zod schemas. Validate PATCH/POST payloads
+ *  against the `treatmentState` jsonb column above. */
+export const treatmentLogEntrySchema = z.object({
+  id: z.string().min(1).max(64),
+  technique: z.string().min(1).max(400),
+  parameters: z.object({
+    jointKey: z.string().min(1).max(40),
+    directionId: z.string().min(1).max(40),
+    grade: z.number().min(0).max(5),
+    gradeSystem: z.enum(['maitland', 'kaltenborn']),
+    amplitudeMm: z.number().min(0).max(50),
+    frequencyHz: z.number().min(0).max(10),
+    durationSec: z.number().min(0).max(600),
+  }),
+  performedAt: z.string().min(1),
+  mechanicalDelta: z.object({
+    translationMm: z.number(),
+    saturated: z.boolean(),
+    lineOfDriveErrorDeg: z.number(),
+  }),
+  clinicalDelta: z.object({
+    romDeltaDeg: z.number(),
+    painDelta: z.number(),
+    capsularExtensibilityDelta: z.number(),
+    effectivenessScore: z.number(),
+  }),
+});
+
+export const treatmentStateSchema = z.object({
+  accessoryMobilityMm: z.record(z.string(), z.number()),
+  capsularExtensibility: z.record(z.string(), z.number()),
+  log: z.array(treatmentLogEntrySchema),
+});
+
+export type TreatmentLogEntry = z.infer<typeof treatmentLogEntrySchema>;
+export type TreatmentState = z.infer<typeof treatmentStateSchema>;
 
 /** Task #301 — Active Movement Mode Zod schemas. Used by both the
  *  POST /api/active-capacity/:caseId regenerate endpoint and the

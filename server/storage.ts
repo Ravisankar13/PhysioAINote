@@ -176,6 +176,7 @@ import {
   caseResearchSyntheses,
   type CaseResearchSynthesis,
   type InsertCaseResearchSynthesis,
+  type TreatmentState,
   treatmentHypotheses,
   type TreatmentHypothesis,
   type InsertTreatmentHypothesis,
@@ -808,6 +809,10 @@ export interface IStorage {
   // Case-Aware Research Engine (Task #281)
   getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined>;
   upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis>;
+
+  // Task #376 — Treatment Mode persistent state
+  getTreatmentState(userId: number, caseId: string): Promise<TreatmentState | null>;
+  updateTreatmentState(userId: number, caseId: string, next: TreatmentState): Promise<TreatmentState>;
 
   // Task #338 — Movement Mode "What-If" Treatment Hypotheses
   createTreatmentHypothesis(hypothesis: InsertTreatmentHypothesis): Promise<TreatmentHypothesis>;
@@ -5146,11 +5151,54 @@ export class DatabaseStorage implements IStorage {
           droppedVariables: synthesis.droppedVariables,
           activeCapacities: synthesis.activeCapacities,
           researchTreatmentPlan: synthesis.researchTreatmentPlan,
+          treatmentState: synthesis.treatmentState,
           updatedAt: now,
         },
       })
       .returning();
     return row;
+  }
+
+  // ==========================================================
+  // Task #376 — Treatment Mode persistent state
+  // ==========================================================
+  async getTreatmentState(userId: number, caseId: string): Promise<TreatmentState | null> {
+    const row = await this.getCaseResearchSynthesis(userId, caseId);
+    return (row?.treatmentState ?? null) as TreatmentState | null;
+  }
+
+  async updateTreatmentState(userId: number, caseId: string, next: TreatmentState): Promise<TreatmentState> {
+    const existing = await this.getCaseResearchSynthesis(userId, caseId);
+    if (existing) {
+      const saved = await this.upsertCaseResearchSynthesis({
+        ...existing,
+        treatmentState: next,
+      } as InsertCaseResearchSynthesis);
+      return (saved.treatmentState ?? next) as TreatmentState;
+    }
+    // No synthesis yet — create a minimal placeholder row so we can
+    // persist treatment state even before research has been run.
+    const saved = await this.upsertCaseResearchSynthesis({
+      caseId,
+      userId,
+      contentHash: `treatment-only:${caseId}`,
+      condition: 'Treatment Mode session',
+      caseSummary: '',
+      phenotype: undefined,
+      inferredVariables: [],
+      queriesRan: [],
+      seedBroadenings: [],
+      retrievedPapers: [],
+      retrievedTrials: [],
+      synthesizedAnswer: '',
+      confidence: 'Extrapolated',
+      confidenceReason: 'Treatment state created without prior research synthesis.',
+      droppedVariables: [],
+      activeCapacities: undefined,
+      researchTreatmentPlan: undefined,
+      treatmentState: next,
+    } as InsertCaseResearchSynthesis);
+    return (saved.treatmentState ?? next) as TreatmentState;
   }
 
   // ==========================================================

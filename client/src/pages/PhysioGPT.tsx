@@ -222,6 +222,42 @@ const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/Patie
 const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
 import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
 import { PlanCartProvider, usePlanCart, type PlanCartItem } from "@/lib/planCart";
+// Task #376 — Treatment Mode (manual-therapy simulation) wiring.
+import {
+  JOINT_ACCESSORY_CATALOG,
+  getJointEntry,
+  computePositionAdvantage,
+  type JointAccessoryEntry,
+} from "@/lib/jointAccessoryMotions";
+import {
+  computeMechanicalResponse,
+  type TreatmentTechnique,
+  type PatientTreatmentState,
+  type MechanicalResponse,
+} from "@/lib/treatmentMechanicalEngine";
+import {
+  computeNeuromuscularResponse,
+  type NeuromuscularResponse,
+  type SessionHistoryEntry,
+} from "@/lib/treatmentNeuromuscularEngine";
+import {
+  computeClinicalOutcome,
+  computeTechniqueQuality,
+  type ClinicalOutcome,
+} from "@/lib/treatmentClinicalEngine";
+import {
+  applyTreatmentToPatientState,
+  buildLogEntry,
+  defaultTreatmentState,
+  type PersistedTreatmentState,
+} from "@/lib/treatmentStateReducer";
+import {
+  deriveIrritabilityProfile,
+  getRegionIrritability,
+  regionForBone,
+} from "@/lib/patientIrritabilityProfile";
+import TreatmentTechniqueHUD, { type PatientPositionPreset } from "@/components/skeleton/TreatmentTechniqueHUD";
+import TreatmentResponsePanel from "@/components/skeleton/TreatmentResponsePanel";
 import { OrchestratePlanProvider } from "@/lib/orchestratePlanContext";
 import { TreatmentRationaleProvider, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
 import type { PhysioGptCaseSnapshot } from "@shared/schema";
@@ -229,6 +265,22 @@ import type { PhysioGptCaseSnapshot } from "@shared/schema";
 /** Bridges the plan cart context to refs/state in the parent PhysioGPT
  *  component so case-snapshot persistence can read the cart contents and
  *  call replaceAll on restore without restructuring the whole page. */
+// Task #376 — Bridge from PlanCart context into the parent's
+// `planCartTreatmentRef` so `handlePerformTreatment` can call .add()
+// without restructuring the page.
+function TreatmentPlanCartBridge({
+  registerAdd,
+}: {
+  registerAdd: (fn: ((item: PlanCartItem) => void) | null) => void;
+}) {
+  const { add } = usePlanCart();
+  useEffect(() => {
+    registerAdd(add);
+    return () => registerAdd(null);
+  }, [add, registerAdd]);
+  return null;
+}
+
 function PlanCartHydrationBridge({
   onItemsChange,
   registerReplaceAll,
@@ -815,7 +867,29 @@ export default function PhysioGPT() {
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
   const [showRecoverySim, setShowRecoverySim] = useState(false);
-  const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement'>('posture');
+  const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement' | 'treatment'>('posture');
+  // Task #376 — Treatment Mode local state. The persisted server-side
+  // treatment state lives on case_research_syntheses.treatmentState
+  // (loaded via /api/treatment-state/:caseId below); this local state
+  // covers the live HUD parameters + the in-session ephemeral state.
+  const [treatmentJointKey, setTreatmentJointKey] = useState<string>('GHJ_R');
+  const [treatmentTechnique, setTreatmentTechnique] = useState<TreatmentTechnique>(() => ({
+    jointKey: 'GHJ_R',
+    directionId: 'posterior_glide',
+    liveAxis: { x: 0, y: 0, z: -1 },
+    gradeSystem: 'maitland',
+    grade: 3,
+    amplitudeMm: 5,
+    frequencyHz: 1,
+    durationSec: 30,
+    holdSec: 0,
+  }));
+  const [treatmentPositionPreset, setTreatmentPositionPreset] = useState<PatientPositionPreset>('loose-packed');
+  const [treatmentContactRegion, setTreatmentContactRegion] = useState<string>('');
+  const [persistedTreatmentState, setPersistedTreatmentState] = useState<PersistedTreatmentState>(() => defaultTreatmentState());
+  const [persistedTreatmentBaseline, setPersistedTreatmentBaseline] = useState<PersistedTreatmentState | null>(null);
+  const [treatmentSessionHistory, setTreatmentSessionHistory] = useState<SessionHistoryEntry[]>([]);
+  const [treatmentPerforming, setTreatmentPerforming] = useState(false);
   const [overlayVisibility, setOverlayVisibility] = useState<Record<OverlayKey, boolean>>(() => {
     if (typeof window === 'undefined') return DEFAULT_OVERLAY_VISIBILITY;
     try {
@@ -3162,7 +3236,7 @@ export default function PhysioGPT() {
   muscleOverridesRef.current = muscleOverrides;
   const compromisedTissuesRef = useRef(compromisedTissues);
   compromisedTissuesRef.current = compromisedTissues;
-  const skeletonModeRef = useRef<'posture' | 'movement'>(skeletonMode);
+  const skeletonModeRef = useRef<'posture' | 'movement' | 'treatment'>(skeletonMode);
   skeletonModeRef.current = skeletonMode;
 
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
@@ -5961,6 +6035,11 @@ ${ddxList}`;
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
     if (skeletonModeRef.current === 'movement') return;
+    // Task #376 — Treatment Mode also gates the static-posture
+    // clinical-reasoning fan-out: the clinician is moving the patient,
+    // not the patient moving themselves, so posture-driven AI is not
+    // appropriate.
+    if (skeletonModeRef.current === 'treatment') return;
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -6367,6 +6446,7 @@ ${ddxList}`;
     if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (isRecording) return;
     if (skeletonMode === 'movement') return;
+    if (skeletonMode === 'treatment') return;
 
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
@@ -6425,6 +6505,7 @@ ${ddxList}`;
 
     if (isRecording) return;
     if (skeletonMode === 'movement') return;
+    if (skeletonMode === 'treatment') return;
     if (subjectiveHistoryInput.trim().length < 10) return;
 
     if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
@@ -6746,6 +6827,240 @@ ${ddxList}`;
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
     },
   });
+
+  // ============================================================
+  // Task #376 — Treatment Mode wiring (engines + persistence + perform)
+  // ============================================================
+
+  // Keep technique.jointKey in lock-step with the HUD's selected joint.
+  useEffect(() => {
+    if (treatmentTechnique.jointKey === treatmentJointKey) return;
+    const entry = getJointEntry(treatmentJointKey);
+    if (!entry) return;
+    const dir = entry.directions[0];
+    setTreatmentTechnique(t => ({
+      ...t,
+      jointKey: treatmentJointKey,
+      directionId: dir.id,
+      liveAxis: dir.axis,
+    }));
+    setTreatmentContactRegion(dir.defaultContactRegion);
+  }, [treatmentJointKey, treatmentTechnique.jointKey]);
+
+  // Sync contact region label when the direction changes.
+  useEffect(() => {
+    const entry = getJointEntry(treatmentTechnique.jointKey);
+    const dir = entry?.directions.find(d => d.id === treatmentTechnique.directionId);
+    if (dir && !treatmentContactRegion) setTreatmentContactRegion(dir.defaultContactRegion);
+  }, [treatmentTechnique.jointKey, treatmentTechnique.directionId, treatmentContactRegion]);
+
+  // Load persisted treatment state when entering Treatment Mode for a case.
+  useEffect(() => {
+    if (skeletonMode !== 'treatment' || !activeCaseId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiRequest(`/api/treatment-state/${activeCaseId}`, 'GET') as { state?: PersistedTreatmentState };
+        if (cancelled) return;
+        const next = r?.state ?? defaultTreatmentState();
+        setPersistedTreatmentState(next);
+        // Snapshot baseline on first entry per workspace session so
+        // the "Reset patient state" control can revert.
+        setPersistedTreatmentBaseline(prev => prev ?? next);
+      } catch {
+        if (!cancelled) {
+          const fallback = defaultTreatmentState();
+          setPersistedTreatmentState(fallback);
+          setPersistedTreatmentBaseline(prev => prev ?? fallback);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [skeletonMode, activeCaseId]);
+
+  // Derive irritability profile from existing pain markers + acuity.
+  const treatmentIrritabilityProfile = useMemo(() => {
+    return deriveIrritabilityProfile({
+      painMarkers: painMarkers.map(pm => ({
+        region: regionForBone(pm.nearestBone),
+        severity: ((pm as any).severity ?? 5) as number,
+        bone: pm.nearestBone,
+      })),
+      acuity: null,
+    });
+  }, [painMarkers]);
+
+  const treatmentJointEntry: JointAccessoryEntry | undefined = useMemo(
+    () => getJointEntry(treatmentJointKey),
+    [treatmentJointKey],
+  );
+
+  const treatmentDirection = useMemo(
+    () => treatmentJointEntry?.directions.find(d => d.id === treatmentTechnique.directionId)
+      ?? treatmentJointEntry?.directions[0],
+    [treatmentJointEntry, treatmentTechnique.directionId],
+  );
+
+  // Currently engaged region for irritability lookup (e.g. "shoulder").
+  const treatmentRegionLabel = useMemo(() => {
+    if (!treatmentJointEntry) return 'unknown';
+    if (treatmentJointEntry.jointId === 'GHJ') return 'shoulder';
+    if (treatmentJointEntry.jointId === 'hip') return 'hip';
+    if (treatmentJointEntry.jointId === 'tibiofemoral') return 'knee';
+    if (treatmentJointEntry.jointId === 'talocrural') return 'ankle';
+    return 'unknown';
+  }, [treatmentJointEntry]);
+
+  const treatmentIrritabilityScalar = useMemo(
+    () => getRegionIrritability(treatmentIrritabilityProfile, treatmentRegionLabel),
+    [treatmentIrritabilityProfile, treatmentRegionLabel],
+  );
+
+  // Live patient state for the engines.
+  const treatmentPatientState: PatientTreatmentState = useMemo(() => ({
+    accessoryMobilityMm: persistedTreatmentState.accessoryMobilityMm,
+    capsularExtensibility: persistedTreatmentState.capsularExtensibility,
+    pose: {},
+    guardingScalar: 0,
+  }), [persistedTreatmentState]);
+
+  const treatmentClosePackedRatio = useMemo(() => {
+    if (!treatmentJointEntry) return 0.5;
+    if (treatmentPositionPreset === 'loose-packed') return 0;
+    if (treatmentPositionPreset === 'sitting') return 0.5;
+    // Approximate the rest as mid-range; full close-packed only via explicit pose.
+    return 0.4;
+  }, [treatmentJointEntry, treatmentPositionPreset]);
+
+  const treatmentMechanical: MechanicalResponse | null = useMemo(() => {
+    if (skeletonMode !== 'treatment' || !treatmentJointEntry || !treatmentDirection) return null;
+    return computeMechanicalResponse({
+      technique: treatmentTechnique,
+      patientState: treatmentPatientState,
+      jointEntry: treatmentJointEntry,
+      direction: treatmentDirection,
+    });
+  }, [skeletonMode, treatmentTechnique, treatmentPatientState, treatmentJointEntry, treatmentDirection]);
+
+  const treatmentNeuromuscular: NeuromuscularResponse | null = useMemo(() => {
+    if (!treatmentMechanical || !treatmentJointEntry) return null;
+    return computeNeuromuscularResponse({
+      mechanical: treatmentMechanical,
+      technique: treatmentTechnique,
+      jointEntry: treatmentJointEntry,
+      irritability: treatmentIrritabilityScalar,
+      sessionHistory: treatmentSessionHistory,
+      closePackedRatio: treatmentClosePackedRatio,
+    });
+  }, [treatmentMechanical, treatmentTechnique, treatmentJointEntry, treatmentIrritabilityScalar, treatmentSessionHistory, treatmentClosePackedRatio]);
+
+  const treatmentClinical: ClinicalOutcome | null = useMemo(() => {
+    if (!treatmentMechanical || !treatmentNeuromuscular || !treatmentJointEntry || !treatmentDirection) return null;
+    return computeClinicalOutcome({
+      mechanical: treatmentMechanical,
+      neuromuscular: treatmentNeuromuscular,
+      technique: treatmentTechnique,
+      patientState: treatmentPatientState,
+      jointEntry: treatmentJointEntry,
+      direction: treatmentDirection,
+      positionLabel: treatmentPositionPreset,
+    });
+  }, [treatmentMechanical, treatmentNeuromuscular, treatmentTechnique, treatmentPatientState, treatmentJointEntry, treatmentDirection, treatmentPositionPreset]);
+
+  const treatmentScorecard = useMemo(() => {
+    if (!treatmentMechanical) {
+      return {
+        positionCorrectness: { score: 0, rationale: '' },
+        gradeAppropriateness: { score: 0, rationale: '' },
+        lineOfDriveAccuracy: { score: 0, rationale: '' },
+        contraindicationCheck: { score: 100, rationale: 'No flagged contraindications' },
+        doseAdequacy: { score: 0, rationale: '' },
+        overall: 0,
+      };
+    }
+    return computeTechniqueQuality(treatmentTechnique, treatmentMechanical, treatmentIrritabilityScalar, []);
+  }, [treatmentMechanical, treatmentTechnique, treatmentIrritabilityScalar]);
+
+  const planCartTreatmentRef = useRef<((item: PlanCartItem) => void) | null>(null);
+
+  const handlePerformTreatment = useCallback(async () => {
+    if (!treatmentClinical || !treatmentMechanical || !treatmentJointEntry || !treatmentDirection || !activeCaseId) {
+      toast({ title: 'Cannot perform', description: 'Set a technique first.', variant: 'destructive' });
+      return;
+    }
+    setTreatmentPerforming(true);
+    try {
+      const logEntry = buildLogEntry(treatmentClinical, treatmentTechnique, {
+        translationMm: treatmentMechanical.translationMm,
+        saturated: treatmentMechanical.saturated,
+        lineOfDriveErrorDeg: treatmentMechanical.lineOfDriveErrorDeg,
+      });
+      const nextState = applyTreatmentToPatientState(persistedTreatmentState, treatmentClinical, treatmentTechnique);
+      const stateWithLog: PersistedTreatmentState = { ...nextState, log: [...nextState.log, logEntry] };
+      setPersistedTreatmentState(stateWithLog);
+      setTreatmentSessionHistory(prev => [
+        ...prev,
+        { jointKey: treatmentJointEntry.jointId, acceptable: treatmentScorecard.overall >= 60, performedAt: Date.now() },
+      ]);
+      // Persist to server.
+      try {
+        await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', stateWithLog);
+      } catch (err) {
+        console.warn('[Treatment] Failed to persist state:', err);
+      }
+      // Append to plan cart as a manual_therapy item.
+      planCartTreatmentRef.current?.({
+        id: logEntry.id,
+        modality: 'manual_therapy',
+        name: `${treatmentDirection.label} — ${treatmentJointEntry.label}`,
+        targetStructure: treatmentJointEntry.label,
+        parameters: treatmentClinical.techniqueString,
+        rationale: treatmentClinical.clinicalSummary,
+        patientPosition: treatmentPositionPreset,
+      });
+      toast({
+        title: 'Technique performed',
+        description: treatmentClinical.clinicalSummary,
+      });
+    } finally {
+      setTreatmentPerforming(false);
+    }
+  }, [treatmentClinical, treatmentMechanical, treatmentJointEntry, treatmentDirection, treatmentTechnique, treatmentPositionPreset, treatmentScorecard.overall, persistedTreatmentState, activeCaseId, toast]);
+
+  const handleResetTreatmentState = useCallback(async () => {
+    if (!persistedTreatmentBaseline || !activeCaseId) return;
+    setPersistedTreatmentState(persistedTreatmentBaseline);
+    setTreatmentSessionHistory([]);
+    try {
+      await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', persistedTreatmentBaseline);
+    } catch (err) {
+      console.warn('[Treatment] Failed to reset state:', err);
+    }
+    toast({ title: 'Patient treatment state reset to baseline' });
+  }, [persistedTreatmentBaseline, activeCaseId, toast]);
+
+  /** Cart "Perform" launcher. Opens Treatment Mode pre-loaded with the
+   *  joint / direction / grade implied by the cart item. */
+  const requestTreatmentSimulation = useCallback((item: PlanCartItem) => {
+    setSkeletonMode('treatment');
+    // Best-effort joint inference from the item's targetStructure / name.
+    const haystack = `${item.targetStructure ?? ''} ${item.name ?? ''}`.toLowerCase();
+    let inferredJoint = treatmentJointKey;
+    if (/glenohumeral|shoulder|ghj/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'GHJ_L' : 'GHJ_R';
+    else if (/hip/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'hip_L' : 'hip_R';
+    else if (/knee|tibiofemoral/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'tibiofemoral_L' : 'tibiofemoral_R';
+    else if (/ankle|talocrural/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'talocrural_L' : 'talocrural_R';
+    setTreatmentJointKey(inferredJoint);
+    let inferredDir = 'posterior_glide';
+    if (/anterior/.test(haystack)) inferredDir = 'anterior_glide';
+    else if (/distract/.test(haystack)) inferredDir = 'inferior_distraction';
+    const entry = getJointEntry(inferredJoint);
+    const dir = entry?.directions.find(d => d.id === inferredDir) ?? entry?.directions[0];
+    if (entry && dir) {
+      setTreatmentTechnique(t => ({ ...t, jointKey: inferredJoint, directionId: dir.id, liveAxis: dir.axis }));
+      setTreatmentContactRegion(dir.defaultContactRegion);
+    }
+  }, [treatmentJointKey]);
 
   const handleApplyWhatIfToSkeleton = useCallback(() => {
     if (!whatIfSimulatedConfig) return;
@@ -10475,6 +10790,9 @@ ${ddxList}`;
       onItemsChange={handlePlanCartItemsChange}
       registerReplaceAll={handlePlanCartRegisterReplaceAll}
     />
+    <TreatmentPlanCartBridge
+      registerAdd={(fn) => { planCartTreatmentRef.current = fn; }}
+    />
     <OrchestratePlanProvider
       clinicalContext={orchestrateClinicalContext}
       autoOrganizeNonce={orchestrateAutoNonce}
@@ -10803,7 +11121,7 @@ ${ddxList}`;
               selectedRomJointId={selectedRomJoint?.id || null}
               enablePoseMode={effectiveEnablePoseMode}
               onModelConfigChange={updateModelConfig}
-              skeletonMode={skeletonMode}
+              skeletonMode={skeletonMode === 'treatment' ? 'posture' : skeletonMode}
               activeCapacities={viewerActiveCapacities}
               onActiveMovementAttempt={handleActiveMovementAttempt}
               onPainfulArcFlare={handlePainfulArcFlare}
@@ -10957,7 +11275,41 @@ ${ddxList}`;
                 }
               }}
             />
-            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'movement') return (
+            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'treatment') return (
+              <div className="relative w-full h-full ring-2 ring-amber-500/70 ring-inset rounded-md" data-testid="treatment-mode-frame">
+                <div className="absolute inset-0">{__viewer}</div>
+                <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="treatment-mode-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  TREATMENT
+                  {treatmentPerforming && <span className="text-amber-100 font-normal">· performing…</span>}
+                </div>
+                <div className="absolute top-2 right-2 z-30 w-[320px] max-w-[40vw] pointer-events-auto" data-testid="treatment-hud-slot">
+                  <TreatmentTechniqueHUD
+                    jointKey={treatmentJointKey}
+                    setJointKey={setTreatmentJointKey}
+                    technique={treatmentTechnique}
+                    setTechnique={setTreatmentTechnique}
+                    positionPreset={treatmentPositionPreset}
+                    setPositionPreset={setTreatmentPositionPreset}
+                    contactRegionLabel={treatmentContactRegion || treatmentDirection?.defaultContactRegion || ''}
+                    techniqueString={treatmentClinical?.techniqueString ?? ''}
+                    scorecard={treatmentScorecard}
+                    onPerform={handlePerformTreatment}
+                    performing={treatmentPerforming}
+                    onResetPatientState={handleResetTreatmentState}
+                    onClose={() => setSkeletonMode('posture')}
+                  />
+                </div>
+                <div className="absolute bottom-2 right-2 z-30 w-[340px] max-w-[42vw] pointer-events-auto" data-testid="treatment-response-slot">
+                  <TreatmentResponsePanel
+                    mechanical={treatmentMechanical}
+                    neuromuscular={treatmentNeuromuscular}
+                    clinical={treatmentClinical}
+                    irritability={treatmentIrritabilityScalar}
+                  />
+                </div>
+              </div>
+            ); if (skeletonMode === 'movement') return (
               <div className="relative w-full h-full ring-2 ring-emerald-500/70 ring-inset rounded-md" data-testid="movement-mode-frame">
                 <div
                   className="absolute inset-0"
@@ -14304,6 +14656,8 @@ ${ddxList}`;
                     // sibling viewer panels (Recovery Sim + Mechanics
                     // Analyser) so the static-posture clinical pipeline
                     // and movement gating cannot run side-by-side.
+                    // Task #376 — switching INTO Movement also leaves
+                    // Treatment cleanly (the only other interactive mode).
                     if (next === 'movement') {
                       if (showRecoverySim) setShowRecoverySim(false);
                       if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
@@ -14328,9 +14682,38 @@ ${ddxList}`;
                 title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Active Movement Mode — click and drag any joint'}
               >
                 <Activity className="h-3 w-3 mr-1" />
-                {skeletonMode === 'movement' ? 'Movement Mode' : 'Posture Mode'}
+                {skeletonMode === 'movement' ? 'Movement Mode' : skeletonMode === 'treatment' ? 'Posture Mode' : 'Posture Mode'}
               </Button>
-              {skeletonMode !== 'movement' && (
+              {/* Task #376 — Treatment Mode toggle. Mutually exclusive
+                  with Posture / Movement / sibling viewer panels.
+                  Amber colour matches the frame glow + HUD badge. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${skeletonMode === 'treatment' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  setSkeletonMode(prev => {
+                    const next = prev === 'treatment' ? 'posture' : 'treatment';
+                    if (next === 'treatment') {
+                      if (showRecoverySim) setShowRecoverySim(false);
+                      if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                      setPoseMode(false);
+                      setPainMarkerMode(false);
+                      setRomMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
+                    }
+                    return next;
+                  });
+                }}
+                data-testid="toggle-treatment-mode"
+                title={skeletonMode === 'treatment' ? 'Switch back to Posture Mode' : 'Treatment Mode — simulate manual therapy on the patient'}
+              >
+                <Hand className="h-3 w-3 mr-1" />
+                {skeletonMode === 'treatment' ? 'Treatment Mode' : 'Treatment'}
+              </Button>
+              {skeletonMode !== 'movement' && skeletonMode !== 'treatment' && (
               <>
               <Button
                 variant="secondary"

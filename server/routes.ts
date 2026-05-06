@@ -10178,6 +10178,62 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
     }
   });
 
+  // ==========================================================
+  // Task #376 — Treatment Mode persistent state endpoints.
+  // Deterministic CRUD; no AI calls. The treatment state is folded
+  // into the same case_research_syntheses row used by other case
+  // engines so a single GET fetches the whole patient picture.
+  // ==========================================================
+  app.get("/api/treatment-state/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const state = await storage.getTreatmentState(req.user!.id, caseId);
+      res.json({ state: state ?? { accessoryMobilityMm: {}, capsularExtensibility: {}, log: [] } });
+    } catch (error: unknown) {
+      console.error("Get treatment state error:", error);
+      res.status(500).json({ error: "Failed to fetch treatment state" });
+    }
+  });
+
+  app.patch("/api/treatment-state/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { treatmentStateSchema } = await import("@shared/schema");
+      const parsed = treatmentStateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid treatment state", details: parsed.error.flatten() });
+      }
+      const saved = await storage.updateTreatmentState(req.user!.id, caseId, parsed.data);
+      res.json({ state: saved });
+    } catch (error: unknown) {
+      console.error("Update treatment state error:", error);
+      res.status(500).json({ error: "Failed to update treatment state" });
+    }
+  });
+
+  app.post("/api/treatment-state/:caseId/log", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { treatmentLogEntrySchema } = await import("@shared/schema");
+      const parsed = treatmentLogEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid log entry", details: parsed.error.flatten() });
+      }
+      const current = (await storage.getTreatmentState(req.user!.id, caseId)) ?? {
+        accessoryMobilityMm: {}, capsularExtensibility: {}, log: [],
+      };
+      const next = { ...current, log: [...current.log, parsed.data] };
+      const saved = await storage.updateTreatmentState(req.user!.id, caseId, next);
+      res.json({ state: saved });
+    } catch (error: unknown) {
+      console.error("Append treatment log error:", error);
+      res.status(500).json({ error: "Failed to append treatment log" });
+    }
+  });
+
   app.post("/api/movement-findings/summarise", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const findingSchema = z.object({

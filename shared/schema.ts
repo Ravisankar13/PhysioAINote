@@ -4146,7 +4146,9 @@ export const moduleTypeEnum = pgEnum("module_type", [
   "case_study",
 ]);
 
-export const assessmentTypeEnum = pgEnum("assessment_type", [
+// Renamed from "assessment_type" to avoid colliding with the movement-analysis
+// enum of the same name in shared/movementAnalysisSchema.ts (Task #380).
+export const educationAssessmentTypeEnum = pgEnum("education_assessment_type", [
   "quiz",
   "case_analysis",
   "practical_demo",
@@ -4290,7 +4292,7 @@ export const assessments = pgTable("assessments", {
     .references(() => courseModules.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
-  type: assessmentTypeEnum("type").default("quiz").notNull(),
+  type: educationAssessmentTypeEnum("type").default("quiz").notNull(),
   questions: json("questions").$type<Array<{
     id: string;
     question: string;
@@ -4621,6 +4623,76 @@ export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
 export type DiscussionUpvote = typeof discussionUpvoteTracking.$inferSelect;
 export type InsertDiscussionUpvote = z.infer<typeof insertDiscussionUpvoteSchema>;
+
+// ---------------------------------------------------------------------------
+// Legacy tables retained in the live database
+// ---------------------------------------------------------------------------
+// These three tables exist in production but had been dropped from the schema
+// file at some point. Drizzle's `db:push` rename detector therefore treated
+// the new `assessment_sessions` table as a possible rename candidate and
+// blocked on an interactive prompt. Re-declaring them here as bare table
+// definitions matching the current production columns marks them as
+// "preserved", removes the rename ambiguity, and keeps the data intact.
+// (Task #380 — see "Gotchas" in replit.md.)
+//
+//  - `session`        : connect-pg-simple express-session store, actively
+//                       used by `server/auth.ts`. Do NOT drop.
+//  - `exercises`      : legacy AI-exercise table (272 rows). Not currently
+//                       queried via Drizzle; kept for historical content.
+//  - `temp_soap_note` : legacy stub table (1 row). Kept for safety; not
+//                       queried.
+export const sessionDifficultyEnum = pgEnum("difficulty", [
+  "beginner",
+  "intermediate",
+  "advanced",
+]);
+export const exerciseTypeEnum = pgEnum("exercise_type", [
+  "strength",
+  "mobility",
+  "motor control",
+  "functional",
+  "isometric",
+  "eccentric",
+  "neural",
+  "sensorimotor",
+  "power",
+  "endurance",
+  "stretching",
+  "other",
+]);
+
+export const sessionStore = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire").notNull(),
+});
+
+export const exercises = pgTable("exercises", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  targetMuscles: text("target_muscles").notNull(),
+  difficulty: sessionDifficultyEnum("difficulty").default("beginner").notNull(),
+  instructions: text("instructions").notNull(),
+  precautions: text("precautions"),
+  repetitions: text("repetitions"),
+  sets: text("sets"),
+  duration: text("duration"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  aiGenerated: boolean("ai_generated").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  exerciseType: exerciseTypeEnum("exercise_type").default("other"),
+  equipment: text("equipment").array(),
+  restPeriod: text("rest_period"),
+});
+
+export const tempSoapNote = pgTable("temp_soap_note", {
+  id: integer("id"),
+  bodyPart: text("bodyPart"),
+});
 
 // Adaptive Joint Assessment Sessions
 // Main assessment session table

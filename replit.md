@@ -1,51 +1,71 @@
 # PhysioGPT Platform
+An AI-powered physiotherapy platform providing clinical decision support, enhancing efficiency, accuracy, and educational capabilities for practitioners and students.
 
-## Overview
-PhysioGPT is an AI-powered physiotherapy platform providing clinical decision support for practitioners and students. Its purpose is to enhance efficiency, accuracy, and educational capabilities in physiotherapy, improving patient outcomes and practitioner workflow. Key capabilities include SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The project aims to be a leading AI solution in physiotherapy with significant market potential.
+## Run & Operate
+- `npm install`: Install dependencies.
+- `npm run dev`: Start the development server.
+- `npm run build`: Build the frontend and backend.
+- `npm run typecheck`: Run TypeScript type checking.
+- `npm run codegen`: Generate API client code.
+- `npm run db:push`: Apply database schema changes (see Gotchas for non-interactive environments).
 
-## User Preferences
+**Required Environment Variables:**
+- `DATABASE_URL`: PostgreSQL connection string (Neon serverless).
+- `OPENAI_API_KEY`: API key for OpenAI services.
+- `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: For AWS S3 storage.
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: For PayPal integration.
+- `STRIPE_SECRET_KEY`: For Stripe integration.
+- `SENDGRID_API_KEY`: For SendGrid email service.
+- `SESSION_SECRET`: For Express session management.
+
+## Stack
+- **Frontend**: React 18 (TypeScript), Shadcn/ui, Radix UI, Tailwind CSS
+- **Backend**: Node.js 20 (TypeScript), Express.js, Passport.js
+- **Database**: PostgreSQL (Neon serverless)
+- **ORM**: Drizzle ORM
+- **Validation**: Zod
+- **Build Tool**: Vite
+
+## Where things live
+- `client/`: Frontend React application.
+- `server/`: Backend Node.js application.
+- `shared/schema.ts`: Database schema definition (source of truth).
+- `server/db.ts`: Drizzle ORM configuration and database connection.
+- `client/src/utils/footLock.ts`: Foot lock logic for pose tracking.
+- `server/api/`: Backend API routes.
+- `client/src/components/ui/`: Shared UI components.
+
+## Architecture decisions
+- **WebSocket Transport for Drizzle**: The Drizzle pool uses WebSocket transport (`@neondatabase/serverless`) to avoid issues with the Replit-hosted Neon-compatible HTTP gateway (e.g., `rows: null` for empty results, dropped rows from `INSERT/UPDATE … RETURNING`).
+- **On-Frame Check for MediaPipe Landmarks**: To prevent avatar contortions from extrapolated MediaPipe landmarks, `mediapipeTo3D.ts` enforces an "on-frame check" (`[-0.05, 1.05]`) for landmark visibility and confidence, and `bodyVisibility` flags (upper/lower) are used to gate joint writes.
+- **Foot Lock System**: A sophisticated foot lock system is implemented in `client/src/utils/footLock.ts` using a two-stage IK pass and `hipOffset` adjustments to stabilize the avatar's feet during pose tracking.
+- **Real-time 3D Biomechanics**: The platform integrates a biomechanical engine with a Time-Aware Force Engine and a trust layer, providing realistic segment-chain moment calculations using de Leva (1996) mass fractions and Marras (1995) L1/L2 → L5/S1 amplification.
+- **Manual Therapy Simulation**: A dedicated "Treatment Mode" (Manual-Therapy Simulation) runs three deterministic engines (Mechanical, Neuromuscular, Clinical) in tandem to simulate manual therapy techniques, persist state, and integrate with the Plan Cart.
+
+## Product
+- AI-powered clinical decision support for physiotherapy.
+- SOAP note generation and clinical documentation.
+- Virtual patient analysis and management.
+- Evidence-based exercise prescription and treatment planning.
+- Real-time motion capture and biomechanical analysis.
+- Advanced anatomical visualization with pathology layers.
+- Research integration and evidence scoring.
+- Simulated manual therapy and treatment timeline engine.
+- Goal-driven recovery engine.
+- Secure user authentication and data handling.
+
+## User preferences
 Preferred communication style: Simple, everyday language.
 
-## System Architecture
+## Gotchas
+- **`npm run db:push` in CI/sandboxes**: Drizzle's `db:push` command is non-interactive. To ensure successful pushes in automated environments, normalize the database schema beforehand by: (1) keeping legacy table stubs, (2) dropping obsolete columns and renaming indexes, (3) fixing type mismatches with `ALTER … TYPE … USING`, (4) backfilling `NOT NULL` columns, (5) cleaning orphan foreign keys, and (6) remapping enum values. Use `npm run db:push --force` after these steps.
 
-### Core Architecture
-The platform features a React 18 (TypeScript) frontend utilizing Shadcn/ui and Radix UI with Tailwind CSS. The backend is built with Node.js 20 (Express.js) in TypeScript, using Passport.js for authentication and a RESTful API. Data is stored in a PostgreSQL database (Neon serverless) managed by Drizzle ORM. The Drizzle pool uses the `@neondatabase/serverless` **WebSocket transport** (`neonConfig.poolQueryViaFetch = false` in `server/db.ts`); the HTTP-fetch transport is intentionally disabled because the Replit-hosted Neon-compatible HTTP gateway returns `rows: null` for empty result sets and drops the rows from `INSERT/UPDATE … RETURNING` responses, both of which crash or silently corrupt Drizzle queries.
-
-### Key Features & Design Patterns
-- **AI Integration**: Leverages OpenAI GPT-4o for clinical analysis, content generation, and decision support, including virtual patient analysis, exercise generation, and real-time movement analysis.
-- **Biomechanical Systems**: Incorporates a bidirectional muscle-joint system, 3D force visualization, biomechanical clinical assessment, patient digital twins, injury risk scoring, and an "Influence Ripple System."
-- **Motion Capture & Virtual Patient System**: Integrates WebRTC for real-time pose detection, AI-powered virtual patient generation, detailed movement analysis, and a Focused Clinical Camera System with GPT-4o Vision AI for detecting clinical signs and automated postural analysis. Supports WebSocket-based phone-to-desktop camera linking. A **Foot Lock** layer (`client/src/utils/footLock.ts`, default ON) detects per-foot support phase from MediaPipe ankle/heel/foot-index velocity, visibility, and floor-proximity (with hysteresis: 3 frames to plant, 2 to swing). On each planted frame it captures an anchor and applies a two-stage lock: (1) a true 2-bone IK pass (`solveLegIK`) re-solves the planted leg's knee position so FK from the hip lands the foot exactly on the anchor (raw knee landmark as pole hint, falling back to camera-forward when degenerate; heel and foot-index landmarks are translated by the same delta so dorsi/inversion stays coherent), and (2) the planted-foot `hipOffset` (in hipMidNorm coord space) is folded into `hipMidNorm` *before* `globalTranslation` is computed, so the avatar root stops drifting with raw hip noise. Mirror mode negates `lateralShift` downstream, which correctly mirrors the folded offset. The tracker also low-pass-filters the torsoUp/Forward/Right basis (α=0.18) before hip/knee dot products are taken, and `Posesmoother` damps leg joints adaptively — multiplying planted-leg joint noise by 2.5×, plus an additional up-to-3× multiplier when lower-body depth confidence drops below 0.5 (e.g., head-on view). Trackers reset on every camera start/stop. Wired through both `CameraPoseCapture` and `FocusedCameraCapture` (local + phone full_body paths) with a "Foot lock" toggle and per-foot planted/swinging Badges.
-- **Partial-Frame Robustness**: MediaPipe extrapolates landmarks beyond the visible image when only part of the body is in frame, frequently emitting deceptively-high visibility scores for joints the camera can't actually see. To stop the avatar from contorting on these guesses, `mediapipeTo3D.ts` enforces an **on-frame check** (normalized x/y must lie in `[-0.05, 1.05]`) inside both `landmarksVisible` (joint nulled out) and `getLandmarkConfidence` (per-landmark visibility capped at 0.1), which trips the smoother's `CONFIDENCE_GATE_THRESHOLD = 0.3` and holds the previous joint value. A new `bodyVisibility: { upperBody, lowerBody }` flag is computed by `computeBodyVisibility` (≥4 of 6 region landmarks must be both visibility-≥0.4 and on-frame) and forwarded through the `Posesmoother` and `PartialSkeleton3DPose` outputs. `FootLockTracker.update` returns `feetVisible: { left, right }` using the same on-frame + ankle-visibility check so anchors aren't captured against extrapolated foot positions. `PhysioGPT.handleCameraPoseUpdate` applies a per-joint write gate (`JOINT_CONF_GATE = 0.45`) and skips upper- or lower-body joints (and pelvis translation) entirely when `bodyVisibility` reports that half off-frame — so a person standing in a torso-only crop no longer has the avatar fling its legs around. `FocusedCameraCapture` surfaces an amber "Step back so the full body is in frame" / "Lower body off-frame" banner above the video preview, hides the foot-lock badges when the lower body isn't tracked, and the inverted shoulder-flexion display formula (`180 − angle3D(hip, shoulder, elbow)`) was corrected to read 0° at arms-down instead of 173°.
-- **Virtual Patient Management**: Provides CRUD operations for 3D patient models, procedural generation or Mixamo integration, customizable pathologies, and animation playback.
-- **Enhanced Anatomical Visualization**: Features a high-fidelity muscled skeleton GLB model with Multi-View Skeleton Visualization, an Enhanced Body Scanner X-Ray Alternative, and a Tissue-Specific Pathology Layer for specialized clinical insights.
-- **Advanced Clinical Analysis**:
-    - **Running Gait Analysis**: Professional biomechanical analysis with real-time metrics.
-    - **Clinical Bubble**: AI-powered floating panel for differential diagnoses and treatment guidance.
-    - **Kinetic Chain Connection System**: Analyzes connected regions for pain markers.
-    - **Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis.
-    - **Pain & Symptom Intelligence Layer**: Classifies pain mechanisms and provides nerve root analysis and trigger point referral patterns.
-    - **Injury Mechanism Engine**: Explains injury causation through causal chain flowcharts.
-    - **What-If Clinical Simulation**: Allows simulation of interventions and prediction of changes in risk scores.
-    - **Treatment Simulation Timeline Engine**: Projects recovery based on prescribed treatments with a visual multi-phase timeline, recovery curve charts, milestone tracking, and dynamic treatment plan adjustments.
-    - **Goal-Driven Recovery Engine**: Defines measurable recovery targets and drives treatments to achieve them, using local-first computation with background AI refinement. Includes pathology-aware goal overrides and skeleton-aware goal setting based on current ROM, scar data, fascial tensions, and posture.
-    - **Patient Factors & Condition Recovery Engine**: Personalizes recovery predictions using patient-specific factors and evidence-based condition recovery profiles.
-    - **Sling Engine**: Analyzes functional slings to detect weaknesses and generate per-sling treatment targets.
-    - **Time-Aware Force Engine**: Upgraded biomechanics engine with a trust layer (cumulative dose, asymmetry index, anthropometric confidence, patient-state thresholds, inline citations) and a time layer (rate of loading, inertial/impact forces, linked-segment chain, live SVG GRF arrow overlay). Includes a segment-chain moment primitive (`computeChainMoment`) using de Leva (1996) mass fractions: bending the elbow folds the forearm + hand back toward the GH joint and *reduces* shoulder load (correcting a prior bug where elbow flexion erroneously increased it), and the elbow no longer inherits ghost moments from shoulder abduction. The chain helper drives shoulder, elbow, wrist, hip and knee, and feeds a hand-load × horizontal-distance amplifier at L1/L2 → L5/S1 (Marras 1995). A HUD "Load" circle exposes 0/2.5/5/10/20 kg presets with a left/both/right hand selector so clinicians can simulate carried-weight scenarios live.
-    - **Plan Cart & AI Treatment Orchestrator**: Allows clinicians to add generated items to a session-scoped cart, which can then be organized by AI to provide intra-session order, duration, frequency, multi-week schedule, and conflict flags.
-    - **Electrophysical Agents (EPA) Engine**: Provides AI-generated recommendations for EPA modalities, including structured dosing parameters and reasoning chips, with a curated catalog excluding certain therapies.
-    - **Lifestyle & Adjunct Rx Engine Tab**: Bundles recommendations for pacing, bracing, NSAID/pharmacology referral, education, sleep hygiene, ergonomics, and self-management strategies, mapping to treatment profiles for recovery curve adjustment.
-    - **Natural Progression Layer**: Anchors recovery simulation baselines to literature-derived diagnosis priors, composing them with patient-specific shifters to adjust capacity-gain multipliers and probabilities.
-    - **Treatment Timeline Builder**: A clinician-facing Gantt panel for scheduling interventions, dragging bars to reschedule, and receiving AI-powered plan reviews for effectiveness and conflict detection.
-    - **Treatment Mode (Manual-Therapy Simulation)**: Third top-level skeleton mode (alongside Posture & Movement) where the clinician virtually performs manual therapy on the avatar. Three deterministic engines run live in tandem: a **Mechanical engine** (`treatmentMechanicalEngine.ts`) computes joint translation, line-of-drive error, and capsular saturation from the technique's grade, force, axis, and the per-joint accessory-motion catalog (`jointAccessoryMotions.ts` — GHJ, hip, tibiofemoral, talocrural, with Maitland AP/PA glides + inferior distraction); a **Neuromuscular engine** (`treatmentNeuromuscularEngine.ts`) derives guarding, end-feel, and reflexive muscle response based on irritability + close-packed ratio + session-history fatigue; and a **Clinical engine** (`treatmentClinicalEngine.ts`) outputs a Maitland-style technique string, qualitative outcome, scorecard (position, grade appropriateness, line-of-drive accuracy, contraindication check, dose adequacy), and reasoning. State persists to a `treatmentState` jsonb column on `case_research_syntheses` (default + reducer in `treatmentStateReducer.ts`, accessory mobility / capsular extensibility / pose / log entries) via `GET/PATCH /api/treatment-state/:caseId` and `POST /api/treatment-state/:caseId/log`. Patient irritability is derived per region from existing pain markers (`patientIrritabilityProfile.ts`). UI surface (`TreatmentTechniqueHUD.tsx` + `TreatmentResponsePanel.tsx`) sits inside an amber `treatment-mode-frame` ring with a TREATMENT pill; toggle button is in the bottom strip next to Movement, mutually exclusive with Recovery Sim, Mechanics Analyser, ROM/Pain/Pose/Camera tools, and Movement mode. "Perform" persists the new patient state, appends a log entry, and pushes a `manual_therapy` PlanCartItem (via `TreatmentPlanCartBridge`) so techniques flow into the Plan Cart for orchestration. A "Reset patient state" control reverts to the per-session baseline snapshot taken on first entry. AI-fan-out gates in `triggerClinicalReasoningAnalysis`, the posture-debounce effect, and the typed-text-trigger effect all skip when `skeletonMode === 'treatment'` (clinician is moving the patient, not posture-driven).
-- **Clinical Documentation**: AI-enhanced SOAP note generation, audio transcription via OpenAI Whisper, automated PII de-identification, and an Interactive Skeleton-to-Text System.
-- **Treatment & Exercise Management**: AI-powered, evidence-based exercise prescription, Treatment Priority Engine, Evidence Engine for scoring treatment options, an 8-module Treatment Decision Engine, and a Treatment Plan Generator. An Intake & Extraction Engine consolidates clinical data.
-- **Dynamic 3D Interactions**: Includes a Zoom Tool with Anatomical Landmark System, Direct Bone Manipulation (Pose Mode), Extended Pain Marker Types, Symptom Types, Postural-Pain Correlation System, Real-Time Postural Force Analysis, Fascial Chain 3D Visualization, Scar Tissue & Adhesion Mapping, and a Pathology Compensation Engine.
-- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights, providing evidence and citations.
-- **Security**: Implements encrypted session secrets, robust CORS, Zod schema validation, and secure file upload handling.
-
-## External Dependencies
-- **AI Services**: OpenAI API (GPT-4o, Whisper), Leonardo AI, Runway ML.
-- **Cloud Storage**: AWS S3.
-- **Payment Processing**: PayPal SDK, Stripe.
-- **Database Services**: Neon PostgreSQL.
-- **Email Service**: SendGrid.
+## Pointers
+- **React Documentation**: [https://react.dev/](https://react.dev/)
+- **Node.js Documentation**: [https://nodejs.org/docs/](https://nodejs.org/docs/)
+- **Express.js Documentation**: [https://expressjs.com/](https://expressjs.com/)
+- **Drizzle ORM Documentation**: [https://orm.drizzle.team/docs/overview](https://orm.drizzle.team/docs/overview)
+- **OpenAI API Documentation**: [https://platform.openai.com/docs/overview](https://platform.openai.com/docs/overview)
+- **MediaPipe Pose Documentation**: [https://developers.google.com/mediapipe/solutions/vision/pose_landmarker](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker)
+- **Shadcn/ui Documentation**: [https://ui.shadcn.com/docs](https://ui.shadcn.com/docs)
+- **Tailwind CSS Documentation**: [https://tailwindcss.com/docs](https://tailwindcss.com/docs)

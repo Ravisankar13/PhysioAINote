@@ -7,11 +7,14 @@
  * Pathology baseline) and is editable: active min/max, painful arc
  * start/end/intensity, strength %, pain-inhibition factor.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Sparkles, Loader2, Pencil, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Sparkles, Loader2, Pencil, RefreshCw, ChevronDown, ChevronRight,
+  Minimize2, Maximize2, Move, PinOff,
+} from 'lucide-react';
 import { useActiveCapacities, type ActiveCapacityRow } from '@/hooks/useActiveCapacities';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -49,27 +52,45 @@ type Draft = {
   activeStrengthPct?: number; painInhibitionFactor?: number;
 };
 
+function usePersistentJSON<T>(key: string, defaultValue: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const [value, setValue] = useState<T>(defaultValue);
+  // Reload on key change.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw != null) setValue(JSON.parse(raw) as T);
+      else setValue(defaultValue);
+    } catch { setValue(defaultValue); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const setAndPersist = useCallback((v: T | ((prev: T) => T)) => {
+    setValue(prev => {
+      const next = typeof v === 'function' ? (v as (p: T) => T)(prev) : v;
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* swallow quota / unavailable */ }
+      return next;
+    });
+  }, [key]);
+  return [value, setAndPersist];
+}
+
+const PANEL_WIDTH = 340;
+
 export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props) {
   const { user } = useAuth();
   const { profile, effectiveProfile, isLoading, isFetching, generate, override, generating, overriding } = useActiveCapacities(caseId, !!caseId);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({});
 
-  const collapseStorageKey = `activeMovement:${user?.id ?? 'anon'}:panel:${caseId ?? 'none'}:open`;
-  const [collapsedRegions, setCollapsedRegions] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(collapseStorageKey);
-      if (raw) setCollapsedRegions(JSON.parse(raw));
-      else setCollapsedRegions({});
-    } catch { setCollapsedRegions({}); }
-  }, [collapseStorageKey]);
+  const namespace = `activeMovement:${user?.id ?? 'anon'}:panel:${caseId ?? 'none'}`;
+  const [collapsedRegions, setCollapsedRegions] = usePersistentJSON<Record<string, boolean>>(`${namespace}:open`, {});
+  const [collapsed, setCollapsed] = usePersistentJSON<boolean>(`${namespace}:panelCollapsed`, false);
+  const [floating, setFloating] = usePersistentJSON<{ x: number; y: number } | null>(`${namespace}:panelFloat`, null);
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
   const toggleRegion = (region: string) => {
-    setCollapsedRegions(prev => {
-      const next = { ...prev, [region]: !prev[region] };
-      try { localStorage.setItem(collapseStorageKey, JSON.stringify(next)); } catch { /* localStorage may be unavailable */ }
-      return next;
-    });
+    setCollapsedRegions(prev => ({ ...prev, [region]: !prev[region] }));
   };
 
   // Group ALL rows by region (no "interesting" filter).
@@ -86,6 +107,78 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
     return groups;
   }, [effectiveProfile]);
 
+  // Clamp floating position to viewport on window resize.
+  useEffect(() => {
+    if (!floating) return;
+    const onResize = () => {
+      setFloating(prev => {
+        if (!prev) return prev;
+        const w = cardRef.current?.offsetWidth ?? PANEL_WIDTH;
+        const h = cardRef.current?.offsetHeight ?? 100;
+        const maxX = Math.max(8, window.innerWidth - w - 8);
+        const maxY = Math.max(8, window.innerHeight - h - 8);
+        return {
+          x: Math.min(Math.max(8, prev.x), maxX),
+          y: Math.min(Math.max(8, prev.y), maxY),
+        };
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [floating, setFloating]);
+
+  // Drag handling.
+  const dragStateRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const onHeaderMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!floating) return;
+    // Don't start drag from button clicks.
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    e.preventDefault();
+    dragStateRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: floating.x,
+      baseY: floating.y,
+    };
+    const onMove = (ev: MouseEvent) => {
+      const s = dragStateRef.current;
+      if (!s) return;
+      const w = cardRef.current?.offsetWidth ?? PANEL_WIDTH;
+      const h = cardRef.current?.offsetHeight ?? 100;
+      const maxX = Math.max(8, window.innerWidth - w - 8);
+      const maxY = Math.max(8, window.innerHeight - h - 8);
+      const nx = Math.min(Math.max(8, s.baseX + (ev.clientX - s.startX)), maxX);
+      const ny = Math.min(Math.max(8, s.baseY + (ev.clientY - s.startY)), maxY);
+      setFloating({ x: nx, y: ny });
+    };
+    const onUp = () => {
+      dragStateRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [floating, setFloating]);
+
+  const toggleFloating = useCallback(() => {
+    if (floating) {
+      setFloating(null);
+    } else {
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      const x = rect ? rect.left : 80;
+      const y = rect ? rect.top : 80;
+      const w = cardRef.current?.offsetWidth ?? PANEL_WIDTH;
+      const h = cardRef.current?.offsetHeight ?? 100;
+      const maxX = Math.max(8, window.innerWidth - w - 8);
+      const maxY = Math.max(8, window.innerHeight - h - 8);
+      setFloating({
+        x: Math.min(Math.max(8, x), maxX),
+        y: Math.min(Math.max(8, y), maxY),
+      });
+    }
+  }, [floating, setFloating]);
+
   if (!caseId) {
     return (
       <Card className={`p-4 bg-emerald-950/40 border-emerald-700/50 text-emerald-100 ${className}`}>
@@ -94,55 +187,97 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
     );
   }
 
-  return (
-    <Card className={`bg-emerald-950/40 border-emerald-700/50 text-emerald-50 flex flex-col max-h-[min(70vh,640px)] overflow-hidden ${className}`}>
-      <div className="flex items-center justify-between p-3 border-b border-emerald-700/40 shrink-0">
-        <div>
+  const stop = (e: React.MouseEvent | React.PointerEvent) => e.stopPropagation();
+
+  const headerControls = (
+    <div className="flex items-center gap-1" onMouseDown={stop}>
+      {!profile && (
+        <Button
+          size="sm"
+          className="h-7 text-xs bg-emerald-500 hover:bg-emerald-600 text-white"
+          onClick={(e) => { stop(e); generate.mutate(false); }}
+          disabled={generating || isLoading}
+          data-testid="generate-active-capacities"
+        >
+          {generating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
+          Generate
+        </Button>
+      )}
+      {profile && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs text-emerald-200 hover:bg-emerald-800/40"
+          onClick={(e) => { stop(e); generate.mutate(true); }}
+          disabled={generating}
+          data-testid="regenerate-active-capacities"
+        >
+          {generating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+          Re-run
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0 text-emerald-200 hover:bg-emerald-800/40"
+        onClick={(e) => { stop(e); setCollapsed(!collapsed); }}
+        title={collapsed ? 'Expand panel' : 'Collapse panel'}
+        data-testid="toggle-panel-collapsed"
+      >
+        {collapsed ? <Maximize2 className="h-3 w-3" /> : <Minimize2 className="h-3 w-3" />}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0 text-emerald-200 hover:bg-emerald-800/40"
+        onClick={(e) => { stop(e); toggleFloating(); }}
+        title={floating ? 'Dock panel' : 'Float panel'}
+        data-testid="toggle-panel-floating"
+      >
+        {floating ? <PinOff className="h-3 w-3" /> : <Move className="h-3 w-3" />}
+      </Button>
+    </div>
+  );
+
+  const cardClass = [
+    'bg-emerald-950/40 border-emerald-700/50 text-emerald-50 flex flex-col overflow-hidden',
+    collapsed ? '' : 'max-h-[min(70vh,640px)]',
+    floating ? 'shadow-2xl w-full' : className,
+  ].filter(Boolean).join(' ');
+
+  const card = (
+    <Card ref={cardRef} className={cardClass}>
+      <div
+        className={`flex items-center justify-between p-3 border-b border-emerald-700/40 shrink-0 ${floating ? 'cursor-move select-none' : ''}`}
+        onMouseDown={onHeaderMouseDown}
+        data-testid="active-capacities-header"
+      >
+        <div className="min-w-0 flex-1 pr-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-emerald-200">Active Capacities</div>
-          {profile?.rationaleSummary ? (
-            <div className="text-[11px] text-emerald-100/80 mt-1 max-w-[480px]">{profile.rationaleSummary}</div>
-          ) : (
-            <div className="text-[11px] text-emerald-100/60 italic mt-1">
-              {profile ? '' : (isLoading || isFetching || generating
-                ? 'Loading case profile — showing default passive×0.85 baseline.'
-                : 'No AI profile yet — showing default passive×0.85 baseline.')}
-            </div>
+          {!collapsed && (
+            profile?.rationaleSummary ? (
+              <div className="text-[11px] text-emerald-100/80 mt-1 max-w-[480px]">{profile.rationaleSummary}</div>
+            ) : (
+              <div className="text-[11px] text-emerald-100/60 italic mt-1">
+                {profile ? '' : (isLoading || isFetching || generating
+                  ? 'Loading case profile — showing default passive×0.85 baseline.'
+                  : 'No AI profile yet — showing default passive×0.85 baseline.')}
+              </div>
+            )
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {!profile && (
-            <Button
-              size="sm"
-              className="h-7 text-xs bg-emerald-500 hover:bg-emerald-600 text-white"
-              onClick={() => generate.mutate(false)}
-              disabled={generating || isLoading}
-              data-testid="generate-active-capacities"
-            >
-              {generating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
-              Generate
-            </Button>
-          )}
-          {profile && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs text-emerald-200 hover:bg-emerald-800/40"
-              onClick={() => generate.mutate(true)}
-              disabled={generating}
-              data-testid="regenerate-active-capacities"
-            >
-              {generating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-              Re-run
-            </Button>
-          )}
-        </div>
+        {headerControls}
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto" data-testid="active-capacities-scroll">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        data-testid="active-capacities-scroll"
+        style={collapsed ? { display: 'none' } : undefined}
+      >
         <div className="p-3 space-y-2">
           {REGION_ORDER.concat(Object.keys(groupedRows).filter(k => !REGION_ORDER.includes(k))).map(region => {
             const rows = groupedRows[region];
             if (!rows || rows.length === 0) return null;
-            const collapsed = !!collapsedRegions[region];
+            const regionCollapsed = !!collapsedRegions[region];
             return (
               <div key={region} className="rounded border border-emerald-800/50 bg-emerald-900/20" data-testid={`capacity-region-${region}`}>
                 <button
@@ -152,12 +287,12 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
                   data-testid={`toggle-region-${region}`}
                 >
                   <span className="flex items-center gap-1 font-semibold">
-                    {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {regionCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     {region}
                   </span>
                   <span className="text-emerald-300/70">{rows.length}</span>
                 </button>
-                {!collapsed && (
+                {!regionCollapsed && (
                   <div className="p-1.5 space-y-1">
                     {rows.map(row => {
                       const key = `${row.joint}:${row.movement}`;
@@ -320,5 +455,23 @@ export default function ActiveCapacitiesPanel({ caseId, className = '' }: Props)
         </div>
       </div>
     </Card>
+  );
+
+  if (floating) {
+    return (
+      <div
+        ref={wrapperRef}
+        style={{ position: 'fixed', left: floating.x, top: floating.y, zIndex: 50, width: PANEL_WIDTH }}
+        data-testid="active-capacities-floating-wrapper"
+      >
+        {card}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapperRef} className={className}>
+      {card}
+    </div>
   );
 }

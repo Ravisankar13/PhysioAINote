@@ -81,7 +81,9 @@ export class ForceVisualizationManager {
   private scene: THREE.Scene;
   private camera: THREE.Camera | null = null;
   private forceArrows: Map<string, THREE.ArrowHelper> = new Map();
-  private stressIndicators: Map<string, THREE.Mesh> = new Map();
+  // Task #381 — widened from `Mesh` to `Object3D` so badge sprites can sit
+  // alongside ring/sphere meshes without unsafe casting.
+  private stressIndicators: Map<string, THREE.Object3D> = new Map();
   private muscleGlows: Map<string, THREE.Mesh> = new Map();
   private forceLabels: Map<string, THREE.Sprite> = new Map();
   /** Task #381 — objects that need camera-facing reorientation each frame
@@ -124,33 +126,33 @@ export class ForceVisualizationManager {
     
     const intersects = this.raycaster.intersectObjects(allObjects, true);
     
-    if (intersects.length > 0) {
-      const hit = intersects[0];
-      let obj = hit.object;
-      
+    // Task #381 — walk every intersection (sorted near→far) and return the
+    // first one that has metadata. Without this, a hover on a badge sprite
+    // (which has no metadata) would block the underlying ring's tooltip.
+    for (const hit of intersects) {
+      let obj: THREE.Object3D | null = hit.object;
       while (obj && !this.forceMetadata.has(obj)) {
-        obj = obj.parent as THREE.Object3D;
+        obj = obj.parent;
       }
-      
       if (obj && this.forceMetadata.has(obj)) {
         const meta = this.forceMetadata.get(obj)!;
         const worldPos = new THREE.Vector3();
         obj.getWorldPosition(worldPos);
-        
+
         const screenPos = worldPos.project(this.camera);
         const x = ((screenPos.x + 1) / 2) * containerRect.width;
         const y = ((-screenPos.y + 1) / 2) * containerRect.height;
-        
+
         return {
           label: meta.label,
           value: meta.value,
           unit: meta.unit,
           status: getStressLevel(meta.value, meta.threshold),
-          position: { x, y }
+          position: { x, y },
         };
       }
     }
-    
+
     return null;
   }
 
@@ -413,10 +415,16 @@ export class ForceVisualizationManager {
     const ranked = joints
       .map((j) => ({ ...j, ratio: j.force / Math.max(1, j.threshold.critical) }))
       .sort((a, b) => b.ratio - a.ratio);
-    const focalKey = mode === 'clean' && ranked.length > 0 ? ranked[0].key : null;
+    // Deterministic per the task spec: focal halo always goes on the single
+    // top-ranked joint; numeric badges always go on the top one or two
+    // joints. We do skip joints with zero force (no data → nothing to show),
+    // but never gate on a stress-ratio threshold.
+    const focalKey = mode === 'clean' && ranked.length > 0 && ranked[0].force > 0
+      ? ranked[0].key
+      : null;
     const badgeKeys = new Set<string>(
       mode === 'clean'
-        ? ranked.slice(0, 2).filter((r) => r.ratio > 0.3).map((r) => r.key)
+        ? ranked.slice(0, 2).filter((r) => r.force > 0).map((r) => r.key)
         : []
     );
 
@@ -454,7 +462,7 @@ export class ForceVisualizationManager {
       });
 
       // Clean mode — Tier 2: focal halo on the single most-loaded joint.
-      if (joint.key === focalKey && ranked[0].ratio > 0.4) {
+      if (joint.key === focalKey) {
         const haloSize = stressLevel === 'critical' ? 0.15 : stressLevel === 'warning' ? 0.12 : 0.1;
         const halo = this.createStressIndicator(pos, color, haloSize);
         (halo.material as THREE.MeshBasicMaterial).opacity = 0.32;
@@ -477,7 +485,7 @@ export class ForceVisualizationManager {
         badgePos.y += 0.16;
         badge.position.copy(badgePos);
         this.scene.add(badge);
-        this.stressIndicators.set(`${joint.key}__badge`, badge as unknown as THREE.Mesh);
+        this.stressIndicators.set(`${joint.key}__badge`, badge);
       }
     }
 

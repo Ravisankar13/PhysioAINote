@@ -3301,11 +3301,20 @@ export default function PhysioGPT() {
             return !labelsToRemove.has(h.label || '');
           }));
         }
-        // Reset the cumulative ref so the rebuild below starts fresh.
-        // The block at L3466+ will repopulate it from `applied` /
-        // `perEntry`, and the predictionText line in the subjective
-        // box gets rewritten by the block at L3439+.
-        clinicalTextAppliedRef.current = null;
+        // Drop the now-reverted artifact ids from the ref so the
+        // rebuild block at L3466+ doesn't merge stale ids back in,
+        // but PRESERVE `predictionText` so the block at L3439+ can
+        // still find and replace the prior prediction line in the
+        // subjective history (otherwise stale prediction blurbs would
+        // accumulate across each follow-up refinement).
+        clinicalTextAppliedRef.current = {
+          markerIds: [],
+          muscleIds: [],
+          deviationKeys: [],
+          highlightLabels: [],
+          highlightInstanceIds: [],
+          predictionText: prevApplied.predictionText,
+        };
       }
     }
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {

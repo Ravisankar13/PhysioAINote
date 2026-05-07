@@ -134,7 +134,7 @@ import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPostureP
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, FUNCTIONAL_SLINGS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
@@ -10472,33 +10472,14 @@ ${ddxList}`;
     return { groups, colors };
   }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds]);
 
-  const slingMuscleHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
-    if (!slingOverlayActive || !slingAnalysis) return { groups: [], colors: {} };
-    const orderedSlingIds: string[] = [];
-    if (selectedSlingId) {
-      orderedSlingIds.push(selectedSlingId);
-    }
-    if (orderedSlingIds.length === 0) return { groups: [], colors: {} };
-    const groups: string[] = [];
-    const colors: Record<string, string> = {};
-    const seen = new Set<string>();
-    for (const slingId of orderedSlingIds) {
-      const slingDef = FUNCTIONAL_SLINGS.find(s => s.id === slingId);
-      if (!slingDef) continue;
-      const slingMeta = slingAnalysis.slings.find(s => s.slingId === slingId);
-      const color = slingMeta?.color ?? '#a855f7';
-      for (const [a, b] of slingDef.pairs) {
-        for (const muscleId of [a, b]) {
-          if (seen.has(muscleId)) continue;
-          seen.add(muscleId);
-          groups.push(muscleId);
-          colors[muscleId] = color;
-        }
-      }
-    }
-    return { groups, colors };
-  }, [slingOverlayActive, slingAnalysis, selectedSlingId]);
-
+  // Task #389 — Sling overlay used to feed every muscle in the selected sling
+  // into the muscle-glow pipeline, which clones the GLB body-mesh material
+  // with `emissive = sling color` + `opacity 0.85`. With multi-muscle slings
+  // (e.g. posterior oblique = lat + glute + hamstring + ...) this draped
+  // large translucent yellow/amber volumes across chest, shoulders, and back,
+  // obscuring the avatar. The 3D sling pathways (tubes, dots, status labels,
+  // reroute arrows) are rendered independently in PureThreeGLBViewer at
+  // ~L4569+, so the sling stays fully visible without the body-paint.
   const mergedHighlightMuscleGroups = useMemo<string[] | undefined>(() => {
     const merged: string[] = [];
     const seen = new Set<string>();
@@ -10508,16 +10489,13 @@ ${ddxList}`;
     for (const g of chainMuscleHighlights.groups) {
       if (!seen.has(g)) { seen.add(g); merged.push(g); }
     }
-    for (const g of slingMuscleHighlights.groups) {
-      if (!seen.has(g)) { seen.add(g); merged.push(g); }
-    }
     return merged.length > 0 ? merged : undefined;
-  }, [biomechanicalMuscleHighlights, chainMuscleHighlights, slingMuscleHighlights]);
+  }, [biomechanicalMuscleHighlights, chainMuscleHighlights]);
 
   const mergedMuscleHighlightColors = useMemo<Record<string, string> | undefined>(() => {
-    const merged: Record<string, string> = { ...slingMuscleHighlights.colors, ...chainMuscleHighlights.colors, ...muscleHighlightColors };
+    const merged: Record<string, string> = { ...chainMuscleHighlights.colors, ...muscleHighlightColors };
     return Object.keys(merged).length > 0 ? merged : undefined;
-  }, [slingMuscleHighlights, chainMuscleHighlights, muscleHighlightColors]);
+  }, [chainMuscleHighlights, muscleHighlightColors]);
 
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);

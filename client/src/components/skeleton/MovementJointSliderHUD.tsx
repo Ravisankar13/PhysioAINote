@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pin, PinOff, X } from 'lucide-react';
 
 export interface SliderDof {
@@ -138,8 +138,85 @@ export default function MovementJointSliderHUD({
     return () => window.removeEventListener('pointerdown', onPointerDown, true);
   }, []);
 
+  // Task #385 — measured chip box, refreshed every frame after layout so
+  // placement math has the actual rendered width/height. Defaults are
+  // close to the real size to avoid a first-frame jump.
+  const measuredRef = useRef({ width: 280, height: 80 });
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    measuredRef.current = { width: el.offsetWidth, height: el.offsetHeight };
+  });
+
   const anchor = getAnchor();
   if (!anchor || dofs.length === 0) return null;
+
+  // Task #385 — side-aware placement so the chip never sits on top of
+  // the figure. We dock to whichever side has empty space, treating the
+  // central ~40% of the canvas as a "skeleton safe zone".
+  const parentEl = (containerRef.current?.offsetParent as HTMLElement | null) ?? null;
+  const viewportW = parentEl?.clientWidth ?? window.innerWidth;
+  const viewportH = parentEl?.clientHeight ?? window.innerHeight;
+  const { width: chipW, height: chipH } = measuredRef.current;
+  const GAP = 32;
+  const EDGE_PAD = 8;
+  const safeHalfW = viewportW * 0.2; // 40% wide, centred
+  const safeLeftEdge = viewportW / 2 - safeHalfW;
+  const safeRightEdge = viewportW / 2 + safeHalfW;
+
+  const rightLeftPx = anchor.x + GAP;
+  const rightRightPx = rightLeftPx + chipW;
+  const leftRightPx = anchor.x - GAP;
+  const leftLeftPx = leftRightPx - chipW;
+
+  const intrudes = (l: number, r: number) => r > safeLeftEdge && l < safeRightEdge;
+  const rightOverflows = rightRightPx > viewportW - EDGE_PAD;
+  const leftOverflows = leftLeftPx < EDGE_PAD;
+  const rightIntrudes = intrudes(rightLeftPx, rightRightPx);
+  const leftIntrudes = intrudes(leftLeftPx, leftRightPx);
+
+  let placement: 'left' | 'right' = 'right';
+  if (rightOverflows || rightIntrudes) {
+    if (!leftOverflows && !leftIntrudes) {
+      placement = 'left';
+    } else {
+      // Both sides have a constraint — pick the side with more open space.
+      const rightSpace = viewportW - anchor.x;
+      const leftSpace = anchor.x;
+      placement = rightSpace >= leftSpace ? 'right' : 'left';
+    }
+  }
+
+  let chipLeft: number;
+  if (placement === 'right') {
+    chipLeft = anchor.x + GAP;
+    // Push outward past the safe zone if needed, then clamp to viewport.
+    if (intrudes(chipLeft, chipLeft + chipW)) {
+      chipLeft = Math.max(chipLeft, safeRightEdge);
+    }
+    chipLeft = Math.min(chipLeft, viewportW - chipW - EDGE_PAD);
+    chipLeft = Math.max(chipLeft, EDGE_PAD);
+  } else {
+    chipLeft = anchor.x - GAP - chipW;
+    if (intrudes(chipLeft, chipLeft + chipW)) {
+      chipLeft = Math.min(chipLeft, safeLeftEdge - chipW);
+    }
+    chipLeft = Math.max(chipLeft, EDGE_PAD);
+    chipLeft = Math.min(chipLeft, viewportW - chipW - EDGE_PAD);
+  }
+  const chipTop = Math.max(EDGE_PAD, Math.min(viewportH - chipH - EDGE_PAD, anchor.y - chipH / 2));
+
+  // Connector geometry — drawn inside the container, so coordinates are
+  // relative to (chipLeft, chipTop). Show whenever the chip is more than
+  // ~1.5× the standard gap from the joint, which only happens when
+  // placement was pushed by a safe-zone or viewport clamp.
+  const chipEdgeViewportX = placement === 'right' ? chipLeft : chipLeft + chipW;
+  const distFromAnchor = Math.hypot(chipEdgeViewportX - anchor.x, (chipTop + chipH / 2) - anchor.y);
+  const showConnector = distFromAnchor > GAP * 1.5;
+  const jointRelX = anchor.x - chipLeft;
+  const jointRelY = anchor.y - chipTop;
+  const edgeRelX = placement === 'right' ? 0 : chipW;
+  const edgeRelY = chipH / 2;
 
   const handleTrackMouseDown = (e: React.MouseEvent<HTMLDivElement>, dof: SliderDof) => {
     e.preventDefault();
@@ -169,12 +246,35 @@ export default function MovementJointSliderHUD({
       ref={containerRef}
       className="absolute z-30 pointer-events-auto select-none"
       style={{
-        left: anchor.x + 32,
-        top: anchor.y,
-        transform: 'translate(0, -50%)',
+        left: chipLeft,
+        top: chipTop,
       }}
       data-testid="movement-slider-hud"
+      data-placement={placement}
     >
+      {showConnector && (
+        <svg
+          className="absolute pointer-events-none"
+          style={{
+            left: Math.min(edgeRelX, jointRelX) - 2,
+            top: Math.min(edgeRelY, jointRelY) - 2,
+            width: Math.abs(edgeRelX - jointRelX) + 4,
+            height: Math.abs(edgeRelY - jointRelY) + 4,
+            overflow: 'visible',
+          }}
+          aria-hidden="true"
+        >
+          <line
+            x1={edgeRelX - (Math.min(edgeRelX, jointRelX) - 2)}
+            y1={edgeRelY - (Math.min(edgeRelY, jointRelY) - 2)}
+            x2={jointRelX - (Math.min(edgeRelX, jointRelX) - 2)}
+            y2={jointRelY - (Math.min(edgeRelY, jointRelY) - 2)}
+            stroke="rgba(16,185,129,0.55)"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        </svg>
+      )}
       <div className="rounded-lg shadow-xl bg-slate-900/95 backdrop-blur border border-emerald-500/40 p-2 space-y-1.5 min-w-[260px]">
         <div className="flex items-center justify-between gap-2 px-1 pb-0.5 border-b border-emerald-500/20">
           <span className="text-[10px] uppercase tracking-wide text-emerald-300/80">

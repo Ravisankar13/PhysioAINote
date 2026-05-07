@@ -22,6 +22,12 @@ export interface BiomechanicsVisualizationData {
   showForceArrows: boolean;
   showStressColors: boolean;
   showMuscleGlow: boolean;
+  /** Task #381 — declutter stress cloud.
+   *  - 'clean' (default): thin camera-billboarded ring per joint, a single
+   *    translucent halo on the most-loaded joint, and numeric badges on the
+   *    top 1–2 joints. Designed to never occlude the upper-body skeleton.
+   *  - 'detailed': legacy behavior — full translucent sphere per joint. */
+  stressVizMode?: 'clean' | 'detailed';
 }
 
 const CLINICAL_THRESHOLDS = {
@@ -78,6 +84,9 @@ export class ForceVisualizationManager {
   private stressIndicators: Map<string, THREE.Mesh> = new Map();
   private muscleGlows: Map<string, THREE.Mesh> = new Map();
   private forceLabels: Map<string, THREE.Sprite> = new Map();
+  /** Task #381 — objects that need camera-facing reorientation each frame
+   *  (rings in clean mode). Sprites self-billboard, so they aren't included. */
+  private billboardTargets: THREE.Object3D[] = [];
   private bones: { [name: string]: THREE.Object3D };
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
   private forceMetadata: Map<THREE.Object3D, { label: string; value: number; unit: string; threshold: { safe: number; warning: number; critical: number } }> = new Map();
@@ -169,6 +178,83 @@ export class ForceVisualizationManager {
     return mesh;
   }
 
+  /** Task #381 — thin camera-facing ring used in 'clean' mode. Frames the
+   *  joint without filling space, so multiple rings never blend into a blob.
+   *  Stress level scales the outer radius only — the ring stays flat. */
+  private createStressRing(position: THREE.Vector3, color: THREE.Color, level: 'safe' | 'warning' | 'critical'): THREE.Mesh {
+    const outerRadius = level === 'critical' ? 0.135 : level === 'warning' ? 0.108 : 0.09;
+    const innerRadius = outerRadius - 0.022;
+    const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 48);
+    const material = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      depthTest: false,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    mesh.renderOrder = 999;
+    return mesh;
+  }
+
+  /** Task #381 — small numeric label sprite reserved for the most-stressed
+   *  joints. Sprites auto-face the camera so no per-frame work is needed. */
+  private createBadgeSprite(text: string, color: THREE.Color): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 72;
+    const ctx = canvas.getContext('2d')!;
+    const radius = 14;
+    ctx.fillStyle = 'rgba(15,23,42,0.88)';
+    ctx.beginPath();
+    ctx.moveTo(radius, 0);
+    ctx.lineTo(canvas.width - radius, 0);
+    ctx.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
+    ctx.lineTo(canvas.width, canvas.height - radius);
+    ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - radius, canvas.height);
+    ctx.lineTo(radius, canvas.height);
+    ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - radius);
+    ctx.lineTo(0, radius);
+    ctx.quadraticCurveTo(0, 0, radius, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = `#${color.getHexString()}`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.font = 'bold 40px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(0.36, 0.1, 1);
+    sprite.renderOrder = 1000;
+    return sprite;
+  }
+
+  /** Task #381 — call once per render frame so clean-mode rings always face
+   *  the camera (sprites self-orient and don't need this). No-op in detailed
+   *  mode because billboardTargets stays empty. */
+  updateBillboards(camera?: THREE.Camera): void {
+    const cam = camera ?? this.camera;
+    if (!cam || this.billboardTargets.length === 0) return;
+    const camPos = new THREE.Vector3();
+    cam.getWorldPosition(camPos);
+    for (const obj of this.billboardTargets) {
+      obj.lookAt(camPos);
+    }
+  }
+
   private createMuscleGlow(position: THREE.Vector3, color: THREE.Color, intensity: number): THREE.Mesh {
     const size = 0.1 + intensity * 0.15;
     const geometry = new THREE.SphereGeometry(size, 12, 12);
@@ -206,12 +292,20 @@ export class ForceVisualizationManager {
     }
 
     if (data.showStressColors) {
-      this.updateStressIndicators(data.jointForces);
+      // Task #381 — clean mode is the new default; only render the legacy
+      // volumetric blob when the clinician explicitly opts into 'detailed'.
+      const mode = data.stressVizMode ?? 'clean';
+      this.updateStressIndicators(data.jointForces, mode);
     }
 
     if (data.showMuscleGlow) {
       this.updateMuscleGlows(data.muscleActivation);
     }
+
+    // Reorient any rings on the very next frame the caller renders, so the
+    // viewer doesn't see a stale 0-degree orientation flash before its
+    // animation loop fires.
+    this.updateBillboards();
   }
 
   private updateForceArrows(forces: JointForceData): void {
@@ -297,7 +391,7 @@ export class ForceVisualizationManager {
     }
   }
 
-  private updateStressIndicators(forces: JointForceData): void {
+  private updateStressIndicators(forces: JointForceData, mode: 'clean' | 'detailed' = 'clean'): void {
     const joints: { key: string; force: number; threshold: { safe: number; warning: number; critical: number } }[] = [
       { key: 'lumbarSpine', force: forces.lumbarSpine.compression, threshold: CLINICAL_THRESHOLDS.lumbarCompression },
       { key: 'leftHip', force: forces.leftHip.compression, threshold: CLINICAL_THRESHOLDS.hipCompression },
@@ -314,13 +408,27 @@ export class ForceVisualizationManager {
       rightKnee: 'Right Knee'
     };
 
+    // Task #381 — pre-compute stress ratios so 'clean' mode can pick the
+    // single focal halo (highest ratio) and the top-1/2 numeric badges.
+    const ranked = joints
+      .map((j) => ({ ...j, ratio: j.force / Math.max(1, j.threshold.critical) }))
+      .sort((a, b) => b.ratio - a.ratio);
+    const focalKey = mode === 'clean' && ranked.length > 0 ? ranked[0].key : null;
+    const badgeKeys = new Set<string>(
+      mode === 'clean'
+        ? ranked.slice(0, 2).filter((r) => r.ratio > 0.3).map((r) => r.key)
+        : []
+    );
+
     for (const joint of joints) {
       const pos = this.getJointWorldPosition(joint.key);
-      if (pos) {
-        const color = getStressColor(joint.force, joint.threshold);
-        const stressLevel = getStressLevel(joint.force, joint.threshold);
+      if (!pos) continue;
+      const color = getStressColor(joint.force, joint.threshold);
+      const stressLevel = getStressLevel(joint.force, joint.threshold);
+
+      if (mode === 'detailed') {
+        // Legacy behavior — full translucent sphere at every joint.
         const size = stressLevel === 'critical' ? 0.15 : stressLevel === 'warning' ? 0.12 : 0.08;
-        
         const indicator = this.createStressIndicator(pos, color, size);
         this.scene.add(indicator);
         this.stressIndicators.set(joint.key, indicator);
@@ -328,44 +436,77 @@ export class ForceVisualizationManager {
           label: `${labelMap[joint.key] || joint.key} Stress`,
           value: joint.force,
           unit: 'N',
-          threshold: joint.threshold
+          threshold: joint.threshold,
         });
+        continue;
+      }
+
+      // Clean mode — Tier 1: thin billboarded ring at every joint.
+      const ring = this.createStressRing(pos, color, stressLevel);
+      this.scene.add(ring);
+      this.stressIndicators.set(joint.key, ring);
+      this.billboardTargets.push(ring);
+      this.forceMetadata.set(ring, {
+        label: `${labelMap[joint.key] || joint.key} Stress`,
+        value: joint.force,
+        unit: 'N',
+        threshold: joint.threshold,
+      });
+
+      // Clean mode — Tier 2: focal halo on the single most-loaded joint.
+      if (joint.key === focalKey && ranked[0].ratio > 0.4) {
+        const haloSize = stressLevel === 'critical' ? 0.15 : stressLevel === 'warning' ? 0.12 : 0.1;
+        const halo = this.createStressIndicator(pos, color, haloSize);
+        (halo.material as THREE.MeshBasicMaterial).opacity = 0.32;
+        this.scene.add(halo);
+        this.stressIndicators.set(`${joint.key}__halo`, halo);
+        // Forward hover hits on the halo to the same metadata as the ring.
+        this.forceMetadata.set(halo, {
+          label: `${labelMap[joint.key] || joint.key} Stress`,
+          value: joint.force,
+          unit: 'N',
+          threshold: joint.threshold,
+        });
+      }
+
+      // Clean mode — Tier 3: numeric badge on the top 1–2 joints only.
+      if (badgeKeys.has(joint.key)) {
+        const text = joint.force >= 1000 ? `${(joint.force / 1000).toFixed(1)} kN` : `${Math.round(joint.force)} N`;
+        const badge = this.createBadgeSprite(text, color);
+        const badgePos = pos.clone();
+        badgePos.y += 0.16;
+        badge.position.copy(badgePos);
+        this.scene.add(badge);
+        this.stressIndicators.set(`${joint.key}__badge`, badge as unknown as THREE.Mesh);
       }
     }
 
-    const leftKneePos = this.getJointWorldPosition('leftKnee');
-    if (leftKneePos && forces.leftKnee.patellofemoral > 500) {
-      const pfColor = getStressColor(forces.leftKnee.patellofemoral, CLINICAL_THRESHOLDS.patellofemoral);
-      const pfIndicator = this.createStressIndicator(
-        leftKneePos.clone().add(new THREE.Vector3(0, 0, 0.1)),
-        pfColor,
-        0.08
-      );
-      this.scene.add(pfIndicator);
-      this.stressIndicators.set('leftKnee_pf', pfIndicator);
-      this.forceMetadata.set(pfIndicator, {
-        label: 'Left Patellofemoral',
-        value: forces.leftKnee.patellofemoral,
-        unit: 'N',
-        threshold: CLINICAL_THRESHOLDS.patellofemoral
-      });
-    }
+    // Patellofemoral indicators — same mode-aware treatment so the knee area
+    // doesn't sprout extra blobs in clean mode.
+    const pfJoints: { key: string; force: number }[] = [
+      { key: 'leftKnee', force: forces.leftKnee.patellofemoral },
+      { key: 'rightKnee', force: forces.rightKnee.patellofemoral },
+    ];
+    for (const pf of pfJoints) {
+      if (pf.force <= 500) continue;
+      const basePos = this.getJointWorldPosition(pf.key);
+      if (!basePos) continue;
+      const pos = basePos.clone().add(new THREE.Vector3(0, 0, 0.1));
+      const pfColor = getStressColor(pf.force, CLINICAL_THRESHOLDS.patellofemoral);
+      const pfLevel = getStressLevel(pf.force, CLINICAL_THRESHOLDS.patellofemoral);
+      const labelText = pf.key === 'leftKnee' ? 'Left Patellofemoral' : 'Right Patellofemoral';
 
-    const rightKneePos = this.getJointWorldPosition('rightKnee');
-    if (rightKneePos && forces.rightKnee.patellofemoral > 500) {
-      const pfColor = getStressColor(forces.rightKnee.patellofemoral, CLINICAL_THRESHOLDS.patellofemoral);
-      const pfIndicator = this.createStressIndicator(
-        rightKneePos.clone().add(new THREE.Vector3(0, 0, 0.1)),
-        pfColor,
-        0.08
-      );
-      this.scene.add(pfIndicator);
-      this.stressIndicators.set('rightKnee_pf', pfIndicator);
-      this.forceMetadata.set(pfIndicator, {
-        label: 'Right Patellofemoral',
-        value: forces.rightKnee.patellofemoral,
+      const indicator = mode === 'clean'
+        ? this.createStressRing(pos, pfColor, pfLevel)
+        : this.createStressIndicator(pos, pfColor, 0.08);
+      this.scene.add(indicator);
+      this.stressIndicators.set(`${pf.key}_pf`, indicator);
+      if (mode === 'clean') this.billboardTargets.push(indicator);
+      this.forceMetadata.set(indicator, {
+        label: labelText,
+        value: pf.force,
         unit: 'N',
-        threshold: CLINICAL_THRESHOLDS.patellofemoral
+        threshold: CLINICAL_THRESHOLDS.patellofemoral,
       });
     }
   }
@@ -436,10 +577,28 @@ export class ForceVisualizationManager {
     this.stressIndicators.forEach((indicator) => {
       this.scene.remove(indicator);
       this.forceMetadata.delete(indicator);
-      indicator.geometry.dispose();
-      (indicator.material as THREE.Material).dispose();
+      // Sprites have no `geometry` field — guard before disposing so badge
+      // sprites stored alongside rings/spheres don't throw on cleanup.
+      const anyInd = indicator as unknown as { geometry?: THREE.BufferGeometry };
+      if (anyInd.geometry && typeof anyInd.geometry.dispose === 'function') {
+        anyInd.geometry.dispose();
+      }
+      const mat = (indicator as unknown as { material: THREE.Material | THREE.Material[] }).material;
+      const disposeOne = (m: THREE.Material) => {
+        // SpriteMaterial holds a CanvasTexture map that won't be GC'd
+        // unless we dispose it explicitly.
+        const map = (m as unknown as { map?: THREE.Texture }).map;
+        if (map && typeof map.dispose === 'function') map.dispose();
+        m.dispose();
+      };
+      if (Array.isArray(mat)) {
+        mat.forEach(disposeOne);
+      } else {
+        disposeOne(mat);
+      }
     });
     this.stressIndicators.clear();
+    this.billboardTargets.length = 0;
 
     this.muscleGlows.forEach((glow) => {
       this.scene.remove(glow);

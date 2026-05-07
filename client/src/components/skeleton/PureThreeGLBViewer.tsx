@@ -8924,6 +8924,12 @@ export default function PureThreeGLBViewer({
             setForceLabels(prev => prev.length > 0 ? [] : prev);
           }
 
+          // Task #381 — keep clean-mode stress rings facing the camera.
+          // No-op when no rings exist (detailed mode or no force data).
+          if (forceVisualizationRef.current) {
+            forceVisualizationRef.current.updateBillboards(sceneRef.current.camera);
+          }
+
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
           sceneRef.current.renderer.info.reset();
         };
@@ -10203,6 +10209,26 @@ export default function PureThreeGLBViewer({
     };
   }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
 
+  // Task #381 — local mirror of the clinician's Clean/Detailed preference,
+  // persisted to localStorage by `BiomechanicsHUD`. Listening to a custom
+  // window event keeps the toggle reactive without threading another prop
+  // through every consumer (PhysioGPT, TestSkeletonNew, MultiViewSkeletonLayout).
+  const [stressVizMode, setStressVizMode] = useState<'clean' | 'detailed'>(() => {
+    if (typeof window === 'undefined') return 'clean';
+    const stored = window.localStorage.getItem('physiogpt:stressVizMode');
+    return stored === 'detailed' ? 'detailed' : 'clean';
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode?: 'clean' | 'detailed' }>).detail;
+      const next = detail?.mode === 'detailed' ? 'detailed' : 'clean';
+      setStressVizMode(next);
+    };
+    window.addEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
+    return () => window.removeEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
+  }, []);
+
   // Force visualization effect
   useEffect(() => {
     if (status !== 'ready' || !sceneRef.current || Object.keys(bonesRef.current).length === 0) {
@@ -10222,7 +10248,13 @@ export default function PureThreeGLBViewer({
 
     // Update visualization if biomechanics data is provided
     if (biomechanicsData) {
-      forceVisualizationRef.current.updateVisualization(biomechanicsData);
+      // Task #381 — overlay the clinician's preferred stress-viz mode onto
+      // the data the parent sends. Parent code paths (TestSkeletonNew, etc.)
+      // don't need to know about the toggle.
+      forceVisualizationRef.current.updateVisualization({
+        ...biomechanicsData,
+        stressVizMode: biomechanicsData.stressVizMode ?? stressVizMode,
+      });
     } else {
       forceVisualizationRef.current.clearVisualization();
     }
@@ -10230,7 +10262,7 @@ export default function PureThreeGLBViewer({
     return () => {
       // Clear visualization when component updates
     };
-  }, [biomechanicsData, status]);
+  }, [biomechanicsData, status, stressVizMode]);
 
   // Muscle visualization effect
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight, Weight } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight, Weight, Cloud } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
@@ -115,6 +115,26 @@ export default function BiomechanicsHUD({
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
   const [loadPopoverOpen, setLoadPopoverOpen] = useState(false);
+  // Task #381 — Clean/Detailed toggle for the on-skeleton stress
+  // visualization. Default Clean so the skeleton anatomy is never occluded.
+  // The PureThreeGLBViewer mirrors this preference via a window event.
+  const [stressVizMode, setStressVizMode] = useState<'clean' | 'detailed'>(() => {
+    if (typeof window === 'undefined') return 'clean';
+    const stored = window.localStorage.getItem('physiogpt:stressVizMode');
+    return stored === 'detailed' ? 'detailed' : 'clean';
+  });
+  const toggleStressVizMode = () => {
+    setStressVizMode((prev) => {
+      const next = prev === 'clean' ? 'detailed' : 'clean';
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('physiogpt:stressVizMode', next);
+        window.dispatchEvent(
+          new CustomEvent('physiogpt:stress-viz-mode-change', { detail: { mode: next } })
+        );
+      }
+      return next;
+    });
+  };
   const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
   const prevThresholdsRef = useRef<{
     forceStatus: string;
@@ -445,6 +465,23 @@ export default function BiomechanicsHUD({
         : 'Add a hand-held load (click to choose kg + hand)',
       pressed: loadPopoverOpen || externalLoadKg > 0,
     }] : []),
+    {
+      // Task #381 — Clean/Detailed toggle for the on-skeleton stress viz.
+      // Pressed = Detailed (legacy cloud); released = Clean (rings + focal halo).
+      id: 'stressViz',
+      icon: Cloud,
+      color: 'text-sky-400',
+      bgColor: 'bg-sky-500/15',
+      ringColor: 'ring-sky-500/30',
+      label: 'Cloud',
+      value: stressVizMode === 'clean' ? 'Clean' : 'Detail',
+      valueColor: stressVizMode === 'clean' ? '#38bdf8' : '#fb923c',
+      onClick: toggleStressVizMode,
+      pressed: stressVizMode === 'detailed',
+      tooltip: stressVizMode === 'clean'
+        ? 'Stress viz: Clean rings (click for legacy cloud)'
+        : 'Stress viz: Detailed cloud (click for clean rings)',
+    },
     {
       id: 'weight',
       icon: Scale,

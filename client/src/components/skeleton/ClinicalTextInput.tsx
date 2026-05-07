@@ -58,6 +58,13 @@ export interface ClinicalParseResult {
   follow_up_questions?: FollowUpQuestion[];
   predictions_confidence?: "high" | "moderate" | "low";
   compromised_tissues?: CompromisedTissue[];
+  /** Client-only flag (Task #390): true when this parse refines the
+   *  same prediction by re-running with follow-up Q&A context. The
+   *  consumer treats refinement as REPLACE rather than APPEND so
+   *  pain markers / region halos / muscle overrides from prior
+   *  intermediate predictions don't accumulate into "clouds". Stamped
+   *  in `doParseRequest` based on whether `context` was non-empty. */
+  __isRefinement?: boolean;
 }
 
 interface QAEntry {
@@ -166,6 +173,10 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         patient_context: pcPayload,
       });
       result.original_description = originalTextRef.current || inputText.trim();
+      // Task #390: stamp refinement flag so the consumer can REPLACE
+      // (not APPEND) prior parse contributions when answering follow-up
+      // Q&A. Fresh parses (no Q&A context yet) leave this falsy.
+      result.__isRefinement = context.length > 0;
       setLastResult(result);
       onParseResult(result);
 

@@ -3252,6 +3252,62 @@ export default function PhysioGPT() {
     markStageStart('parse');
     setLastClinicalParseResult(result);
     markStageEnd('parse', 'done');
+
+    // Task #390: if this parse is a refinement (user answered a
+    // follow-up question on the same prediction), surgically remove
+    // the previous parse's contributions before applying the new
+    // ones. Without this the appended pain markers, region halos and
+    // muscle pathology overrides accumulate across each refinement,
+    // producing stacks of large translucent spheres ("clouds") on the
+    // skeleton. We only revert what THIS clinical-text flow applied;
+    // user-placed markers, voice-dock entries with their own undo, and
+    // unrelated state are left alone.
+    if (result.__isRefinement) {
+      const prevApplied = clinicalTextAppliedRef.current;
+      if (prevApplied) {
+        if (prevApplied.markerIds.length > 0) {
+          const ids = new Set(prevApplied.markerIds);
+          setPainMarkers(prev => prev.filter(m => !ids.has(m.id)));
+        }
+        if (prevApplied.muscleIds.length > 0) {
+          const ids = new Set(prevApplied.muscleIds);
+          setMuscleOverrides(prev => {
+            const updated = { ...prev };
+            for (const id of ids) delete updated[id];
+            return updated;
+          });
+        }
+        if (prevApplied.deviationKeys.length > 0) {
+          setModelConfig(prev => {
+            const updated = JSON.parse(JSON.stringify(prev));
+            const defaults = JSON.parse(JSON.stringify(DEFAULT_MODEL_CONFIG));
+            for (const dotPath of prevApplied.deviationKeys) {
+              const parts = dotPath.split('.');
+              if (parts.length === 2) {
+                const [joint, param] = parts;
+                if (updated[joint] && defaults[joint]) {
+                  updated[joint][param] = defaults[joint][param] ?? 0;
+                }
+              }
+            }
+            return updated;
+          });
+        }
+        if (prevApplied.highlightInstanceIds.length > 0 || prevApplied.highlightLabels.length > 0) {
+          const idsToRemove = new Set(prevApplied.highlightInstanceIds);
+          const labelsToRemove = new Set(prevApplied.highlightLabels);
+          setClinicalHighlights(prev => prev.filter(h => {
+            if (h.instanceId) return !idsToRemove.has(h.instanceId);
+            return !labelsToRemove.has(h.label || '');
+          }));
+        }
+        // Reset the cumulative ref so the rebuild below starts fresh.
+        // The block at L3466+ will repopulate it from `applied` /
+        // `perEntry`, and the predictionText line in the subjective
+        // box gets rewritten by the block at L3439+.
+        clinicalTextAppliedRef.current = null;
+      }
+    }
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
     };

@@ -2868,7 +2868,13 @@ export default function PureThreeGLBViewer({
   const treatmentBoneNamesRef = useRef(treatmentBoneNames);
   treatmentBoneNamesRef.current = treatmentBoneNames;
   const treatmentFrameCounter = useRef(0);
-  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } }>>(new Map());
+  // Task #382 — `cleanRing` is a thin camera-facing ring sprite shown in
+  // Clean mode in place of the bulky translucent `outer` sphere, so multiple
+  // head/neck/shoulder pain markers don't stack into an opaque blob.
+  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number }; cleanRing?: THREE.Sprite }>>(new Map());
+  // Task #382 — always-current mirror of the Clean/Detailed preference, read
+  // by mesh-creation code that runs independently of the React render cycle.
+  const painMarkerVizModeRef = useRef<'clean' | 'detailed'>('clean');
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
@@ -5429,7 +5435,7 @@ export default function PureThreeGLBViewer({
     const { scene } = sceneRef.current;
 
     const applyPainMarkerSeverity = (
-      meshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] },
+      meshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; cleanRing?: THREE.Sprite },
       marker: PainMarker,
       markerType: string,
     ) => {
@@ -5472,6 +5478,59 @@ export default function PureThreeGLBViewer({
           }
         }
       }
+
+      // Task #382 — also scale the Clean-mode ring with severity so the
+      // visual emphasis matches the legacy outer sphere when toggling modes.
+      if (meshes.cleanRing) {
+        const ring = meshes.cleanRing;
+        const ringBase = (ring.userData.baseRadius as number | undefined) ?? 0.1;
+        const radiusForRing = (markerType === 'area' && marker.radius)
+          ? marker.radius
+          : ringBase;
+        const diameter = radiusForRing * 2.1 * s;
+        ring.scale.set(diameter, diameter, 1);
+        const ringMat = ring.material as THREE.SpriteMaterial;
+        const ringBaseOp = (ringMat.userData.baseOpacity as number | undefined) ?? 0.9;
+        ringMat.opacity = ringBaseOp * o;
+        ringMat.transparent = true;
+      }
+    };
+
+    // Task #382 — thin camera-facing ring used in Clean mode in place of the
+    // bulky translucent outer sphere. Sprites auto-billboard to the camera, so
+    // the ring always reads as a flat circle around the marker without baking
+    // any volume into the scene.
+    const buildPainCleanRing = (color: number, radius: number): THREE.Sprite => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const hex = '#' + color.toString(16).padStart(6, '0');
+      if (ctx) {
+        ctx.clearRect(0, 0, 128, 128);
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = hex;
+        ctx.shadowColor = hex;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(64, 64, 56, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        opacity: 0.9,
+      });
+      mat.userData.baseOpacity = 0.9;
+      const sprite = new THREE.Sprite(mat);
+      const diameter = radius * 2.1;
+      sprite.scale.set(diameter, diameter, 1);
+      sprite.userData.baseRadius = radius;
+      return sprite;
     };
 
     const buildAiDecoration = (
@@ -5561,6 +5620,12 @@ export default function PureThreeGLBViewer({
           });
         }
         if (meshes.aiDecoration) disposeAiDecoration(scene, meshes.aiDecoration);
+        if (meshes.cleanRing) {
+          scene.remove(meshes.cleanRing);
+          const cm = meshes.cleanRing.material as THREE.SpriteMaterial;
+          if (cm.map) cm.map.dispose();
+          cm.dispose();
+        }
         painMarkerMeshesRef.current.delete(id);
       }
     });
@@ -5591,6 +5656,7 @@ export default function PureThreeGLBViewer({
         const meshes = painMarkerMeshesRef.current.get(marker.id)!;
         meshes.inner.position.copy(pos);
         meshes.outer.position.copy(pos);
+        if (meshes.cleanRing) meshes.cleanRing.position.copy(pos);
 
         const wantsAi = marker.source === 'prediction';
         if (wantsAi && !meshes.aiDecoration) {
@@ -5737,6 +5803,19 @@ export default function PureThreeGLBViewer({
       scene.add(innerMesh);
       scene.add(outerMesh);
 
+      // Task #382 — build the Clean-mode ring for every marker. Visibility of
+      // the ring vs the legacy `outerMesh` is governed by `painMarkerVizModeRef`
+      // (and a dedicated useEffect on `stressVizMode` that flips it live).
+      const cleanRing = buildPainCleanRing(color, baseOuterRadius);
+      cleanRing.position.copy(pos);
+      cleanRing.renderOrder = 1002;
+      cleanRing.userData.isPainMarker = true;
+      cleanRing.userData.markerId = marker.id;
+      const initialModeIsClean = painMarkerVizModeRef.current === 'clean';
+      cleanRing.visible = initialModeIsClean;
+      outerMesh.visible = !initialModeIsClean;
+      scene.add(cleanRing);
+
       const extraObjects: THREE.Object3D[] = [];
 
       if (markerType === 'referred' && marker.referralTarget) {
@@ -5759,6 +5838,10 @@ export default function PureThreeGLBViewer({
         tOuterMesh.renderOrder = 1000;
         tOuterMesh.userData.isPainMarker = true;
         tOuterMesh.userData.markerId = marker.id;
+        // Task #382 — tag the referred-target outer sphere so the Clean-mode
+        // visibility toggle can find it without index-guessing into `extra`
+        // (line/paint markers also populate `extra[1]` with legitimate dots).
+        tOuterMesh.userData.role = 'referredTargetOuter';
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([pos, tp]);
         const lineMat = new THREE.LineDashedMaterial({ color: 0xcc66ff, dashSize: 0.04, gapSize: 0.02, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false });
@@ -5822,11 +5905,22 @@ export default function PureThreeGLBViewer({
         }
       }
 
-      const newMeshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } } = {
+      const newMeshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number }; cleanRing?: THREE.Sprite } = {
         inner: innerMesh,
         outer: outerMesh,
         extra: extraObjects.length > 0 ? extraObjects : undefined,
+        cleanRing,
       };
+      // Task #382 — referred-marker target sphere is also a translucent volume;
+      // hide it in Clean mode to match the source sphere. Found by role tag,
+      // not by index, so line/paint marker dots are unaffected.
+      if (markerType === 'referred') {
+        for (const obj of extraObjects) {
+          if (obj instanceof THREE.Mesh && obj.userData.role === 'referredTargetOuter') {
+            obj.visible = !initialModeIsClean;
+          }
+        }
+      }
       if (marker.source === 'prediction') {
         newMeshes.aiDecoration = buildAiDecoration(scene, marker.id, pos, baseOuterRadius, markerType);
       }
@@ -5843,12 +5937,16 @@ export default function PureThreeGLBViewer({
     if (!pulseAtFailureBeat || painMarkers.length === 0) return;
     let raf = 0;
     const start = performance.now();
-    const baseScales = new Map<string, { inner: THREE.Vector3; outer: THREE.Vector3; outerOpacity: number }>();
+    const baseScales = new Map<string, { inner: THREE.Vector3; outer: THREE.Vector3; outerOpacity: number; ring?: THREE.Vector3; ringOpacity?: number }>();
     painMarkerMeshesRef.current.forEach((meshes, id) => {
       baseScales.set(id, {
         inner: meshes.inner.scale.clone(),
         outer: meshes.outer.scale.clone(),
         outerOpacity: (meshes.outer.material as THREE.MeshBasicMaterial).opacity ?? 0.4,
+        ring: meshes.cleanRing?.scale.clone(),
+        ringOpacity: meshes.cleanRing
+          ? (meshes.cleanRing.material as THREE.SpriteMaterial).opacity ?? 0.9
+          : undefined,
       });
     });
     const matchesBone = (markerBone: string | undefined) => {
@@ -5869,6 +5967,14 @@ export default function PureThreeGLBViewer({
           const mat = meshes.outer.material as THREE.MeshBasicMaterial;
           mat.opacity = Math.min(1, base.outerOpacity + 0.45 * beat);
           mat.needsUpdate = true;
+          // Task #382 — pulse the Clean-mode ring on the same beat so the
+          // failure flash reads even when the legacy cloud is hidden.
+          if (meshes.cleanRing && base.ring && base.ringOpacity !== undefined) {
+            meshes.cleanRing.scale.set(base.ring.x * k, base.ring.y * k, base.ring.z * k);
+            const rmat = meshes.cleanRing.material as THREE.SpriteMaterial;
+            rmat.opacity = Math.min(1, base.ringOpacity + 0.1 * beat);
+            rmat.needsUpdate = true;
+          }
         }
       });
       raf = requestAnimationFrame(loop);
@@ -5884,6 +5990,12 @@ export default function PureThreeGLBViewer({
         const mat = meshes.outer.material as THREE.MeshBasicMaterial;
         mat.opacity = base.outerOpacity;
         mat.needsUpdate = true;
+        if (meshes.cleanRing && base.ring && base.ringOpacity !== undefined) {
+          meshes.cleanRing.scale.copy(base.ring);
+          const rmat = meshes.cleanRing.material as THREE.SpriteMaterial;
+          rmat.opacity = base.ringOpacity;
+          rmat.needsUpdate = true;
+        }
       });
     };
   }, [pulseAtFailureBeat, failureBoneSet, painMarkers]);
@@ -5913,6 +6025,12 @@ export default function PureThreeGLBViewer({
           const sm = dec.sprite.material as THREE.SpriteMaterial;
           if (sm.map) sm.map.dispose();
           sm.dispose();
+        }
+        if (meshes.cleanRing) {
+          if (meshes.cleanRing.parent) meshes.cleanRing.parent.remove(meshes.cleanRing);
+          const cm = meshes.cleanRing.material as THREE.SpriteMaterial;
+          if (cm.map) cm.map.dispose();
+          cm.dispose();
         }
       });
       painMarkerMeshesRef.current.clear();
@@ -10218,6 +10336,9 @@ export default function PureThreeGLBViewer({
     const stored = window.localStorage.getItem('physiogpt:stressVizMode');
     return stored === 'detailed' ? 'detailed' : 'clean';
   });
+  // Task #382 — keep the pain-marker ref in sync so newly-created marker
+  // meshes pick up the correct initial visibility on first paint.
+  painMarkerVizModeRef.current = stressVizMode;
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handler = (e: Event) => {
@@ -10228,6 +10349,28 @@ export default function PureThreeGLBViewer({
     window.addEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
     return () => window.removeEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
   }, []);
+
+  // Task #382 — flip outer sphere ↔ clean ring visibility on every existing
+  // pain marker when the clinician toggles the HUD's Cloud control. Mesh
+  // creation lives in another effect (deps: [painMarkers]) and we don't want
+  // to rebuild every marker just because the mode changed.
+  useEffect(() => {
+    painMarkerMeshesRef.current.forEach((meshes) => {
+      meshes.outer.visible = stressVizMode === 'detailed';
+      if (meshes.cleanRing) meshes.cleanRing.visible = stressVizMode === 'clean';
+      // Referred-marker target sphere is also a translucent blob — hide it in
+      // Clean mode so stacked referred markers don't form a cloud either.
+      // Located via the explicit `role` tag set at creation time so we don't
+      // accidentally hide line/paint marker dots that also live in `extra`.
+      if (meshes.extra) {
+        for (const obj of meshes.extra) {
+          if (obj instanceof THREE.Mesh && obj.userData.role === 'referredTargetOuter') {
+            obj.visible = stressVizMode === 'detailed';
+          }
+        }
+      }
+    });
+  }, [stressVizMode]);
 
   // Force visualization effect
   useEffect(() => {

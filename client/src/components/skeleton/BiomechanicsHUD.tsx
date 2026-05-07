@@ -478,9 +478,11 @@ export default function BiomechanicsHUD({
       valueColor: stressVizMode === 'clean' ? '#38bdf8' : '#fb923c',
       onClick: toggleStressVizMode,
       pressed: stressVizMode === 'detailed',
+      // Task #382 — same toggle now also governs the pain-marker layer
+      // (head/neck/shoulder symptom blobs), not just the joint-stress cloud.
       tooltip: stressVizMode === 'clean'
-        ? 'Stress viz: Clean rings (click for legacy cloud)'
-        : 'Stress viz: Detailed cloud (click for clean rings)',
+        ? 'Stress + pain viz: Clean rings (click for legacy cloud)'
+        : 'Stress + pain viz: Detailed cloud (click for clean rings)',
     },
     {
       id: 'weight',

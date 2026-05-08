@@ -51,6 +51,7 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
     labrum: THREE.Mesh;
     labrumMat: THREE.MeshStandardMaterial;
     camBump: THREE.Mesh;
+    camBumpMat: THREE.MeshStandardMaterial;
     osteophytes: THREE.Group;
     pincerRing: THREE.Mesh;
     rafId: number;
@@ -64,25 +65,55 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
     return { flex, add, ir };
   }, [hipConfig.flexion, hipConfig.extension, hipConfig.abduction, hipConfig.adduction, hipConfig.internalRotation, hipConfig.externalRotation]);
 
-  // Clinical metrics derived from joint pose
+  // Clinical metrics derived from joint pose. Pathology contributes
+  // angle-dependent contact behaviour (not just static offsets):
+  //   - CAM: deep flexion + IR triggers a non-linear contact spike at
+  //     the antero-superior femoral head-neck junction.
+  //   - PINCER: end-range flexion crushes the labrum against the rim.
+  //   - OA: baseline joint-space narrowing across the whole arc, plus
+  //     amplified compression rise vs. flexion (cartilage attrition).
   const metrics = useMemo(() => {
     const fNorm = Math.max(0, angles.flex) / 120;            // 0–1 flexion
     const addNorm = Math.max(0, angles.add) / 30;            // 0–1 adduction
     const irNorm = Math.max(0, angles.ir) / 45;              // 0–1 internal rotation
     // Antero-superior labral compression — FADIR-position weighted
-    const labralCompression = Math.min(1, fNorm * 0.5 + addNorm * 0.3 + irNorm * 0.2);
+    let labralCompression = Math.min(1, fNorm * 0.5 + addNorm * 0.3 + irNorm * 0.2);
+    // CAM contact: deep flexion (>~70°) AND IR (>~15°) → non-linear spike
+    // because the aspherical bump enters the acetabulum and shears the
+    // antero-superior labrum. Below the threshold, CAM is silent.
+    const camFlex = Math.max(0, angles.flex - 70) / 50;       // 0 below 70°, 1 at 120°
+    const camIR = Math.max(0, angles.ir - 15) / 30;           // 0 below 15°, 1 at 45°
+    const camContact = pathology === 'cam' ? camFlex * camIR : 0;  // 0–1
+    if (pathology === 'cam') {
+      labralCompression = Math.min(1, labralCompression + camContact * 0.6);
+    }
+    if (pathology === 'pincer') {
+      // Pincer crushes labrum at end-range flexion regardless of IR
+      labralCompression = Math.min(1, labralCompression + Math.max(0, fNorm - 0.6) * 1.5);
+    }
+    if (pathology === 'labral_tear') {
+      labralCompression = Math.min(1, labralCompression + 0.15);
+    }
     // Global joint compression — magnitude-based
     const absAdd = Math.abs(angles.add) / 30;
     const absIR = Math.abs(angles.ir) / 45;
     let jointCompression = Math.min(1, fNorm * 0.4 + absAdd * 0.3 + absIR * 0.3);
-    if (pathology === 'oa') jointCompression = Math.min(1, jointCompression + 0.25);
-    if (pathology === 'cam' || pathology === 'pincer') jointCompression = Math.min(1, jointCompression + 0.10);
-    // Clearance: nominal 4 mm joint-space, drops with global compression
-    const clearance = Math.max(0, 4 - 4 * jointCompression);
+    // OA: baseline narrowing (~+0.30) plus stronger rise with flexion
+    // — cartilage is thinned, so each degree compresses more.
+    if (pathology === 'oa') {
+      jointCompression = Math.min(1, jointCompression * 1.25 + 0.30);
+    }
+    if (pathology === 'cam') jointCompression = Math.min(1, jointCompression + camContact * 0.25);
+    if (pathology === 'pincer') jointCompression = Math.min(1, jointCompression + 0.10);
+    // Clearance: nominal 4 mm joint-space, drops with global compression.
+    // OA also reduces the *baseline* clearance to model joint-space narrowing.
+    const baselineClearance = pathology === 'oa' ? 2.5 : 4.0;
+    const clearance = Math.max(0, baselineClearance - baselineClearance * jointCompression);
     return {
       labralPct: Math.round(labralCompression * 100),
       jointPct: Math.round(jointCompression * 100),
       clearanceMm: Math.round(clearance * 10) / 10,
+      camContact,                                              // 0–1, drives bump tint
     };
   }, [angles, pathology]);
 
@@ -246,9 +277,10 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
     femurGroup.add(shaft);
 
     // CAM bump — bony deposit on antero-superior femoral head-neck junction
+    const camBumpMat = new THREE.MeshStandardMaterial({ color: 0xe8a86b, roughness: 0.6 });
     const camBump = new THREE.Mesh(
       new THREE.SphereGeometry(0.025, 16, 12),
-      new THREE.MeshStandardMaterial({ color: 0xe8a86b, roughness: 0.6 }),
+      camBumpMat,
     );
     camBump.position.set(0.035, -0.02, 0.045);
     camBump.scale.set(1.1, 0.7, 1.1);
@@ -303,7 +335,7 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
       scene, camera, renderer, controls,
       femurGroup, femoralHead, femoralHeadMat,
       labrum, labrumMat,
-      camBump, osteophytes, pincerRing,
+      camBump, camBumpMat, osteophytes, pincerRing,
       rafId,
     };
 
@@ -356,6 +388,12 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
     s.femurGroup.rotation.z = -toRad(angles.add);
     s.femurGroup.rotation.y = -toRad(angles.ir);
 
+    // OA joint-space narrowing — physically pull the femur ~3 mm into
+    // the acetabulum so the visible joint space collapses (in addition
+    // to the metric-side baseline clearance reduction).
+    const oaInset = pathology === 'oa' ? 0.003 : 0;
+    s.femurGroup.position.set(-oaInset, 0, 0);
+
     // Red contact tint as joint compression rises
     const t = metrics.jointPct / 100;
     const base = new THREE.Color(0xf2e7d0);
@@ -365,7 +403,13 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
     const lt = metrics.labralPct / 100;
     const labBase = new THREE.Color(0xc97a8a);
     s.labrumMat.color.copy(labBase).lerp(hot, Math.min(1, lt * 1.0));
-  }, [angles, metrics]);
+    // CAM bump glows red on contact (deep flexion + IR), dim otherwise.
+    if (pathology === 'cam') {
+      const camBase = new THREE.Color(0xe8a86b);
+      s.camBumpMat.color.copy(camBase).lerp(hot, Math.min(1, metrics.camContact));
+      s.camBumpMat.emissive = new THREE.Color(0xff2a1a).multiplyScalar(metrics.camContact * 0.6);
+    }
+  }, [angles, metrics, pathology]);
 
   const sideLabel = side === 'left' ? 'Left Hip' : 'Right Hip';
   const compressionTone = metrics.jointPct >= 70 ? 'text-rose-300' : metrics.jointPct >= 40 ? 'text-amber-300' : 'text-emerald-300';

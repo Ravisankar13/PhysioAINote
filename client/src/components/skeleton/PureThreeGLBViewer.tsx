@@ -6744,32 +6744,44 @@ export default function PureThreeGLBViewer({
     };
   }, [enableRomMode, selectedRomJointId]);
 
+  // Unified joint-pick click listener — services BOTH ROM mode and
+  // Task #391 Joint Zoom Mode. Pick targets are tagged with
+  // `userData.pickKind` ('rom' | 'jointZoom') and dispatched to the
+  // appropriate callback. This is the single click pipeline; the
+  // joint-zoom render-side effect just adds its own meshes to the
+  // scene with the right userData.
   useEffect(() => {
-    if (!enableRomMode || !sceneRef.current) return;
+    if (!sceneRef.current) return;
+    if (!enableRomMode && !enableJointZoomMode) return;
     const domElement = sceneRef.current.renderer.domElement;
     const camera = sceneRef.current.camera;
 
     const onClick = (e: MouseEvent) => {
-      if (!enableRomModeRef.current) return;
+      if (!enableRomModeRef.current && !enableJointZoomModeRef.current) return;
       const rect = domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(romHighlightMeshesRef.current, false);
-      if (hits.length > 0) {
-        const jointId = hits[0].object.userData.romJointId;
-        const jointDef = ROM_JOINT_DEFINITIONS.find(j => j.id === jointId);
-        if (jointDef) {
-          onRomJointSelectRef.current?.(jointDef);
-        }
+      const candidates: THREE.Object3D[] = [];
+      if (enableRomModeRef.current) candidates.push(...romHighlightMeshesRef.current);
+      if (enableJointZoomModeRef.current) candidates.push(...jointZoomMeshesRef.current);
+      if (candidates.length === 0) return;
+      const hits = raycasterRef.current.intersectObjects(candidates, false);
+      if (hits.length === 0) return;
+      const ud = hits[0].object.userData;
+      if (ud.romJointId && enableRomModeRef.current) {
+        const jointDef = ROM_JOINT_DEFINITIONS.find(j => j.id === ud.romJointId);
+        if (jointDef) onRomJointSelectRef.current?.(jointDef);
+      } else if (ud.jointZoomSide && enableJointZoomModeRef.current) {
+        onJointZoomSelectRef.current?.(ud.jointZoomSide as 'left' | 'right');
       }
     };
 
     domElement.addEventListener('click', onClick);
     return () => { domElement.removeEventListener('click', onClick); };
-  }, [enableRomMode]);
+  }, [enableRomMode, enableJointZoomMode]);
 
   // ===== Task #391 — Joint Zoom Mode (hip v1) =====
   // Renders click-target spheres on Hip_L and Hip_R when enabled, then
@@ -6809,6 +6821,8 @@ export default function PureThreeGLBViewer({
       jointZoomMeshesRef.current.push(sphere);
     });
 
+    // Position-tracking only — clicks are handled by the unified joint
+    // pick listener above (shared with ROM mode).
     let raf = 0;
     const tick = () => {
       if (!enableJointZoomModeRef.current) return;
@@ -6821,27 +6835,8 @@ export default function PureThreeGLBViewer({
     };
     raf = requestAnimationFrame(tick);
 
-    const domElement = sceneRef.current.renderer.domElement;
-    const camera = sceneRef.current.camera;
-    const onClick = (e: MouseEvent) => {
-      if (!enableJointZoomModeRef.current) return;
-      const rect = domElement.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
-      raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(jointZoomMeshesRef.current, false);
-      if (hits.length > 0) {
-        const side = hits[0].object.userData.jointZoomSide as 'left' | 'right';
-        onJointZoomSelectRef.current?.(side);
-      }
-    };
-    domElement.addEventListener('click', onClick);
-
     return () => {
       cancelAnimationFrame(raf);
-      domElement.removeEventListener('click', onClick);
       jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
       jointZoomMeshesRef.current = [];
     };

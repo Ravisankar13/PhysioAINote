@@ -11633,7 +11633,7 @@ ${ddxList}`;
                 {hipZoomSide && (
                   <HipZoomPanel
                     side={hipZoomSide}
-                    hipConfig={(hipZoomSide === 'left' ? finalModelConfig?.leftHip : finalModelConfig?.rightHip) || {}}
+                    hipConfig={(hipZoomSide === 'left' ? modelConfig?.leftHip : modelConfig?.rightHip) || {}}
                     pathology={hipZoomPathology}
                     onClose={() => setHipZoomSide(null)}
                   />

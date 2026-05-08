@@ -1378,10 +1378,11 @@ export default function PhysioGPT() {
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
-  // Task #391 — Joint Zoom Mode (hip v1). `jointZoomMode` toggles the
-  // emerald hip-pick spheres on the main viewer; clicking either opens
-  // the docked HipZoomPanel for that side. Only available in Movement Mode.
-  const [jointZoomMode, setJointZoomMode] = useState(false);
+  // Task #391 — Joint Zoom Mode (hip v1). Hip pick spheres on the main
+  // viewer are auto-enabled whenever Movement Mode is active; clicking
+  // L or R hip opens the docked HipZoomPanel for that side. The v1 lock
+  // is enforced in the click handler: if a panel is already open, the
+  // user must close it before clicking a different hip.
   const [hipZoomSide, setHipZoomSide] = useState<'left' | 'right' | null>(null);
   // Auto-derived hip pathology from the current Clinical Prediction. Scans
   // clinical_summary + original_description for canonical hip-pathology
@@ -11394,8 +11395,20 @@ ${ddxList}`;
               enableRomMode={romMode}
               onRomJointSelect={handleRomJointSelect}
               selectedRomJointId={selectedRomJoint?.id || null}
-              enableJointZoomMode={skeletonMode === 'movement' && jointZoomMode}
-              onJointZoomSelect={(side) => setHipZoomSide(side)}
+              enableJointZoomMode={skeletonMode === 'movement'}
+              onJointZoomSelect={(side) => {
+                // Task #391 v1 lock — once a hip is open, ignore further
+                // hip clicks and surface the required "close first" hint
+                // instead of switching directly between sides.
+                if (hipZoomSide) {
+                  toast({
+                    title: 'Close current Joint Zoom first',
+                    description: `Close the ${hipZoomSide === 'left' ? 'left' : 'right'} hip panel, then click the other hip to inspect it.`,
+                  });
+                  return;
+                }
+                setHipZoomSide(side);
+              }}
               enablePoseMode={effectiveEnablePoseMode}
               onModelConfigChange={updateModelConfig}
               skeletonMode={skeletonMode}
@@ -11614,27 +11627,9 @@ ${ddxList}`;
                   Active Movement Mode
                   {generatingActiveCapacity && <span className="text-emerald-100 font-normal">· generating capacities…</span>}
                 </div>
-                {/* Task #391 — Joint Zoom toggle. Lives next to the Movement
-                    Mode pill so it's discoverable and visually grouped with
-                    the mode it belongs to. Clicking it lights up the hip
-                    pick spheres on the main viewer; clicking a hip then
-                    opens HipZoomPanel below. */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setJointZoomMode(prev => {
-                      const next = !prev;
-                      if (!next) setHipZoomSide(null);
-                      return next;
-                    });
-                  }}
-                  className={`absolute top-2 left-[178px] z-30 pointer-events-auto flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold shadow-lg border transition-colors ${jointZoomMode ? 'bg-emerald-400 text-emerald-950 border-emerald-200' : 'bg-slate-900/80 text-emerald-200 border-emerald-400/50 hover:bg-slate-800/80'}`}
-                  data-testid="toggle-joint-zoom"
-                  title={jointZoomMode ? 'Joint Zoom on — click L/R hip on the skeleton' : 'Enable Joint Zoom (hip)'}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${jointZoomMode ? 'bg-emerald-900 animate-pulse' : 'bg-emerald-300'}`} />
-                  Joint Zoom · Hip
-                </button>
+                {/* Task #391 — Joint Zoom panel. Hip pick spheres on the
+                    main viewer are auto-enabled in Movement Mode; clicking
+                    L or R hip opens this panel directly (no toggle). */}
                 {hipZoomSide && (
                   <HipZoomPanel
                     side={hipZoomSide}
@@ -14994,7 +14989,6 @@ ${ddxList}`;
                     } else {
                       // Leaving Movement Mode tears down the Joint Zoom UI
                       // (Task #391 — hip zoom is movement-mode only in v1).
-                      setJointZoomMode(false);
                       setHipZoomSide(null);
                     }
                     return next;

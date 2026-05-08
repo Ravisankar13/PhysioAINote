@@ -1666,6 +1666,12 @@ interface PureThreeGLBViewerProps {
   enableRomMode?: boolean;
   onRomJointSelect?: (jointDef: RomJointDefinition) => void;
   selectedRomJointId?: string | null;
+  /** Task #391 — Joint Zoom Mode (hip v1). When true, the viewer renders
+   *  click-target spheres on Hip_L and Hip_R only and emits the side via
+   *  `onJointZoomSelect`. Independent of ROM mode so it can be combined
+   *  with Movement Mode without disrupting the ROM picker. */
+  enableJointZoomMode?: boolean;
+  onJointZoomSelect?: (side: 'left' | 'right') => void;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
   /** Top-level skeleton interaction mode. 'treatment' is the manual-therapy
@@ -2763,6 +2769,8 @@ export default function PureThreeGLBViewer({
   enableRomMode = false,
   onRomJointSelect,
   selectedRomJointId = null,
+  enableJointZoomMode = false,
+  onJointZoomSelect,
   enablePoseMode = false,
   onModelConfigChange,
   skeletonMode = 'posture',
@@ -2917,6 +2925,11 @@ export default function PureThreeGLBViewer({
   enableRomModeRef.current = enableRomMode;
   const onRomJointSelectRef = useRef(onRomJointSelect);
   onRomJointSelectRef.current = onRomJointSelect;
+  const enableJointZoomModeRef = useRef(enableJointZoomMode);
+  enableJointZoomModeRef.current = enableJointZoomMode;
+  const onJointZoomSelectRef = useRef(onJointZoomSelect);
+  onJointZoomSelectRef.current = onJointZoomSelect;
+  const jointZoomMeshesRef = useRef<THREE.Mesh[]>([]);
   const romHighlightMeshesRef = useRef<THREE.Mesh[]>([]);
   const enablePoseModeRef = useRef(enablePoseMode);
   enablePoseModeRef.current = enablePoseMode;
@@ -6757,6 +6770,82 @@ export default function PureThreeGLBViewer({
     domElement.addEventListener('click', onClick);
     return () => { domElement.removeEventListener('click', onClick); };
   }, [enableRomMode]);
+
+  // ===== Task #391 — Joint Zoom Mode (hip v1) =====
+  // Renders click-target spheres on Hip_L and Hip_R when enabled, then
+  // raycasts on click and emits 'left' / 'right' to the parent. Kept as
+  // a separate effect from the ROM picker so the two modes can coexist
+  // (e.g. Movement Mode + Joint Zoom).
+  useEffect(() => {
+    if (!sceneRef.current || !enableJointZoomMode) return;
+    const { scene } = sceneRef.current;
+    const bones = bonesRef.current;
+    const hipPicks: Array<{ side: 'left' | 'right'; boneName: string }> = [
+      { side: 'left', boneName: 'Hip_L' },
+      { side: 'right', boneName: 'Hip_R' },
+    ];
+
+    jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+    jointZoomMeshesRef.current = [];
+
+    hipPicks.forEach(({ side, boneName }) => {
+      const bone = bones[boneName];
+      if (!bone) return;
+      const geo = new THREE.SphereGeometry(0.05, 20, 16);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x10b981,
+        transparent: true,
+        opacity: 0.55,
+        depthTest: false,
+      });
+      const sphere = new THREE.Mesh(geo, mat);
+      sphere.userData.jointZoomSide = side;
+      sphere.userData.jointZoomBone = boneName;
+      sphere.renderOrder = 1000;
+      const wp = new THREE.Vector3();
+      bone.getWorldPosition(wp);
+      sphere.position.copy(wp);
+      scene.add(sphere);
+      jointZoomMeshesRef.current.push(sphere);
+    });
+
+    let raf = 0;
+    const tick = () => {
+      if (!enableJointZoomModeRef.current) return;
+      const wp = new THREE.Vector3();
+      jointZoomMeshesRef.current.forEach(sphere => {
+        const b = bonesRef.current[sphere.userData.jointZoomBone as string];
+        if (b) { b.getWorldPosition(wp); sphere.position.copy(wp); }
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    const domElement = sceneRef.current.renderer.domElement;
+    const camera = sceneRef.current.camera;
+    const onClick = (e: MouseEvent) => {
+      if (!enableJointZoomModeRef.current) return;
+      const rect = domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(jointZoomMeshesRef.current, false);
+      if (hits.length > 0) {
+        const side = hits[0].object.userData.jointZoomSide as 'left' | 'right';
+        onJointZoomSelectRef.current?.(side);
+      }
+    };
+    domElement.addEventListener('click', onClick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      domElement.removeEventListener('click', onClick);
+      jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+      jointZoomMeshesRef.current = [];
+    };
+  }, [enableJointZoomMode]);
 
   useEffect(() => {
     if (!sceneRef.current || !enablePoseMode) return;

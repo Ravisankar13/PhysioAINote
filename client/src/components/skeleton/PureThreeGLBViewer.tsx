@@ -2930,6 +2930,7 @@ export default function PureThreeGLBViewer({
   const onJointZoomSelectRef = useRef(onJointZoomSelect);
   onJointZoomSelectRef.current = onJointZoomSelect;
   const jointZoomMeshesRef = useRef<THREE.Mesh[]>([]);
+  const hipPickWarnedRef = useRef<Set<string>>(new Set());
   const romHighlightMeshesRef = useRef<THREE.Mesh[]>([]);
   const enablePoseModeRef = useRef(enablePoseMode);
   enablePoseModeRef.current = enablePoseMode;
@@ -6800,18 +6801,29 @@ export default function PureThreeGLBViewer({
     jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
     jointZoomMeshesRef.current = [];
 
-    // If the model hasn't populated bones yet, bail. The effect will
-    // re-run when `modelReadyTick` advances (model load completes).
+    // Decide whether the model is actually loaded. `modelReadyTick > 0`
+    // means the GLB load callback has populated `bonesRef.current`. If
+    // it hasn't yet, bail silently — this effect will re-run when the
+    // tick advances. If the model IS loaded but expected hip bones are
+    // missing, that's a real rig mismatch — warn once.
+    const modelLoaded = modelReadyTick > 0;
     const missing = hipPicks.filter(p => !bones[p.boneName]);
-    if (missing.length === hipPicks.length) {
-      // Both Hip_L and Hip_R absent — model not loaded yet, just wait.
+    if (!modelLoaded) {
       return;
     }
     if (missing.length > 0) {
-      console.warn(
-        `[JointZoom] Skipping hip pick spheres for missing bones: ${missing.map(m => m.boneName).join(', ')}. ` +
-        `Loaded rig is missing the expected hip bone names.`
-      );
+      const key = missing.map(m => m.boneName).sort().join(',');
+      if (!hipPickWarnedRef.current.has(key)) {
+        hipPickWarnedRef.current.add(key);
+        console.warn(
+          `[JointZoom] Loaded rig is missing expected hip bone(s): ${missing.map(m => m.boneName).join(', ')}. ` +
+          `Pick spheres will not be created for those side(s).`
+        );
+      }
+      if (missing.length === hipPicks.length) {
+        // Nothing to render, but we've surfaced the cause above.
+        return;
+      }
     }
 
     hipPicks.forEach(({ side, boneName }) => {

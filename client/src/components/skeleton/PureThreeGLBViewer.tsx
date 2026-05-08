@@ -6800,6 +6800,20 @@ export default function PureThreeGLBViewer({
     jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
     jointZoomMeshesRef.current = [];
 
+    // If the model hasn't populated bones yet, bail. The effect will
+    // re-run when `modelReadyTick` advances (model load completes).
+    const missing = hipPicks.filter(p => !bones[p.boneName]);
+    if (missing.length === hipPicks.length) {
+      // Both Hip_L and Hip_R absent — model not loaded yet, just wait.
+      return;
+    }
+    if (missing.length > 0) {
+      console.warn(
+        `[JointZoom] Skipping hip pick spheres for missing bones: ${missing.map(m => m.boneName).join(', ')}. ` +
+        `Loaded rig is missing the expected hip bone names.`
+      );
+    }
+
     hipPicks.forEach(({ side, boneName }) => {
       const bone = bones[boneName];
       if (!bone) return;
@@ -6840,7 +6854,10 @@ export default function PureThreeGLBViewer({
       jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
       jointZoomMeshesRef.current = [];
     };
-  }, [enableJointZoomMode]);
+    // `modelReadyTick` advances when the GLB finishes loading and bones
+    // are populated; depending on it ensures the picker re-runs and
+    // creates the spheres if Movement Mode was already on at load time.
+  }, [enableJointZoomMode, modelReadyTick]);
 
   useEffect(() => {
     if (!sceneRef.current || !enablePoseMode) return;

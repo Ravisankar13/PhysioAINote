@@ -3346,6 +3346,20 @@ export default function PhysioGPT() {
           predictionText: prevApplied.predictionText,
         };
       }
+      // Task #395: also reset the compromised-tissues list so the
+      // tissue-intelligence aggregator starts clean. Without this the
+      // refinement parse's Q&A-aware tissue set is OR'd against the
+      // initial parse's tissues by the aggregator, producing a burst
+      // of additional translucent glow spheres / halos on the
+      // skeleton that block the view. The rebuild block below
+      // re-applies whatever tissues the refinement parse returned.
+      // Note: this runs BEFORE perEntry.prevCompromisedTissues is
+      // captured at L3495, but voice-activity undo snapshots are only
+      // captured for voice-triggered parses (refinement parses come
+      // from the Clinical Text panel UI and have no
+      // pendingVoiceTriggerRef), so the snapshot path is unaffected.
+      compromisedTissuesRef.current = [];
+      setCompromisedTissues([]);
     }
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],

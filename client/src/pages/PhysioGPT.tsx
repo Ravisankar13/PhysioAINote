@@ -1384,6 +1384,10 @@ export default function PhysioGPT() {
   // is enforced in the click handler: if a panel is already open, the
   // user must close it before clicking a different hip.
   const [hipZoomSide, setHipZoomSide] = useState<'left' | 'right' | null>(null);
+  // Task #393 — viewer-relative position (px) for the draggable Joint
+  // Zoom panel. Per-session state (no DB persistence); preserved across
+  // L/R switches so the clinician's chosen spot stays put.
+  const [hipZoomPosition, setHipZoomPosition] = useState<{ left: number; top: number } | null>(null);
   // Auto-derived hip pathology from the current Clinical Prediction. Scans
   // clinical_summary + original_description for canonical hip-pathology
   // keywords. Defaults to 'none' so the zoom panel shows normal morphology.
@@ -11636,6 +11640,8 @@ ${ddxList}`;
                     hipConfig={(hipZoomSide === 'left' ? modelConfig?.leftHip : modelConfig?.rightHip) || {}}
                     pathology={hipZoomPathology}
                     onClose={() => setHipZoomSide(null)}
+                    position={hipZoomPosition}
+                    onPositionChange={setHipZoomPosition}
                   />
                 )}
                 {refreshingActiveCapacity && !generatingActiveCapacity && (

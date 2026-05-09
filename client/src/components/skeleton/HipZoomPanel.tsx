@@ -1,8 +1,8 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { GripVertical, X } from 'lucide-react';
 
 export type HipPathology = 'none' | 'cam' | 'pincer' | 'labral_tear' | 'oa';
 
@@ -20,6 +20,14 @@ interface HipZoomPanelProps {
   hipConfig: HipZoomConfig;
   pathology: HipPathology;
   onClose: () => void;
+  /**
+   * Optional viewer-relative position (left/top in px). When provided,
+   * the panel renders at that position; otherwise it falls back to the
+   * default top-left slot. The parent owns the state so position
+   * persists across L/R switches within the same Movement Mode session.
+   */
+  position?: { left: number; top: number } | null;
+  onPositionChange?: (pos: { left: number; top: number } | null) => void;
 }
 
 const PATHOLOGY_LABEL: Record<HipPathology, string> = {
@@ -38,7 +46,7 @@ const PATHOLOGY_BLURB: Record<HipPathology, string> = {
   oa: 'Cartilage thinning, joint-space narrowing, marginal osteophyte formation — global compression rises throughout arc.',
 };
 
-export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: HipZoomPanelProps) {
+export default function HipZoomPanel({ side, hipConfig, pathology, onClose, position, onPositionChange }: HipZoomPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneStateRef = useRef<{
     scene: THREE.Scene;
@@ -416,14 +424,96 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
   const labralTone = metrics.labralPct >= 70 ? 'text-rose-300' : metrics.labralPct >= 40 ? 'text-amber-300' : 'text-emerald-300';
   const clearanceTone = metrics.clearanceMm <= 1.0 ? 'text-rose-300' : metrics.clearanceMm <= 2.5 ? 'text-amber-300' : 'text-emerald-300';
 
+  // Drag-to-move (Task #393). Mirrors the DraggableShell pattern used by
+  // MovementFindingsStream / SFV: viewer-relative absolute positioning,
+  // header-only drag (handle gates via the grip wrapper), clamping based
+  // on the panel's offsetParent (the Movement Mode frame). Compact size
+  // (no longer fills viewer height) so the skeleton stays visible.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStateRef = useRef<{
+    pointerStartX: number;
+    pointerStartY: number;
+    panelStartLeft: number;
+    panelStartTop: number;
+    container: HTMLElement | null;
+  } | null>(null);
+
+  const onHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const container = (panel.offsetParent as HTMLElement | null) ?? null;
+    const containerRect = container?.getBoundingClientRect();
+    dragStateRef.current = {
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      panelStartLeft: rect.left - (containerRect?.left ?? 0),
+      panelStartTop: rect.top - (containerRect?.top ?? 0),
+      container,
+    };
+    setDragging(true);
+    e.preventDefault();
+  }, []);
+
+  const onHeaderDoubleClick = useCallback(() => {
+    onPositionChange?.(null);
+  }, [onPositionChange]);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (ev: MouseEvent) => {
+      const ds = dragStateRef.current;
+      if (!ds) return;
+      const dx = ev.clientX - ds.pointerStartX;
+      const dy = ev.clientY - ds.pointerStartY;
+      const panel = panelRef.current;
+      const w = panel?.offsetWidth ?? 360;
+      const h = panel?.offsetHeight ?? 200;
+      const containerRect = ds.container?.getBoundingClientRect();
+      const containerW = containerRect?.width ?? window.innerWidth;
+      const containerH = containerRect?.height ?? window.innerHeight;
+      const minX = 4;
+      const minY = 4;
+      const maxX = Math.max(minX, containerW - w - 4);
+      const maxY = Math.max(minY, containerH - h - 4);
+      const nextLeft = Math.max(minX, Math.min(maxX, ds.panelStartLeft + dx));
+      const nextTop = Math.max(minY, Math.min(maxY, ds.panelStartTop + dy));
+      onPositionChange?.({ left: nextLeft, top: nextTop });
+    };
+    const handleUp = () => {
+      setDragging(false);
+      dragStateRef.current = null;
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragging, onPositionChange]);
+
+  const positionStyle: React.CSSProperties = position
+    ? { left: position.left, top: position.top }
+    : { left: 8, top: 8 };
+
   return (
     <div
-      className="absolute top-2 left-2 z-40 w-[360px] max-w-[42vw] rounded-lg overflow-hidden shadow-2xl border border-emerald-400/40 bg-slate-950/95 backdrop-blur-md pointer-events-auto flex flex-col"
-      style={{ height: 'calc(100% - 16px)' }}
+      ref={panelRef}
+      className={`absolute z-40 w-[320px] max-w-[42vw] max-h-[70vh] rounded-lg overflow-hidden shadow-2xl border border-emerald-400/40 bg-slate-950/95 backdrop-blur-md pointer-events-auto flex flex-col ${dragging ? 'ring-1 ring-emerald-400/60 shadow-emerald-500/30' : ''}`}
+      style={positionStyle}
       data-testid="hip-zoom-panel"
     >
-      <div className="flex items-center justify-between px-3 py-2 bg-emerald-600/30 border-b border-emerald-400/30">
-        <div className="flex items-center gap-2">
+      <div
+        className={`flex items-center justify-between px-3 py-2 bg-emerald-600/30 border-b border-emerald-400/30 select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={onHeaderMouseDown}
+        onDoubleClick={onHeaderDoubleClick}
+        data-testid="hip-zoom-drag-handle"
+        title="Drag to move · Double-click to reset position"
+      >
+        <div className="flex items-center gap-2 pointer-events-none">
+          <GripVertical className="h-3 w-3 text-emerald-200/80" />
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-[12px] font-semibold text-white">Joint Zoom — {sideLabel}</span>
         </div>
@@ -432,7 +522,7 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose }: Hi
         </Button>
       </div>
 
-      <div ref={mountRef} className="flex-1 min-h-0 bg-[#0a0f1a]" data-testid="hip-zoom-canvas" />
+      <div ref={mountRef} className="h-[180px] shrink-0 bg-[#0a0f1a]" data-testid="hip-zoom-canvas" />
 
       <div className="px-3 py-2 border-t border-emerald-400/20 bg-slate-900/80 text-[11px] text-slate-200 space-y-1.5">
         <div className="grid grid-cols-3 gap-2">

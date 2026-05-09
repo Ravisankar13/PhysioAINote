@@ -441,6 +441,11 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose, posi
 
   const onHeaderMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
+    // Only start a drag from the bare header surface — not the close
+    // button or anything else interactive nested inside it. Mirrors
+    // the DraggableShell gating used in MovementFindingsStream.
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, [role="button"], a, input')) return;
     const panel = panelRef.current;
     if (!panel) return;
     const rect = panel.getBoundingClientRect();
@@ -457,7 +462,9 @@ export default function HipZoomPanel({ side, hipConfig, pathology, onClose, posi
     e.preventDefault();
   }, []);
 
-  const onHeaderDoubleClick = useCallback(() => {
+  const onHeaderDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, [role="button"], a, input')) return;
     onPositionChange?.(null);
   }, [onPositionChange]);
 

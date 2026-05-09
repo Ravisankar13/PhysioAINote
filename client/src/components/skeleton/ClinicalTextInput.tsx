@@ -148,6 +148,19 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   // closes over it.
   const patientContextRef = useRef<typeof patientContext>(patientContext);
   patientContextRef.current = patientContext;
+  // Mount guard — when the parent remounts this component (Task #394:
+  // bumping `caseInstanceId` on New Case forces a fresh key), in-flight
+  // parse / report responses from the previous case must not call
+  // setState or fire parent callbacks. Without this guard, a late
+  // /api/clinical-text/parse response would still invoke
+  // `onParseResult` on the parent and repaint stale findings into the
+  // brand-new case. The cleanup callback flips the ref to false so the
+  // post-await guards below early-return.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const { toast } = useToast();
 
   // Voice transcript no longer mirrors into the textarea, and voice
@@ -172,6 +185,11 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         context: context.length > 0 ? context : undefined,
         patient_context: pcPayload,
       });
+      // Drop the response entirely when the component has unmounted
+      // (e.g., parent bumped the case key on New Case). Without this
+      // guard, a late response would still call `onParseResult` on the
+      // parent and repaint stale findings into the new case.
+      if (!mountedRef.current) return;
       result.original_description = originalTextRef.current || inputText.trim();
       // Task #390: stamp refinement flag so the consumer can REPLACE
       // (not APPEND) prior parse contributions when answering follow-up
@@ -200,10 +218,11 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
       });
     } catch (err) {
       console.error("Clinical text parse error:", err);
+      if (!mountedRef.current) return;
       toast({ title: "Parse Error", description: "Failed to analyze the clinical description. Please try again.", variant: "destructive" });
       onParseError?.(err);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [onParseResult, onParseError, toast]);
 
@@ -304,14 +323,17 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         chain_integrity: chainIntegrityScores && chainIntegrityScores.length > 0 ? chainIntegrityScores : undefined,
         force_analysis: forceAnalysis && forceAnalysis.length > 0 ? forceAnalysis : undefined,
       });
+      // Drop late report responses after a New Case remount.
+      if (!mountedRef.current) return;
       setDiagnosisReport(reportData);
       setReportOpen(true);
       toast({ title: "Report Generated", description: "Clinical diagnosis and treatment plan ready." });
     } catch (err) {
       console.error("Diagnosis report error:", err);
+      if (!mountedRef.current) return;
       toast({ title: "Report Error", description: "Failed to generate diagnosis report. Please try again.", variant: "destructive" });
     } finally {
-      setReportLoading(false);
+      if (mountedRef.current) setReportLoading(false);
     }
   }, [lastResult, qaHistory, toast, chainIntegrityScores, forceAnalysis]);
 

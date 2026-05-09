@@ -1952,6 +1952,13 @@ export default function PhysioGPT() {
   const lastSavedSnapshotRef = useRef<string>("");
   const snapshotSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [snapshotSaveCounter, setSnapshotSaveCounter] = useState(0);
+  // Per-case instance counter — bumped in handleNewConversation and
+  // passed as `key` to ClinicalTextInput and ClinicalReasoningPanel so
+  // React fully remounts them, wiping every piece of child-owned
+  // useState/useRef text (input box, parsed result, follow-up Q&A,
+  // diagnosis report, manual evidence query fields, expanded sections,
+  // internally-cached SOAP notes, drag position, etc.).
+  const [caseInstanceId, setCaseInstanceId] = useState(0);
   // Snapshot eligibility — only conversations created after this feature
   // shipped (or that already have a snapshot persisted) are auto-saved.
   // Legacy chat-only conversations stay chat-only even after interaction;
@@ -4504,10 +4511,24 @@ ${ddxList}`;
 
   const handleManualEvidenceQuery = useCallback((params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => {
     if (evidenceLoading) return;
+    // Task #394: cancel any prior evidence request and stamp a fresh
+    // query id so a late response from a previous case (or even a
+    // previous click) cannot repaint stale evidence into the panel
+    // after New Case. Mirrors the abort/queryId pattern in
+    // handleEvidenceQuery and is also aborted in handleNewConversation.
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    evidenceAbortRef.current = abortController;
+    evidenceQueryIdRef.current += 1;
+    const currentQueryId = evidenceQueryIdRef.current;
     setEvidenceLoading(true);
     fetch('/api/evidence-engine/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      signal: abortController.signal,
       body: JSON.stringify({
         diagnosis: params.diagnosis,
         bodyRegions: params.bodyRegions,
@@ -4517,9 +4538,25 @@ ${ddxList}`;
       }),
     })
     .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
-    .then(data => setEvidenceEngineResult(data))
-    .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence results.', variant: 'destructive' }); })
-    .finally(() => setEvidenceLoading(false));
+    .then(data => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceEngineResult(data);
+      }
+    })
+    .catch((err) => {
+      if (err?.name === 'AbortError') return;
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        toast({ title: 'Evidence query failed', description: 'Could not fetch evidence results.', variant: 'destructive' });
+      }
+    })
+    .finally(() => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceLoading(false);
+        if (evidenceAbortRef.current === abortController) {
+          evidenceAbortRef.current = null;
+        }
+      }
+    });
   }, [evidenceLoading, toast]);
 
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
@@ -5383,6 +5420,28 @@ ${ddxList}`;
     setTestChainActive(null);
     setSelectedRomJoint(null);
     setRomValues({});
+
+    // Abort any in-flight evidence-engine query (manual or autopilot)
+    // and bump the queryId so a late response cannot repaint stale
+    // evidence into the just-cleared case.
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+      evidenceAbortRef.current = null;
+    }
+    evidenceQueryIdRef.current += 1;
+    setEvidenceLoading(false);
+
+    // Bump the per-case instance counter so ClinicalTextInput and
+    // ClinicalReasoningPanel fully remount, wiping all child-owned
+    // useState/useRef values (input text, parsed result card,
+    // follow-up Q&A, diagnosis report, manual evidence query fields,
+    // expanded sections, internally-cached SOAP notes, drag pos,
+    // pending fetches, etc.) so the new case looks like a fresh login.
+    // The remount also flips ClinicalTextInput's mountedRef → false,
+    // which gates its post-await state setters / parent callbacks so
+    // late /api/clinical-text/parse and /api/clinical-diagnosis/report
+    // responses are dropped instead of repainting stale findings.
+    setCaseInstanceId((n) => n + 1);
 
     // Release the hydration guard once the resets have committed.
     setTimeout(() => { isHydratingRef.current = false; }, 100);
@@ -17778,6 +17837,7 @@ ${ddxList}`;
       <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
         <Suspense fallback={<LazyPanelFallback />}>
         <ClinicalTextInput
+          key={`clinical-text-input-${caseInstanceId}`}
           ref={clinicalTextInputRef}
           onParseResult={handleClinicalTextParse}
           onParseError={() => {
@@ -18212,6 +18272,7 @@ ${ddxList}`;
       )}
       {skeletonMode !== 'movement' && (
       <ClinicalReasoningPanel
+        key={`clinical-reasoning-panel-${caseInstanceId}`}
         data={clinicalReasoningData}
         isProcessing={clinicalReasoningProcessing}
         isOpen={clinicalReasoningOpen}

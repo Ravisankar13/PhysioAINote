@@ -5770,6 +5770,20 @@ export default function PureThreeGLBViewer({
       const symptomColor = marker.symptomType ? SYMPTOM_TYPES[marker.symptomType]?.color : null;
       const color = symptomColor || MARKER_TYPE_COLORS[markerType] || MARKER_TYPE_COLORS.point;
 
+      // Task #397 — yellow-toned symptom palettes (pins_needles 0xffaa00,
+      // weakness 0xaaaa44, catching 0xddaa44, etc.) render as large
+      // translucent yellow halo spheres on the body when the
+      // refinement parse adds those symptom types after a follow-up
+      // answer. Detect yellowish colours (R+G high, B low, R≈G) and
+      // suppress the outer halo while keeping the inner sphere and
+      // Clean-mode ring so the marker stays visible and selectable.
+      const isYellowTonedColor = (() => {
+        const r = (color >> 16) & 0xff;
+        const g = (color >> 8) & 0xff;
+        const b = color & 0xff;
+        return r >= 160 && g >= 140 && b <= 100 && Math.abs(r - g) <= 90;
+      })();
+
       const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
       const innerMat = new THREE.MeshBasicMaterial({
         color,
@@ -5796,15 +5810,17 @@ export default function PureThreeGLBViewer({
         baseOuterRadius = 0.1;
         outerGeo = new THREE.SphereGeometry(baseOuterRadius, 12, 8);
       }
+      const outerBaseOpacity = isYellowTonedColor ? 0 : (markerType === 'area' ? 0.25 : 0.2);
       const outerMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: markerType === 'area' ? 0.25 : 0.2,
+        opacity: outerBaseOpacity,
         depthWrite: false,
         depthTest: true,
         side: THREE.DoubleSide,
+        visible: !isYellowTonedColor,
       });
-      outerMat.userData.baseOpacity = markerType === 'area' ? 0.25 : 0.2;
+      outerMat.userData.baseOpacity = outerBaseOpacity;
       const outerMesh = new THREE.Mesh(outerGeo, outerMat);
       outerMesh.position.copy(pos);
       outerMesh.renderOrder = 1000;

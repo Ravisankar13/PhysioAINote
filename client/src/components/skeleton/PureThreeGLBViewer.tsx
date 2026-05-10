@@ -12223,7 +12223,10 @@ export default function PureThreeGLBViewer({
           .map(def => {
             const lim = DOF_LIMIT_INDEX.get(def.configKey)!;
             const lookup = def.configKey.replace('.', ':');
-            const row = activeCapacities?.[lookup];
+            // Task #400 — Posture mode never reads active-capacity bands
+            // or painful-arc data even if a parent accidentally passes
+            // it in, keeping the local invariant explicit.
+            const row = skeletonMode === 'movement' ? activeCapacities?.[lookup] : undefined;
             return {
               configKey: def.configKey,
               label: def.label,

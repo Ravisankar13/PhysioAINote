@@ -4450,20 +4450,15 @@ export default function PureThreeGLBViewer({
           }
         }
 
-        if (deviation > 0.3) {
-          const glowGeo = new THREE.SphereGeometry(nodeSize * 2.5, 8, 6);
-          const glowMat = new THREE.MeshBasicMaterial({
-            color: isPainChain ? new THREE.Color('#ff0000') : chainColor,
-            transparent: true,
-            opacity: deviation * 0.2,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-          });
-          const glow = new THREE.Mesh(glowGeo, glowMat);
-          glow.position.copy(positions[i]);
-          glow.renderOrder = 989;
-          group.add(glow);
-        }
+        // Task #399 — the per-node "glow halo" sphere (nodeSize * 2.5
+        // translucent ball at every high-deviation muscle bone) was the
+        // primary source of the cloud overlay reported by clinicians on
+        // chain selection. The chain's muscles are now painted on the
+        // body via the existing muscle-mesh highlight pipeline
+        // (chainMuscleHighlights → mergedMuscleHighlightColors), which
+        // colour-paints the actual muscle GLB groups instead of stacking
+        // translucent spheres. The chain pathway line, node dots,
+        // propagation rings, tubes and flow dots remain.
       }
 
       for (let i = 0; i < positions.length - 1; i++) {

@@ -10581,7 +10581,10 @@ ${ddxList}`;
   const hasManualTensions = Object.keys(manualChainTensions).length > 0;
   const fascialChainVizProp = useMemo(() => {
     if (!showUnifiedChainPanel) return undefined;
-    if (!tensionTabActive && !hasManualTensions) return undefined;
+    // Task #399 — previously gated on `tensionTabActive || hasManualTensions`,
+    // which meant the muscle-mesh highlight pipeline (driven by activeChainIds)
+    // only fired on the Tension tab. Removing the gate so muscle paint shows
+    // whenever the panel is open with at least one active chain.
     const combinedPainChains = Array.from(new Set([...painAffectedChainIds, ...painDriverChainIds]));
     return {
       enabled: true,
@@ -10594,8 +10597,33 @@ ${ddxList}`;
     };
   }, [showUnifiedChainPanel, tensionTabActive, hasManualTensions, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
+  // Task #399 — Kinetic chain (Explorer tab) → myofascial chain id mapping.
+  // The Explorer tab in UnifiedChainPanel uses KINETIC_CHAINS (`selectedChainId`)
+  // which carries anatomical labels like "Gastrocnemius" that don't match GLB
+  // muscle group ids. We translate the kinetic chain into the equivalent
+  // MYOFASCIAL_CHAINS entries (whose `muscleId` values DO match GLB groups
+  // like `calf_l`, `glute_r`, `spine`, …) so the muscle-mesh paint pipeline
+  // can colour the actual muscles instead of dropping translucent bone-glow
+  // spheres. Replaces the prior `chainHighlightBones` cloud-sphere overlay.
+  const KINETIC_TO_MYOFASCIAL: Record<string, string[]> = {
+    posterior_chain: ['superficial_back_l', 'superficial_back_r'],
+    anterior_chain: ['superficial_front_l', 'superficial_front_r'],
+    lateral_chain: ['lateral_line_l', 'lateral_line_r'],
+    spiral_chain: ['spiral_line_l', 'spiral_line_r'],
+    deep_longitudinal: ['deep_longitudinal'],
+    posterior_oblique_sling: ['posterior_oblique'],
+    anterior_oblique_sling: ['anterior_oblique'],
+    lateral_subsystem: ['lateral_sling'],
+    upper_extremity_chain: ['arm_line_l', 'arm_line_r'],
+    lower_extremity_chain: ['deep_front_l', 'deep_front_r'],
+  };
+
   const chainMuscleHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
     if (!fascialChainVizProp) return { groups: [], colors: {} };
+    const groups: string[] = [];
+    const colors: Record<string, string> = {};
+    const seen = new Set<string>();
+
     const orderedChainIds: string[] = [];
     const chainSeen = new Set<string>();
     for (const id of [...activeChainIds, ...painAffectedChainIds, ...painDriverChainIds]) {
@@ -10603,10 +10631,6 @@ ${ddxList}`;
       chainSeen.add(id);
       orderedChainIds.push(id);
     }
-    if (orderedChainIds.length === 0) return { groups: [], colors: {} };
-    const groups: string[] = [];
-    const colors: Record<string, string> = {};
-    const seen = new Set<string>();
     for (const chainId of orderedChainIds) {
       const chain = MYOFASCIAL_CHAINS.find(c => c.id === chainId);
       if (!chain) continue;
@@ -10617,8 +10641,26 @@ ${ddxList}`;
         colors[link.muscleId] = chain.color;
       }
     }
+
+    // Explorer tab: paint muscles for the user-selected kinetic chain
+    if (selectedChainId) {
+      const kineticChain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
+      const myofascialIds = KINETIC_TO_MYOFASCIAL[selectedChainId] ?? [];
+      const kineticColor = kineticChain?.color ?? '#22c55e';
+      for (const myoId of myofascialIds) {
+        const chain = MYOFASCIAL_CHAINS.find(c => c.id === myoId);
+        if (!chain) continue;
+        for (const link of chain.links) {
+          if (seen.has(link.muscleId)) continue;
+          seen.add(link.muscleId);
+          groups.push(link.muscleId);
+          colors[link.muscleId] = kineticColor;
+        }
+      }
+    }
+
     return { groups, colors };
-  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds]);
+  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds, selectedChainId]);
 
   // Task #389 — Sling overlay used to feed every muscle in the selected sling
   // into the muscle-glow pipeline, which clones the GLB body-mesh material
@@ -10687,20 +10729,12 @@ ${ddxList}`;
   const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
 
-  const chainHighlightBones = useMemo(() => {
-    if (!selectedChainId) return undefined;
-    const chain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
-    if (!chain) return undefined;
-    const colorHex = parseInt(chain.color.replace('#', ''), 16);
-    const boneNames = getChainBoneNames(selectedChainId, 'both');
-    const uniqueBones = Array.from(new Set(boneNames));
-    return uniqueBones.map(boneName => ({
-      boneName,
-      color: colorHex,
-      intensity: 0.7,
-      glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.25 : 0.2,
-    }));
-  }, [selectedChainId]);
+  // Task #399 — replaced bone-glow translucent-sphere overlay with muscle-mesh
+  // highlighting on the Explorer tab. The kinetic chain selection now feeds
+  // `chainMuscleHighlights` (above) which paints the actual GLB muscle groups
+  // in the chain colour, instead of stacking 6-9 large translucent spheres at
+  // each bone (which clinicians described as "clouds overlaying the muscles").
+  const chainHighlightBones = useMemo(() => undefined, []);
 
   const muscleOverrideHighlights = useMemo(() => {
     const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);

@@ -832,6 +832,10 @@ export default function PhysioGPT() {
   const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
   const [showUnifiedChainPanel, setShowUnifiedChainPanel] = useState(false);
   const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
+  // Task #399b — L/R/Both side selector for kinetic chains in the Explorer tab,
+  // so clinicians can isolate unilateral pathways (e.g. only the right
+  // superficial back line) instead of always seeing both sides at once.
+  const [selectedChainSide, setSelectedChainSide] = useState<'both' | 'left' | 'right'>('both');
   const [forceAiSuggestions, setForceAiSuggestions] = useState<string | null>(null);
   const [forceAiLoading, setForceAiLoading] = useState(false);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
@@ -10647,13 +10651,24 @@ ${ddxList}`;
       const kineticChain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
       const mapping = KINETIC_TO_MYOFASCIAL[selectedChainId] ?? {};
       const kineticColor = kineticChain?.color ?? '#22c55e';
+      // Explorer-selected kinetic chains take precedence over the existing
+      // myofascial-tab colours so the user sees a single coherent chain
+      // colour across the whole pathway.
       const addMuscle = (muscleId: string) => {
-        if (seen.has(muscleId)) return;
-        seen.add(muscleId);
-        groups.push(muscleId);
+        if (!seen.has(muscleId)) {
+          seen.add(muscleId);
+          groups.push(muscleId);
+        }
         colors[muscleId] = kineticColor;
       };
+      const sideSuffix = selectedChainSide === 'left' ? '_l' : selectedChainSide === 'right' ? '_r' : null;
+      const muscleMatchesSide = (muscleId: string) => {
+        if (!sideSuffix) return true;
+        if (muscleId.endsWith('_l') || muscleId.endsWith('_r')) return muscleId.endsWith(sideSuffix);
+        return true;
+      };
       for (const myoId of mapping.chains ?? []) {
+        if (sideSuffix && (myoId.endsWith('_l') || myoId.endsWith('_r')) && !myoId.endsWith(sideSuffix)) continue;
         const chain = MYOFASCIAL_CHAINS.find(c => c.id === myoId);
         if (!chain) continue;
         for (const link of chain.links) addMuscle(link.muscleId);
@@ -10661,12 +10676,15 @@ ${ddxList}`;
       for (const slingId of mapping.slings ?? []) {
         const sling = FUNCTIONAL_SLINGS.find(s => s.id === slingId);
         if (!sling) continue;
-        for (const [a, b] of sling.pairs) { addMuscle(a); addMuscle(b); }
+        for (const [a, b] of sling.pairs) {
+          if (muscleMatchesSide(a)) addMuscle(a);
+          if (muscleMatchesSide(b)) addMuscle(b);
+        }
       }
     }
 
     return { groups, colors };
-  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds, selectedChainId]);
+  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds, selectedChainId, selectedChainSide]);
 
   // Task #389 — Sling overlay used to feed every muscle in the selected sling
   // into the muscle-glow pipeline, which clones the GLB body-mesh material
@@ -13840,6 +13858,8 @@ ${ddxList}`;
                 painTensionContributors={painTensionContributors}
                 selectedChainId={selectedChainId}
                 setSelectedChainId={setSelectedChainId}
+                selectedChainSide={selectedChainSide}
+                setSelectedChainSide={setSelectedChainSide}
                 clinicalConsequences={clinicalConsequences}
               />
             )}

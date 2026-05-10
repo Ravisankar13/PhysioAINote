@@ -10889,10 +10889,16 @@ export default function PureThreeGLBViewer({
           const origMat = mesh.material as THREE.MeshStandardMaterial;
           if (origMat) {
             const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
-            clonedMat.emissive = new THREE.Color(colorHex);
-            clonedMat.emissiveIntensity = 0.5;
+            // Task #399b — boosted emissive from 0.5 → 0.85 and tinted the
+            // base diffuse colour toward the chain colour so chain-painted
+            // muscles read clearly as the selected chain colour at a glance,
+            // not just as a faint glow on top of the GLB skin tone.
+            const chainColor = new THREE.Color(colorHex);
+            clonedMat.emissive = chainColor;
+            clonedMat.emissiveIntensity = 0.85;
+            clonedMat.color = chainColor.clone().lerp(new THREE.Color('#ffffff'), 0.35);
             clonedMat.transparent = true;
-            clonedMat.opacity = 0.85;
+            clonedMat.opacity = 0.95;
             clonedMat.needsUpdate = true;
 
             biomechanicalHighlightRef.current.push({

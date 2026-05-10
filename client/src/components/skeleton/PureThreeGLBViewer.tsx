@@ -87,7 +87,7 @@ export interface CameraAngleConfig {
 }
 
 export const CAMERA_PRESETS: Record<CameraAngle, CameraAngleConfig> = {
-  front: { position: { x: 0, y: -0.3, z: 2.5 }, lookAt: { x: 0, y: -0.3, z: 0 }, label: 'Front View' },
+  front: { position: { x: 0, y: -0.3, z: 7.0 }, lookAt: { x: 0, y: -0.3, z: 0 }, label: 'Front View' },
   back: { position: { x: 0, y: -0.3, z: -2.5 }, lookAt: { x: 0, y: -0.3, z: 0 }, label: 'Back View' },
   left: { position: { x: -2.5, y: -0.3, z: 0 }, lookAt: { x: 0, y: -0.3, z: 0 }, label: 'Left Side' },
   right: { position: { x: 2.5, y: -0.3, z: 0 }, lookAt: { x: 0, y: -0.3, z: 0 }, label: 'Right Side' },
@@ -157,7 +157,7 @@ export interface AnatomicalRegionConfig {
 
 export const ANATOMICAL_REGION_PRESETS: Record<AnatomicalRegion, AnatomicalRegionConfig> = {
   full_body: { 
-    position: { x: 0, y: -0.3, z: 2.2 }, 
+    position: { x: 0, y: -0.3, z: 7.0 }, 
     lookAt: { x: 0, y: -0.3, z: 0 }, 
     label: 'Full Body',
     icon: '🦴',
@@ -8964,7 +8964,8 @@ export default function PureThreeGLBViewer({
             // Auto-fit model to the camera frame: target ~1.6 units tall, centered horizontally,
             // bottom-aligned around y=-1.0 so it sits within the front-view CAMERA_PRESETS frame.
             // This makes the viewer work for arbitrary GLBs (e.g. Mixamo Soldier ~1.7m, custom anatomical ~1m).
-            const TARGET_HEIGHT = 1.6;
+            const isXbot = modelPath.includes('xbot');
+            const TARGET_HEIGHT = isXbot ? 1.6 : 0.12;
             const TARGET_BOTTOM_Y = -1.0;
             const fitBox = new THREE.Box3().setFromObject(model);
             const fitSize = fitBox.getSize(new THREE.Vector3());
@@ -8982,6 +8983,14 @@ export default function PureThreeGLBViewer({
             }
             scene.add(model);
             model.updateMatrixWorld(true);
+
+            // Zoom out more for non-xbot (skeleton_character) when not in camera pose mode
+            if (!isXbot && camera) {
+              camera.position.z = 12.0;
+              if (sceneRef.current?.controls) {
+                sceneRef.current.controls.update();
+              }
+            }
 
             if (muscleMeshes.length > 0 && splitMuscleGroupsRef.current.size === 0) {
               try {

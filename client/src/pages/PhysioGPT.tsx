@@ -52,7 +52,6 @@ import {
   Crosshair,
   Activity,
   Weight,
-  Scan,
   Camera,
   CameraOff,
   Pause,
@@ -71,7 +70,6 @@ import {
   ExternalLink,
   Pill,
   Microscope,
-  Link2,
   FlaskConical,
   GraduationCap,
   Leaf,
@@ -14682,21 +14680,6 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${correlationMode ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !correlationMode;
-                  setCorrelationMode(newMode);
-                  if (newMode) {
-                    toast({ title: "Clinical Correlation", description: "Cross-system analysis active. Place pain markers to see correlated chains, muscles, forces, and root cause analysis." });
-                  }
-                }}
-              >
-                <Network className="h-3 w-3 mr-1" />
-                {correlationMode ? 'Correlate On' : 'Correlate'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
                 className={`h-7 text-xs shadow-sm ${tissueViewMode ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   if (tissueViewMode) {
@@ -14711,39 +14694,6 @@ ${ddxList}`;
               >
                 <Microscope className="h-3 w-3 mr-1" />
                 Tissue
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showRiskDashboard ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowRiskDashboard(!showRiskDashboard)}
-              >
-                <Shield className="h-3 w-3 mr-1" />
-                Risk
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showInjuryMechanism ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowInjuryMechanism(!showInjuryMechanism)}
-              >
-                <Link2 className="h-3 w-3 mr-1" />
-                Mechanism
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showSimTimeline ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  if (showSimTimeline) {
-                    setTimelinePlaybackState(null);
-                    setConditionPhases(null);
-                  }
-                  setShowSimTimeline(!showSimTimeline);
-                }}
-              >
-                <Clock className="h-3 w-3 mr-1" />
-                Timeline
               </Button>
               <Button
                 variant="secondary"
@@ -15062,16 +15012,6 @@ ${ddxList}`;
               >
                 <Bone className="h-3 w-3 mr-1" />
                 Reset Skeleton
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-7 text-xs bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700 shadow-sm"
-                onClick={handleAnalyzeSkeleton}
-                disabled={isStreaming}
-              >
-                <Scan className="h-3 w-3 mr-1" />
-                Analyze Skeleton
               </Button>
               </>
               )}

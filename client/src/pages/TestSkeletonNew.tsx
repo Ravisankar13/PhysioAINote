@@ -42,6 +42,9 @@ import ClinicalIntakePanel, { ClinicalIntakeData } from "@/components/skeleton/C
 import ClinicalAssessmentResults from "@/components/skeleton/ClinicalAssessmentResults";
 import { MovementPatternRecognizer, MovementAnalysisResult } from "@/lib/movementPatternRecognition";
 import { StaticPostureAnalyzer } from "@/lib/staticPostureAnalyzer";
+import JointAngleEditor, { type BoneMorphologyId } from "@/components/skeleton/JointAngleEditor";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 
 interface GLBErrorBoundaryProps {
   children: ReactNode;
@@ -247,6 +250,12 @@ export default function TestSkeletonNew() {
     shoulders: false,
     elbows: false,
   });
+  const [bilateralMirror, setBilateralMirror] = useState(false);
+  // Shared bone-morphology selection (Task #212): keeps the 3D viewer's
+  // pose-mode bone selection in sync with the JointAngleEditor sidebar so
+  // selecting in either surface mirrors in the other.
+  const [selectedBoneMorphology, setSelectedBoneMorphology] = useState<BoneMorphologyId | null>(null);
+  const [advancedSlidersOpen, setAdvancedSlidersOpen] = useState(false);
 
   const [animationState, setAnimationState] = useState<AnimationState>({
     isPlaying: false,
@@ -1833,6 +1842,8 @@ export default function TestSkeletonNew() {
                     modelConfig={effectiveModelConfig} 
                     className="w-full h-full"
                     animationState={animationState}
+                    selectedBoneSegmentId={selectedBoneMorphology}
+                    onSelectedBoneSegmentChange={setSelectedBoneMorphology}
                     onAnimationFrame={handleAnimationFrame}
                     biomechanicsData={biomechanicsData}
                     muscleVisibility={muscleVisibility}
@@ -3067,17 +3078,70 @@ export default function TestSkeletonNew() {
       </Card>
       )}
 
-      {/* Joint Parameters - Sliders Panel (Above Biomechanics) */}
-      <Card className="mt-6">
+      {/* Quick Joint Angle Editor - HUD-paired control surface */}
+      <div className="mt-6">
+        <JointAngleEditor
+          modelConfig={effectiveModelConfig}
+          onAngleChange={(joint, property, value) => handleSliderChange(joint, property, [value])}
+          onJumpToJoint={(joint) => {
+            setActiveJointGroup(joint as JointGroup);
+            const regionMap: Record<string, AnatomicalRegion> = {
+              spine: 'lumbar_spine', neck: 'cervical_spine', pelvis: 'pelvis',
+              leftHip: 'left_hip', rightHip: 'right_hip',
+              leftKnee: 'left_knee', rightKnee: 'right_knee',
+              leftAnkle: 'left_ankle', rightAnkle: 'right_ankle',
+              leftShoulder: 'left_shoulder', rightShoulder: 'right_shoulder',
+              leftScapula: 'left_scapula', rightScapula: 'right_scapula',
+              leftElbow: 'left_elbow', rightElbow: 'right_elbow',
+              leftWrist: 'left_wrist', rightWrist: 'right_wrist',
+            };
+            const region = regionMap[joint];
+            if (region) setZoomToRegion(region);
+          }}
+          bilateralLink={bilateralMirror}
+          onBilateralLinkChange={setBilateralMirror}
+          selectedBone={selectedBoneMorphology}
+          onSelectedBoneChange={setSelectedBoneMorphology}
+          focusJoint={(() => {
+            if (!zoomToRegion) return null;
+            const m: Record<string, string> = {
+              cervical_spine: 'neck', thoracic_spine: 'spine', lumbar_spine: 'spine',
+              pelvis: 'pelvis',
+              left_hip: 'leftHip', right_hip: 'rightHip',
+              left_knee: 'leftKnee', right_knee: 'rightKnee',
+              left_ankle: 'leftAnkle', right_ankle: 'rightAnkle',
+              left_shoulder: 'leftShoulder', right_shoulder: 'rightShoulder',
+              left_scapula: 'leftScapula', right_scapula: 'rightScapula',
+              left_elbow: 'leftElbow', right_elbow: 'rightElbow',
+              left_wrist: 'leftWrist', right_wrist: 'rightWrist',
+            };
+            return m[zoomToRegion as string] ?? null;
+          })()}
+        />
+      </div>
+
+      {/* Advanced Sliders (collapsible legacy panel) */}
+      <Collapsible open={advancedSlidersOpen} onOpenChange={setAdvancedSlidersOpen} className="mt-6">
+        <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Joint Parameters</CardTitle>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left hover:text-primary"
+                data-testid="btn-toggle-advanced-sliders"
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${advancedSlidersOpen ? '' : '-rotate-90'}`} />
+                <CardTitle>Advanced Sliders &amp; Preset Poses</CardTitle>
+              </button>
+            </CollapsibleTrigger>
             <Button onClick={resetAll} variant="outline" size="sm">
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset All
             </Button>
           </div>
         </CardHeader>
+        <CollapsibleContent>
         <CardContent>
           <Tabs defaultValue="spine" className="w-full">
             <TabsList className="grid grid-cols-3 w-full">
@@ -4416,7 +4480,9 @@ export default function TestSkeletonNew() {
               </TabsContent>
             </Tabs>
         </CardContent>
+        </CollapsibleContent>
       </Card>
+      </Collapsible>
 
       {/* Biomechanical Analysis Panel */}
       <div className="mt-6">

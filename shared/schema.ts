@@ -6,9 +6,12 @@ import {
   timestamp,
   date,
   json,
+  jsonb,
   boolean,
   pgEnum,
   numeric,
+  uniqueIndex,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -3150,6 +3153,50 @@ export const tournamentMatchRelations = relations(tournamentMatches, ({ one }) =
   }),
 }));
 
+// PhysioGPT Case Snapshot — full workspace state captured per conversation.
+// Shape is intentionally loose (all fields optional, unknown payloads) so new
+// panels can be added without schema churn. Validation at the API layer just
+// confirms the value is an object.
+export interface PhysioGptCaseSnapshot {
+  version?: number;
+  modelConfig?: unknown;
+  painMarkers?: unknown;
+  compromisedTissues?: unknown;
+  scarMarkers?: unknown;
+  adhesionBands?: unknown;
+  romMeasurements?: unknown;
+  muscleOverrides?: unknown;
+  slingActivationOverrides?: unknown;
+  bodyWeightKg?: number;
+  externalLoadKg?: number;
+  externalLoadHand?: 'left' | 'right' | 'both';
+  clinicalHighlights?: unknown;
+  subjectiveHistoryInput?: string;
+  patientContextState?: unknown;
+  patientFactorOverrides?: unknown;
+  movementFindings?: unknown;
+  selectedRegion?: string | null;
+  planCartItems?: unknown;
+  // Terminal autopilot status for the case so reopening a settled
+  // conversation does not auto-rerun the AI chain. Restricted to
+  // terminal states — transient states ('idle' / 'running') must
+  // not be persisted because they would falsely re-arm the chain on
+  // hydration.
+  autopilotStatus?: 'done' | 'converged' | 'error';
+  // Persisted structural input hash from the last successful reasoning
+  // run. Restored so the in-memory triggerKey dedup still recognises the
+  // case as already-handled after a reload / conversation switch.
+  lastReasoningTrigger?: string;
+  // Reserved for forward compatibility — additional panels add fields here.
+  [key: string]: unknown;
+}
+
+export const physioGptCaseSnapshotSchema = z
+  .record(z.unknown())
+  .refine((v) => v !== null && typeof v === "object" && !Array.isArray(v), {
+    message: "caseSnapshot must be a JSON object",
+  });
+
 // PhysioGPT Chat Conversations Schema
 export const physioGptConversations = pgTable("physiogpt_conversations", {
   id: serial("id").primaryKey(),
@@ -3157,6 +3204,7 @@ export const physioGptConversations = pgTable("physiogpt_conversations", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  caseSnapshot: jsonb("case_snapshot").$type<PhysioGptCaseSnapshot>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -4098,7 +4146,9 @@ export const moduleTypeEnum = pgEnum("module_type", [
   "case_study",
 ]);
 
-export const assessmentTypeEnum = pgEnum("assessment_type", [
+// Renamed from "assessment_type" to avoid colliding with the movement-analysis
+// enum of the same name in shared/movementAnalysisSchema.ts (Task #380).
+export const educationAssessmentTypeEnum = pgEnum("education_assessment_type", [
   "quiz",
   "case_analysis",
   "practical_demo",
@@ -4242,7 +4292,7 @@ export const assessments = pgTable("assessments", {
     .references(() => courseModules.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
-  type: assessmentTypeEnum("type").default("quiz").notNull(),
+  type: educationAssessmentTypeEnum("type").default("quiz").notNull(),
   questions: json("questions").$type<Array<{
     id: string;
     question: string;
@@ -4573,6 +4623,76 @@ export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type InsertQuizAttempt = z.infer<typeof insertQuizAttemptSchema>;
 export type DiscussionUpvote = typeof discussionUpvoteTracking.$inferSelect;
 export type InsertDiscussionUpvote = z.infer<typeof insertDiscussionUpvoteSchema>;
+
+// ---------------------------------------------------------------------------
+// Legacy tables retained in the live database
+// ---------------------------------------------------------------------------
+// These three tables exist in production but had been dropped from the schema
+// file at some point. Drizzle's `db:push` rename detector therefore treated
+// the new `assessment_sessions` table as a possible rename candidate and
+// blocked on an interactive prompt. Re-declaring them here as bare table
+// definitions matching the current production columns marks them as
+// "preserved", removes the rename ambiguity, and keeps the data intact.
+// (Task #380 — see "Gotchas" in replit.md.)
+//
+//  - `session`        : connect-pg-simple express-session store, actively
+//                       used by `server/auth.ts`. Do NOT drop.
+//  - `exercises`      : legacy AI-exercise table (272 rows). Not currently
+//                       queried via Drizzle; kept for historical content.
+//  - `temp_soap_note` : legacy stub table (1 row). Kept for safety; not
+//                       queried.
+export const sessionDifficultyEnum = pgEnum("difficulty", [
+  "beginner",
+  "intermediate",
+  "advanced",
+]);
+export const exerciseTypeEnum = pgEnum("exercise_type", [
+  "strength",
+  "mobility",
+  "motor control",
+  "functional",
+  "isometric",
+  "eccentric",
+  "neural",
+  "sensorimotor",
+  "power",
+  "endurance",
+  "stretching",
+  "other",
+]);
+
+export const sessionStore = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire").notNull(),
+});
+
+export const exercises = pgTable("exercises", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  bodyPart: bodyPartEnum("body_part").default("general").notNull(),
+  targetMuscles: text("target_muscles").notNull(),
+  difficulty: sessionDifficultyEnum("difficulty").default("beginner").notNull(),
+  instructions: text("instructions").notNull(),
+  precautions: text("precautions"),
+  repetitions: text("repetitions"),
+  sets: text("sets"),
+  duration: text("duration"),
+  imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  aiGenerated: boolean("ai_generated").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  exerciseType: exerciseTypeEnum("exercise_type").default("other"),
+  equipment: text("equipment").array(),
+  restPeriod: text("rest_period"),
+});
+
+export const tempSoapNote = pgTable("temp_soap_note", {
+  id: integer("id"),
+  bodyPart: text("bodyPart"),
+});
 
 // Adaptive Joint Assessment Sessions
 // Main assessment session table
@@ -5195,6 +5315,57 @@ export const patientCloneRelations = relations(patientClones, ({ one }) => ({
   }),
 }));
 
+// Electrophysical Engine condition presets — per-clinician (and optionally
+// per-patient) saved Condition + context bundles for the Electro Rx tab so
+// clinicians don't have to re-type the diagnosis / contraindications every
+// session for the same patient.
+export const electroConditionPresets = pgTable("electro_condition_presets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Optional patient scope. When null, the preset is user-global ("any
+  // patient"); when set, it's scoped to that patient/conversation id.
+  patientId: integer("patient_id"),
+  name: text("name").notNull(),
+  condition: text("condition").notNull().default(""),
+  stage: text("stage").notNull().default(""),
+  irritability: text("irritability").notNull().default(""),
+  tissueType: text("tissue_type").notNull().default(""),
+  primaryGoal: text("primary_goal").notNull().default(""),
+  contraindicationFlags: jsonb("contraindication_flags").$type<string[]>().notNull().default([]),
+  lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  // Persistence is keyed by (userId, patientId, name). The matching DB
+  // index is created with `NULLS NOT DISTINCT` (Postgres 15+) so user-global
+  // presets (patientId IS NULL) also enforce name uniqueness per user — the
+  // installed Drizzle build doesn't expose `.nullsNotDistinct()` on
+  // uniqueIndex, so the NULLS NOT DISTINCT clause is applied at the SQL
+  // level (see migration / db setup) and this declaration documents the
+  // intended uniqueness contract.
+  userPatientNameUnique: uniqueIndex('electro_condition_presets_user_patient_name_unique')
+    .on(table.userId, table.patientId, table.name),
+}));
+
+export const insertElectroConditionPresetSchema = createInsertSchema(electroConditionPresets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastUsedAt: true,
+});
+
+export type InsertElectroConditionPreset = z.infer<typeof insertElectroConditionPresetSchema>;
+export type ElectroConditionPreset = typeof electroConditionPresets.$inferSelect;
+
+export const electroConditionPresetRelations = relations(electroConditionPresets, ({ one }) => ({
+  user: one(users, {
+    fields: [electroConditionPresets.userId],
+    references: [users.id],
+  }),
+}));
+
 // Patient Presentation - Links SOAP notes to skeleton visualization with extracted movement restrictions
 export const patientPresentations = pgTable("patient_presentations", {
   id: serial("id").primaryKey(),
@@ -5351,3 +5522,1058 @@ export const savedSkeletonConfigurationRelations = relations(savedSkeletonConfig
     references: [patientPresentations.id],
   }),
 }));
+
+export interface NaturalTimelineFollowUpQuestion {
+  id: string;
+  question: string;
+  options?: string[];
+  clinical_relevance: string;
+}
+
+export type NaturalTimelineHealingClass = "resolves" | "partially_resolves" | "persists" | "worsens";
+
+export interface NaturalTimelineFinding {
+  finding_id: string;
+  label: string;
+  tissue_type?: "tendon" | "nerve" | "joint" | "fascia" | "muscle" | "ligament" | "disc" | "bone" | "generic";
+  tissue_id?: string;
+  healing_class: NaturalTimelineHealingClass;
+  expected_weeks_to_resolution: number | null;
+  residual_deficit_percent: number;
+  phase_durations_weeks?: {
+    inflammatory?: number;
+    proliferative?: number;
+    remodeling?: number;
+    maturation?: number;
+  };
+  rationale: string;
+}
+
+export interface NaturalTimelineRequestContext {
+  clinical_summary?: string;
+  main_complaint?: string;
+  pain_markers?: Array<{
+    anatomical_label: string;
+    symptom_type?: string;
+    pain_mechanism?: string;
+    description?: string;
+    severity?: number;
+  }>;
+  compromised_tissues?: Array<{
+    tissue_type: string;
+    tissue_id: string;
+    severity: number;
+    rationale?: string;
+  }>;
+  region_highlights?: Array<{ region: string; type?: string; severity?: number; label?: string }>;
+  postural_deviations?: Record<string, number>;
+  sling_weak_links?: Array<{ sling: string; weakLink: string; severity?: number }>;
+  sling_activation_overrides?: Array<{
+    sling: string;
+    activation_percent: number;
+    band: string;
+    deficit_severity: number;
+  }>;
+  joint_deviations?: Array<{ joint: string; parameter: string; degrees: number }>;
+  has_nerve_root?: boolean;
+  patient_factors?: Record<string, string | number | boolean | null | undefined>;
+}
+
+export interface NaturalTimelineQA {
+  question: string;
+  answer: string;
+}
+
+export interface NaturalTimelineRequest {
+  context: NaturalTimelineRequestContext;
+  qa_history?: NaturalTimelineQA[];
+  /** Optional patient-context payload (Task #226). Mirrors the field
+   *  on CaseSpecificTreatmentPlanRequest so downstream consumers have
+   *  consistent typing across the AI panels. */
+  patient_context?: PatientContextPayload;
+}
+
+export interface NaturalTimelineResult {
+  per_finding: NaturalTimelineFinding[];
+  overall_window_weeks: { expected: number; best: number; worst: number };
+  residual_deficit_summary: {
+    overall_percent: number;
+    description: string;
+  };
+  chronicity_risk_percent: number;
+  recurrence_risk_percent: number;
+  flare_risk_percent: number;
+  rationale: string;
+  confidence_percent: number;
+  follow_up_questions: NaturalTimelineFollowUpQuestion[];
+  incorporated_factors: string[];
+}
+
+/** Case-specific per-phase treatment item (technique or exercise) emitted by
+ *  the Case-Specific Treatment Plan engine. Each item references the actual
+ *  finding ids / tissue ids / sling ids it targets so the dashboard can show
+ *  WHY this prescription exists for THIS patient (rather than a generic
+ *  textbook list). */
+export interface CaseSpecificTreatmentItem {
+  /** Concrete clinical name, e.g. "Supraspinatus isometric @ 30° abd",
+   *  "Grade III post-glide R glenohumeral", "Sciatic nerve slider supine". */
+  name: string;
+  /** What this item is intended to change (tissue/finding/sling/posture). */
+  target: string;
+  /** Sets × reps × hold/intensity, frequency, or hands-on dosage. */
+  dosage: string;
+  /** When/how to progress or regress within this phase. */
+  progression?: string;
+  /** 1-2 sentence per-finding healing rationale tying the item to tissue
+   *  biology + the patient's specific drivers. */
+  rationale: string;
+  /** finding_ids from the AI natural-timeline this item is targeting. */
+  finding_ids?: string[];
+  /** tissue_ids from compromised_tissues this item is targeting. */
+  tissue_ids?: string[];
+  /** sling names from sling_weak_links this item is targeting. */
+  sling_ids?: string[];
+}
+
+export interface CaseSpecificPhasePlan {
+  /** Stable archetype stage id (e.g. "calm_prepare", "build_capacity",
+   *  "restore_power", "return_to_sport"). Matches RecoveryStage.id. */
+  phase_id: string;
+  /** Human label (e.g. "Calm & Prepare"). */
+  phase_name: string;
+  /** Case-specific one-line goal — references the actual tissues and
+   *  drivers, not a generic textbook goal. */
+  goal: string;
+  /** 1-2 sentence narrative tying this phase's plan to the patient's
+   *  natural-history verdict + clinical picture. */
+  rationale: string;
+  /** Concrete manual therapy / hands-on / modality items. */
+  techniques: CaseSpecificTreatmentItem[];
+  /** Concrete exercise prescriptions with dosage. */
+  exercises: CaseSpecificTreatmentItem[];
+  /** Objective entry/exit criteria for this phase, written in the
+   *  patient's own clinical units (e.g. "Pain ≤3/10 on isometric ER",
+   *  "Single-leg balance >20s with eyes open"). */
+  criteria?: string[];
+  /** Per-finding healing notes for this phase, e.g. "Supraspinatus:
+   *  protect inflammatory phase, isometrics only". */
+  finding_notes?: Array<{ finding_id: string; note: string }>;
+}
+
+export interface CaseSpecificTreatmentPlan {
+  phases: CaseSpecificPhasePlan[];
+  /** Overall 2-3 sentence narrative for the case as a whole. */
+  case_summary: string;
+  /** AI confidence in this case-specific plan. */
+  confidence_percent: number;
+}
+
+export interface CaseSpecificTreatmentPlanRequest {
+  context: NaturalTimelineRequestContext;
+  natural_timeline: NaturalTimelineResult;
+  /** Archetype stage labels in order so the AI emits one phase plan per
+   *  card with matching ids. */
+  phases: Array<{ id: string; name: string; subtitle?: string }>;
+  archetype_id?: string;
+  condition_label?: string;
+  qa_history?: NaturalTimelineQA[];
+  patient_context?: PatientContextPayload;
+}
+
+/** AI-generated patient-context prompt category. Drives icon / colour
+ *  choice in the Patient Context card so the clinician can see WHY the
+ *  AI is asking each question (e.g. healing time vs red-flag screen). */
+export type PatientContextPromptCategory =
+  | 'healing_time'
+  | 'red_flag'
+  | 'exercise_dosing'
+  | 'contraindication'
+  | 'compensation'
+  | 'lifestyle'
+  | 'other';
+
+/** A single condition-specific prompt the AI thinks would change the
+ *  case if answered. Generated by /api/patient-context/prompts. */
+export interface PatientContextPrompt {
+  id: string;
+  prompt: string;
+  rationale: string;
+  category?: PatientContextPromptCategory;
+  options?: string[];
+}
+
+/** A clinician-supplied answer to one AI-generated patient-context
+ *  prompt. The full prompt + rationale are echoed back so downstream
+ *  endpoints (which never see the prompts list directly) can quote
+ *  them when injecting context into the model. */
+export interface PatientContextAnswer {
+  prompt_id: string;
+  prompt: string;
+  rationale?: string;
+  category?: PatientContextPromptCategory;
+  answer: string;
+}
+
+/** Merged patient-context payload. Sent into every downstream AI call
+ *  (prediction re-run, natural timeline, case-specific plan, recovery
+ *  sim) so outputs are personalised — not just keyed to a diagnosis. */
+export interface PatientContextPayload {
+  /** Free-form clinician-typed paragraph. */
+  free_form: string;
+  /** Per-prompt answered context. */
+  answers: PatientContextAnswer[];
+}
+
+export interface PatientContextPromptsRequest {
+  /** Original clinical description text the clinician submitted. */
+  description: string;
+  /** AI-extracted clinical summary from the prediction (if any). */
+  clinical_summary?: string;
+  /** Lightweight finding excerpts so the prompt generator knows what
+   *  body region / tissue / mechanism is in play without re-running
+   *  the full prediction. */
+  pain_markers?: Array<{ anatomical_label: string; description?: string; symptom_type?: string }>;
+  compromised_tissues?: Array<{ tissue_type: string; tissue_id: string; rationale?: string }>;
+  region_highlights?: Array<{ region: string; type?: string; label?: string }>;
+}
+
+export interface PatientContextPromptsResult {
+  prompts: PatientContextPrompt[];
+  generated_at: string;
+}
+
+// =============================================================================
+// Optimal Loading Engine — Tendinopathy (Task #231)
+// =============================================================================
+
+/** Tendinopathy sites supported by the Optimal Loading Engine v1. */
+export type TendinopathySite =
+  | 'achilles'
+  | 'patellar'
+  | 'gluteal'
+  | 'proximal_hamstring'
+  | 'rotator_cuff'
+  | 'lateral_elbow'
+  | 'medial_elbow';
+
+export type LoadingEngineApplicability = 'tendinopathy' | 'not_applicable';
+
+/** Loading-relevant clinical history fields gathered into Patient Context. */
+export interface LoadingRelevantHistory {
+  /** Free-text list of current medications. */
+  medications?: string[];
+  /** Flagged drug classes that affect tendon loading. Computed if not provided. */
+  medicationFlags?: {
+    statins?: boolean;
+    fluoroquinolones?: boolean;
+    corticosteroids?: boolean;
+    aromataseInhibitors?: boolean;
+  };
+  /** Metabolic conditions affecting tendon recovery. */
+  metabolicConditions?: {
+    diabetes?: boolean;
+    thyroid?: boolean;
+    hypercholesterolaemia?: boolean;
+    obesity?: boolean;
+  };
+  /** Hormonal / menopause status. */
+  hormonalStatus?: {
+    sex?: 'male' | 'female' | 'other';
+    menopauseStatus?: 'premenopausal' | 'perimenopausal' | 'postmenopausal' | 'na';
+    onHrt?: boolean;
+  };
+  /** Prior injury at the SAME site (true = recurrence risk). */
+  priorInjurySameSite?: boolean;
+  /** Recent training / loading history. */
+  trainingHistory?: {
+    weeklyLoadingHours?: number;
+    recentLoadSpikePct?: number; // % increase week-on-week
+    deconditioned?: boolean;
+  };
+}
+
+export interface LoadingPatientFactors {
+  age?: number;
+  history: LoadingRelevantHistory;
+  /** Current irritability (low / moderate / high). */
+  irritability?: 'low' | 'moderate' | 'high';
+  /** Current recovery phase (Cook staging or similar). */
+  recoveryPhase?: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport';
+}
+
+export type LoadingIntensityUnit = '%1RM' | '%MVC' | 'RIR' | 'pain_monitored' | 'isometric_hold' | 'bodyweight';
+
+export type LoadingConfidenceBand =
+  | 'rct_supported'      // direct RCT evidence for this dose at this site
+  | 'protocol_supported' // established protocol (Alfredson, Silbernagel, HSR) extrapolated to this presentation
+  | 'expert_consensus'   // consensus / clinical reasoning, limited primary evidence
+  | 'extrapolation';     // extrapolated from related conditions
+
+export type LoadingEvidenceTier = 'A' | 'B' | 'C' | 'Expert';
+
+export interface LoadingTempo {
+  eccentricSec: number;
+  isometricSec: number;
+  concentricSec: number;
+}
+
+export interface LoadingProgressionRule {
+  trigger: string;
+  nextStep: string;
+  reviewAfterSessions: number;
+}
+
+export interface LoadingFactorContribution {
+  factor: string;
+  effect: string;
+  rationale: string;
+}
+
+/**
+ * One precise dose for one exercise for a specific week (or per day if the
+ * exercise is prescribed daily).
+ */
+export interface OptimalLoadPrescription {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  weekIndex: number; // 0 = current week (committed)
+  daysPerWeek: number;
+  intensity: {
+    value: number | string;
+    unit: LoadingIntensityUnit;
+    label: string;
+  };
+  sets: number;
+  reps: string; // e.g. "6-8" or "30s hold"
+  tempo: LoadingTempo;
+  frequencyPerDay?: number;
+  painCeilingNrs: number; // 0-10 NRS allowed during/after exercise
+  progression: LoadingProgressionRule;
+  confidence: LoadingConfidenceBand;
+  evidenceTier: LoadingEvidenceTier;
+  factorContributions: LoadingFactorContribution[];
+  rationale: string;
+  /** True when a clinician override has set this line; sticks across recomputes. */
+  isOverride: boolean;
+  overrideAuthorId?: string;
+  overrideAt?: string;
+  /** True for the rolling-commit window (weeks 0-1); false for the projection. */
+  isCommitted: boolean;
+}
+
+export interface TendinopathySwapRequest {
+  /** Index of the exercise in the proposed list that needs replacement. */
+  proposedExerciseIndex: number;
+  proposedExerciseId: string;
+  proposedExerciseName: string;
+  reason: string;
+  preferredCategory: 'isometric' | 'isotonic' | 'eccentric' | 'energy_storage' | 'mobility';
+  preferredBodyParts: string[];
+}
+
+export interface TendinopathyLoadingPlan {
+  applicability: LoadingEngineApplicability;
+  /** Human-readable single-line message when not applicable. */
+  notApplicableMessage?: string;
+  /** Recommended primary intervention name when not applicable. */
+  notApplicableSuggestedFocus?: string;
+  /** Site detected from condition text (when applicable). */
+  site?: TendinopathySite;
+  siteLabel?: string;
+  recoveryPhase?: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport';
+  recoveryPhaseLabel?: string;
+  irritability?: 'low' | 'moderate' | 'high';
+  /** Committed prescriptions (weeks 0–1). */
+  committed: OptimalLoadPrescription[];
+  /** Tentative projection (weeks 2–11 typical). */
+  projected: OptimalLoadPrescription[];
+  /** Committed window length in weeks (1 or 2). */
+  commitWindowWeeks: number;
+  /** Total horizon in weeks. */
+  horizonWeeks: number;
+  /** Swap requests the prescription engine should honour. */
+  swapRequests: TendinopathySwapRequest[];
+  /** High-level rationale for the whole plan. */
+  planRationale: string;
+  /** Cumulative explainability string (for AI handoff). */
+  explainabilitySummary: string;
+  /** Triggers that will auto-recompute. */
+  recomputeTriggers: string[];
+  generatedAt: string;
+  /** Hash of inputs — used to detect what changed since last compute. */
+  inputsHash: string;
+}
+
+export interface LoadingPlanDiffEntry {
+  exerciseId: string;
+  exerciseName: string;
+  weekIndex: number;
+  field: 'intensity' | 'sets' | 'reps' | 'tempo' | 'frequency' | 'pain_ceiling' | 'progression';
+  before: string;
+  after: string;
+  reason: string;
+}
+
+export interface LoadingPlanDiff {
+  changes: LoadingPlanDiffEntry[];
+  triggerReason: string;
+  beforeHash: string;
+  afterHash: string;
+  computedAt: string;
+}
+
+export interface TendinopathyLoadingRequest {
+  conditionName: string;
+  /** Optional explicit site (overrides condition-text detection). */
+  site?: TendinopathySite;
+  patientFactors: LoadingPatientFactors;
+  /** Exercises proposed by the AI Prescription engine. */
+  proposedExercises: Array<{
+    exerciseId: string;
+    exerciseName: string;
+    category?: string;
+    bodyParts?: string[];
+    /** Best-guess base dose from the prescription engine (informational only). */
+    baseSets?: number;
+    baseReps?: string;
+  }>;
+  /** Existing clinician overrides to preserve. */
+  overrides?: Array<Pick<OptimalLoadPrescription, 'exerciseId' | 'weekIndex'> & Partial<OptimalLoadPrescription>>;
+  /** Previous plan hash — for diff computation server-side. */
+  previousPlanHash?: string;
+  commitWindowWeeks?: 1 | 2;
+  horizonWeeks?: number; // default 10
+}
+
+export interface TendinopathyLoadingResponse {
+  plan: TendinopathyLoadingPlan;
+  diff?: LoadingPlanDiff;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Task #241 — Weekly check-ins for the recovery simulator
+// ────────────────────────────────────────────────────────────────────
+// One row per (caseId, week). Captures the clinician-logged actuals
+// (pain, flare severity, sessions completed vs prescribed, sleep, free
+// text) so the simulator can re-run from the most recent check-in week
+// using real adherence/symptom values instead of the static plan.
+export const recoveryWeeklyCheckIns = pgTable("recovery_weekly_check_ins", {
+  id: serial("id").primaryKey(),
+  // Owner of the check-in. Scoped per (userId, caseId, week) so one
+  // clinician's case data can never be read or modified by another.
+  userId: integer("user_id").notNull(),
+  caseId: text("case_id").notNull(),
+  week: integer("week").notNull(),
+  pain: integer("pain").notNull(),
+  flareSeverity: integer("flare_severity"),
+  sessionsCompleted: integer("sessions_completed").notNull(),
+  sessionsPrescribed: integer("sessions_prescribed").notNull(),
+  sleepHours: numeric("sleep_hours"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  userCaseWeekUnique: uniqueIndex("recovery_weekly_check_ins_user_case_week_unique").on(t.userId, t.caseId, t.week),
+}));
+
+// Coerce sleepHours — the only non-integer numeric on this row — into
+// a `number | null`. Drizzle stores `numeric` columns as strings, but
+// the API contract is "send a number or null"; an empty string used to
+// slip through the previous loose `z.union([z.number(), z.string()])`
+// schema and reach Postgres, which then threw an opaque 500 (see Task
+// #257). The preprocess below normalises null/undefined/blank-string
+// to `null` and parses any remaining string to a finite number, so
+// from this point onwards the value is guaranteed to be a real number
+// or `null` — never the literal `""`.
+const sleepHoursSchema = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed === '') return null;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : val; // let z.number() reject NaN
+    }
+    return val;
+  },
+  z.number().finite().min(0).max(24).nullable(),
+).optional();
+
+// Defensive integer parser used for every integer column on the row.
+// `z.number().int()` already rejects strings, but this preprocess
+// surfaces an explicit error for the common failure mode (an empty
+// string from a cleared `<Input type="number">`) so the route can
+// turn it into a clear 400 instead of relying on Postgres' opaque
+// "invalid input syntax for type integer: \"\"" message.
+function intField(min: number, max: number) {
+  return z.preprocess(
+    (val) => {
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return Number.NaN; // forces .number() to reject
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : Number.NaN;
+      }
+      return val;
+    },
+    z.number().int().min(min).max(max),
+  );
+}
+
+// Insert schema omits userId — it is server-injected from the
+// authenticated session, never trusted from the client payload.
+export const insertRecoveryWeeklyCheckInSchema = createInsertSchema(recoveryWeeklyCheckIns).omit({
+  id: true,
+  createdAt: true,
+  userId: true,
+}).extend({
+  caseId: z.string().min(1).max(200),
+  week: intField(0, 520),
+  pain: intField(0, 100),
+  flareSeverity: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '') return null;
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : Number.NaN;
+      }
+      return val;
+    },
+    z.number().int().min(0).max(100).nullable(),
+  ).optional(),
+  sessionsCompleted: intField(0, 100),
+  sessionsPrescribed: intField(0, 100),
+  sleepHours: sleepHoursSchema,
+  notes: z.preprocess(
+    (val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        return trimmed === '' ? null : val;
+      }
+      return val;
+    },
+    z.string().max(2000).nullable(),
+  ).optional(),
+});
+
+export type InsertRecoveryWeeklyCheckIn = z.infer<typeof insertRecoveryWeeklyCheckInSchema>;
+export type RecoveryWeeklyCheckIn = typeof recoveryWeeklyCheckIns.$inferSelect;
+
+// =====================================================================
+// Task #281 — Case-Aware Research Engine v1
+//
+// Persists one synthesized, citation-backed answer per case. Cache key
+// is the deterministic content hash of the case (clinical text +
+// patient context). The same caseId is upserted on each refresh so a
+// case has at most one row in the cache at any time. Stale rows
+// (different `contentHash`) are still returned by GET so the UI can
+// flag them and offer a "Re-run" action.
+// =====================================================================
+export const caseResearchSyntheses = pgTable("case_research_syntheses", {
+  id: serial("id").primaryKey(),
+  caseId: text("case_id").notNull(),
+  userId: integer("user_id").notNull(),
+  contentHash: text("content_hash").notNull(),
+  // Free-text condition / diagnosis label used as the broadest tier
+  // and to render headings.
+  condition: text("condition").notNull(),
+  // The exact case summary fed to the engine — kept for debugging /
+  // explainability so the clinician can see what the AI was reasoning
+  // over.
+  caseSummary: text("case_summary").notNull(),
+  // AI-translated structured search phenotype derived from the raw
+  // condition + case summary. Captures the canonical biomedical
+  // wording, region, laterality, mechanism, aggravating factors and
+  // pain type. Persisted so the UI can display it ("Interpreted your
+  // case as…") and so the clinician can edit and re-run with their
+  // own version. Optional for backwards compatibility with rows
+  // written before Task #286 — the UI generates a sensible default.
+  phenotype: jsonb("phenotype").$type<{
+    canonicalCondition: { primary: string; synonyms: string[] };
+    region: string | null;
+    laterality: 'left' | 'right' | 'bilateral' | 'unspecified' | null;
+    mechanism: { phrases: string[]; soft: boolean };
+    aggravatingFactors: { phrases: string[]; soft: boolean };
+    painType: string | null;
+  }>(),
+  // AI-inferred discriminating variables, ranked by importance.
+  inferredVariables: jsonb("inferred_variables").$type<Array<{
+    label: string;
+    value: string;
+    importance: number;     // 1 = most important, drops last
+    dropFirstIfNeeded?: boolean;
+    queryTerms: string[];   // terms to AND into the search
+    rationale: string;
+  }>>().notNull(),
+  // Each tier of the query ladder that was actually executed (most
+  // specific first). The "winning" tier is the last one in this array
+  // since the engine stops as soon as it has enough evidence.
+  queriesRan: jsonb("queries_ran").$type<Array<{
+    tier: number;
+    label: string;
+    query: string;
+    droppedVariables: string[];
+    sources: Record<string, { count: number; ok: boolean; error?: string; query?: string }>;
+    paperCount: number;
+    seedUsed?: string;
+    kind?: 'full' | 'drop-soft' | 'broaden-seed' | 'drop-hard' | 'condition-only';
+  }>>().notNull(),
+  // Audit of every "broaden the seed" swap the engine tried during
+  // the ladder run. Mirrored from queriesRan for fast UI rendering.
+  // Empty array if the engine never had to broaden.
+  seedBroadenings: jsonb("seed_broadenings").$type<Array<{
+    tier: number;
+    from: string;
+    to: string;
+  }>>(),
+  // De-duplicated, ranked papers actually used in synthesis.
+  retrievedPapers: jsonb("retrieved_papers").$type<Array<{
+    citationNumber: number;     // 1-indexed; matches inline [N] in answer
+    source: 'pubmed' | 'openalex' | 'europepmc' | 'pedro' | 'semanticscholar' | 'crossref' | 'clinicaltrials';
+    externalId: string;         // pmid / openalex id / europepmc id / pedro id / s2 id / doi / nct
+    title: string;
+    authors: string[];
+    year: number | null;
+    journal: string | null;
+    abstract: string;
+    doi: string | null;
+    url: string;
+    openAccess: boolean;
+    matchedVariables: string[]; // labels of variables this paper covers
+    // Union of every source that contributed this record (e.g. PubMed
+    // + Semantic Scholar + CrossRef-filled). Always contains at least
+    // the primary `source`. Optional for backwards compatibility with
+    // rows persisted before Task #287.
+    mergedFromSources?: Array<'pubmed' | 'openalex' | 'europepmc' | 'pedro' | 'semanticscholar' | 'crossref' | 'clinicaltrials'>;
+    pedroScore?: number | null;
+    citationCount?: number | null;
+  }>>().notNull(),
+  // ClinicalTrials.gov v2 records — surfaced in their own
+  // "Active & recent trials" sub-section (not mixed into citations).
+  // Optional for backwards compatibility with rows persisted before
+  // Task #287; default to [] in the upsert layer.
+  retrievedTrials: jsonb("retrieved_trials").$type<Array<{
+    source: 'clinicaltrials';
+    nct: string;
+    title: string;
+    abstract: string;
+    status: string;
+    phase: string | null;
+    intervention: string | null;
+    primaryOutcome: string | null;
+    url: string;
+    sponsor: string | null;
+  }>>(),
+  synthesizedAnswer: text("synthesized_answer").notNull(),
+  // Confidence buckets per spec: High / Moderate / Low / Extrapolated.
+  confidence: text("confidence").notNull(),
+  confidenceReason: text("confidence_reason"),
+  // Task #301 — Active Movement Mode capacities. Per-joint, per-direction
+  // active capacity rows derived from the case (literature priors +
+  // GPT-4o synthesis). Optional: only populated once the clinician
+  // toggles into Movement Mode at least once for this case. Manual
+  // overrides also write back here so they persist across reloads.
+  activeCapacities: jsonb("active_capacities").$type<{
+    rows: Array<{
+      joint: string;
+      movement: string;
+      passiveRomMin: number;
+      passiveRomMax: number;
+      activeRomMin: number;
+      activeRomMax: number;
+      painfulArc: {
+        start: number;
+        end: number;
+        intensity: number;
+        /** Direction of joint motion that triggers pain. `ascending` = pain when the
+         *  angle is increasing, `descending` = pain when decreasing, `either`/omitted
+         *  = pain regardless of direction. Lets the AI encode e.g. PFPS knee descent
+         *  pain or shoulder impingement on the lowering phase. */
+        direction?: 'ascending' | 'descending' | 'either';
+        /** Dominant agonist contraction mode that triggers pain. `eccentric` =
+         *  lengthening under load (e.g. quad on squat descent), `concentric` =
+         *  shortening under load, `isometric` = no length change, `any`/omitted =
+         *  pain regardless of contraction mode. */
+        loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+        /** Short clinical phrase the UI surfaces in the on-body halo (e.g. "Painful
+         *  on descent" or "Impingement zone"). ≤60 chars. Optional. */
+        label?: string;
+      } | null;
+      activeStrengthPct: number;
+      painInhibitionFactor: number;
+      source: 'pathology-baseline' | 'ai' | 'manual';
+      rationale?: string;
+      // Task #301 — set when a clinician overrides this row from the
+      // Active Capacities side panel. Used by the AI / Manual / Default
+      // badge and to skip overwriting on re-generation.
+      editedAt?: string;
+    }>;
+    generatedAt: string;
+    rationaleSummary?: string;
+  }>(),
+  // Lightweight audit of which variables ended up dropped to satisfy
+  // the tiered query ladder (mirrored from queriesRan for fast UI
+  // rendering).
+  droppedVariables: jsonb("dropped_variables").$type<string[]>().notNull(),
+  // Task #305 — Research-derived structured treatment plan, generated
+  // alongside synthesizedAnswer from the same retrieved papers. Read-only
+  // companion to the prose answer; never written into the Treatment Plan
+  // box / Plan Cart. Nullable for backwards compatibility with rows
+  // persisted before Task #305.
+  researchTreatmentPlan: jsonb("research_treatment_plan").$type<{
+    generatedAt: string;
+    hasEvidence: boolean;
+    noEvidenceReason?: string;
+    phases: Array<{
+      name: string;
+      goal: string;
+      duration: string;
+      interventions: Array<{
+        category: 'exercise' | 'manual_therapy' | 'electrophysical' | 'education_lifestyle';
+        label: string;
+        dose: string;
+        citations: number[];
+        extrapolated: boolean;
+        rationale?: string;
+      }>;
+      progressionCriteria: Array<{ criterion: string; citations: number[] }>;
+    }>;
+    outcomeMeasures: Array<{ name: string; purpose: string; citations: number[] }>;
+    redFlags: string[];
+    followUpCadence: string;
+    confidence: 'High' | 'Moderate' | 'Low' | 'Extrapolated';
+    confidenceReason: string;
+  }>(),
+  // Task #376 — Treatment Mode persistent patient state. Per-joint
+  // accessory mobility (mm), per-region capsular extensibility (0–1),
+  // and the in-session log of performed manual-therapy techniques. Optional
+  // for backwards compatibility with rows persisted before Task #376.
+  treatmentState: jsonb("treatment_state").$type<{
+    accessoryMobilityMm: Record<string, number>;
+    capsularExtensibility: Record<string, number>;
+    log: Array<{
+      id: string;
+      technique: string;
+      parameters: {
+        jointKey: string;
+        directionId: string;
+        grade: number;
+        gradeSystem: 'maitland' | 'kaltenborn';
+        amplitudeMm: number;
+        frequencyHz: number;
+        durationSec: number;
+      };
+      performedAt: string;
+      mechanicalDelta: { translationMm: number; saturated: boolean; lineOfDriveErrorDeg: number };
+      clinicalDelta: { romDeltaDeg: number; painDelta: number; capsularExtensibilityDelta: number; effectivenessScore: number };
+    }>;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  // One row per (user, case). Upserted on refresh.
+  userCaseUnique: uniqueIndex("case_research_syntheses_user_case_unique").on(t.userId, t.caseId),
+}));
+
+export const insertCaseResearchSynthesisSchema = createInsertSchema(caseResearchSyntheses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCaseResearchSynthesis = z.infer<typeof insertCaseResearchSynthesisSchema>;
+export type CaseResearchSynthesis = typeof caseResearchSyntheses.$inferSelect;
+
+/** Task #376 — Treatment Mode Zod schemas. Validate PATCH/POST payloads
+ *  against the `treatmentState` jsonb column above. */
+export const treatmentLogEntrySchema = z.object({
+  id: z.string().min(1).max(64),
+  technique: z.string().min(1).max(400),
+  parameters: z.object({
+    jointKey: z.string().min(1).max(40),
+    directionId: z.string().min(1).max(40),
+    grade: z.number().min(0).max(5),
+    gradeSystem: z.enum(['maitland', 'kaltenborn']),
+    amplitudeMm: z.number().min(0).max(50),
+    frequencyHz: z.number().min(0).max(10),
+    durationSec: z.number().min(0).max(600),
+  }),
+  performedAt: z.string().min(1),
+  mechanicalDelta: z.object({
+    translationMm: z.number(),
+    saturated: z.boolean(),
+    lineOfDriveErrorDeg: z.number(),
+  }),
+  clinicalDelta: z.object({
+    romDeltaDeg: z.number(),
+    painDelta: z.number(),
+    capsularExtensibilityDelta: z.number(),
+    effectivenessScore: z.number(),
+  }),
+});
+
+export const treatmentStateSchema = z.object({
+  accessoryMobilityMm: z.record(z.string(), z.number()),
+  capsularExtensibility: z.record(z.string(), z.number()),
+  log: z.array(treatmentLogEntrySchema),
+});
+
+export type TreatmentLogEntry = z.infer<typeof treatmentLogEntrySchema>;
+export type TreatmentState = z.infer<typeof treatmentStateSchema>;
+
+/** Task #301 — Active Movement Mode Zod schemas. Used by both the
+ *  POST /api/active-capacity/:caseId regenerate endpoint and the
+ *  PATCH override endpoint to validate payloads before they reach
+ *  storage. Mirror the jsonb shape on `activeCapacities` above. */
+export const activeCapacityRowSchema = z.object({
+  joint: z.string().min(1),
+  movement: z.string().min(1),
+  passiveRomMin: z.number(),
+  passiveRomMax: z.number(),
+  activeRomMin: z.number(),
+  activeRomMax: z.number(),
+  painfulArc: z.object({
+    start: z.number(),
+    end: z.number(),
+    intensity: z.number().min(0).max(10),
+    direction: z.enum(['ascending', 'descending', 'either']).optional(),
+    loadingMode: z.enum(['concentric', 'eccentric', 'isometric', 'any']).optional(),
+    label: z.string().max(80).optional(),
+  }).nullable(),
+  activeStrengthPct: z.number().min(0).max(100),
+  painInhibitionFactor: z.number().min(0).max(1),
+  source: z.enum(['pathology-baseline', 'ai', 'manual']),
+  rationale: z.string().optional(),
+  editedAt: z.string().optional(),
+});
+export const activeCapacityProfileSchema = z.object({
+  rows: z.array(activeCapacityRowSchema),
+  generatedAt: z.string(),
+  rationaleSummary: z.string().optional(),
+  aiContextSignature: z.string().optional(),
+});
+export const activeCapacityOverridePatchSchema = activeCapacityRowSchema
+  .partial()
+  .extend({ joint: z.string().min(1), movement: z.string().min(1) });
+export type ActiveCapacityRowSchema = z.infer<typeof activeCapacityRowSchema>;
+export type ActiveCapacityProfileSchema = z.infer<typeof activeCapacityProfileSchema>;
+export type ActiveCapacityOverridePatchSchema = z.infer<typeof activeCapacityOverridePatchSchema>;
+
+/** Task #305 — Research-derived structured treatment plan. Generated
+ *  alongside the synthesized prose answer using the same retrieved
+ *  papers; persisted on the same `case_research_syntheses` row. */
+export const researchPlanInterventionSchema = z.object({
+  category: z.enum(['exercise', 'manual_therapy', 'electrophysical', 'education_lifestyle']),
+  label: z.string().min(1).max(160),
+  dose: z.string().min(1).max(240),
+  citations: z.array(z.number().int().positive()).max(20).default([]),
+  extrapolated: z.boolean().default(false),
+  rationale: z.string().max(400).optional(),
+});
+export const researchPlanPhaseSchema = z.object({
+  name: z.string().min(1).max(80),
+  goal: z.string().min(1).max(240),
+  duration: z.string().min(1).max(80),
+  interventions: z.array(researchPlanInterventionSchema).max(20).default([]),
+  progressionCriteria: z.array(z.object({
+    criterion: z.string().min(1).max(240),
+    citations: z.array(z.number().int().positive()).max(20).default([]),
+  })).max(10).default([]),
+});
+export const researchTreatmentPlanSchema = z.object({
+  generatedAt: z.string(),
+  hasEvidence: z.boolean(),
+  noEvidenceReason: z.string().max(400).optional(),
+  phases: z.array(researchPlanPhaseSchema).max(6).default([]),
+  outcomeMeasures: z.array(z.object({
+    name: z.string().min(1).max(120),
+    purpose: z.string().min(1).max(240),
+    citations: z.array(z.number().int().positive()).max(20).default([]),
+  })).max(10).default([]),
+  redFlags: z.array(z.string().min(1).max(240)).max(15).default([]),
+  followUpCadence: z.string().min(1).max(160).default('Review at next session'),
+  confidence: z.enum(['High', 'Moderate', 'Low', 'Extrapolated']),
+  confidenceReason: z.string().max(400),
+});
+export type ResearchTreatmentPlanSchema = z.infer<typeof researchTreatmentPlanSchema>;
+
+/** Shape of the structured search phenotype the engine derives from
+ *  the clinician's free-text condition + case summary. Edited inline
+ *  by the clinician via "Edit interpretation" and submitted back to
+ *  re-run the search without re-doing the AI translation. */
+export const searchablePhenotypeSchema = z.object({
+  canonicalCondition: z.object({
+    primary: z.string().min(1).max(160),
+    synonyms: z.array(z.string().min(1).max(160)).max(8).default([]),
+  }),
+  region: z.string().min(1).max(80).nullable().optional().default(null),
+  /** When true, region is treated as a soft modifier (drop first when
+   *  literature is thin). Defaults false because region is usually
+   *  central to the search (e.g. "lumbar spine" for back pain). */
+  regionSoft: z.boolean().optional().default(false),
+  laterality: z.enum(['left', 'right', 'bilateral', 'unspecified']).nullable().optional().default('unspecified'),
+  mechanism: z.object({
+    phrases: z.array(z.string().min(1).max(120)).max(8).default([]),
+    soft: z.boolean().default(false),
+  }).default({ phrases: [], soft: false }),
+  aggravatingFactors: z.object({
+    phrases: z.array(z.string().min(1).max(120)).max(8).default([]),
+    soft: z.boolean().default(true),
+  }).default({ phrases: [], soft: true }),
+  painType: z.string().min(1).max(80).nullable().optional().default(null),
+  /** Soft/hard toggle for pain type. Defaults true because pain type
+   *  ("mechanical", "neuropathic") rarely returns dense literature
+   *  when AND'd as a hard modifier. */
+  painTypeSoft: z.boolean().optional().default(true),
+});
+export type SearchablePhenotype = z.infer<typeof searchablePhenotypeSchema>;
+
+/** Body shape accepted by POST /api/case-research/:caseId. The
+ *  `caseSummary` is the canonical clinical text the engine reasons
+ *  over (clinician description + AI-extracted summary + patient
+ *  context answers). `condition` is the parsed diagnosis used as the
+ *  broadest fallback tier. `contentHash` is computed client-side from
+ *  the same source material so cache hits are deterministic.
+ *  `phenotypeOverride` (optional): when supplied (e.g. from the
+ *  clinician's "Edit interpretation" → "Re-run with my edits"), the
+ *  engine SKIPS its own AI translation step and uses the supplied
+ *  phenotype directly.
+ *  `caseContext` (optional): structured case picture from the
+ *  orchestrator (top hypothesis, mechanism, region/laterality,
+ *  chronicity, irritability, patient factors). When supplied, the
+ *  engine prefers the top hypothesis label as the search seed and
+ *  seeds variable inference with the structured fields. */
+export const caseResearchContextSchema = z.object({
+  topHypothesis: z.object({
+    label: z.string().min(1).max(200),
+    confidence: z.number().min(0).max(1),
+  }).optional(),
+  mainComplaint: z.string().max(200).optional(),
+  region: z.string().max(80).optional(),
+  laterality: z.enum(['left', 'right', 'bilateral', 'unspecified']).optional(),
+  chronicity: z.string().max(40).optional(),
+  irritability: z.enum(['low', 'moderate', 'high']).optional(),
+  mechanism: z.string().max(200).optional(),
+  severity: z.number().min(0).max(10).optional(),
+  painRegions: z.array(z.string().max(80)).max(12).optional(),
+  patientFactors: z.array(z.string().max(80)).max(12).optional(),
+  comorbidities: z.array(z.enum([
+    'diabetes', 'smoking', 'pregnancy', 'osteoporosis',
+    'cardiovascular', 'autoimmune', 'obesity', 'previousEpisodes',
+  ])).max(8).optional(),
+});
+export type CaseResearchContext = z.infer<typeof caseResearchContextSchema>;
+
+export const caseResearchRequestSchema = z.object({
+  caseSummary: z.string().min(10).max(20000),
+  condition: z.string().min(1).max(500),
+  contentHash: z.string().min(1).max(128),
+  refresh: z.boolean().optional(),
+  phenotypeOverride: searchablePhenotypeSchema.optional(),
+  caseContext: caseResearchContextSchema.optional(),
+});
+export type CaseResearchRequest = z.infer<typeof caseResearchRequestSchema>;
+
+// ==========================================================
+// Task #338 — Movement Mode "What-If" Treatment Hypotheses
+// Persists clinician-saved What-If scenario sets so they can be
+// re-loaded as a starting point for treatment planning.
+// ==========================================================
+export const treatmentHypotheses = pgTable("treatment_hypotheses", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  caseId: text("case_id").notNull(),
+  label: text("label").notNull(),
+  flareUpScenarioId: text("flare_up_scenario_id"),
+  painfulTissue: text("painful_tissue"),
+  scenarios: json("scenarios").$type<unknown[]>().default([]).notNull(),
+  painLoadDelta: doublePrecision("pain_load_delta"),
+  overallRiskBefore: doublePrecision("overall_risk_before"),
+  overallRiskAfter: doublePrecision("overall_risk_after"),
+  topImprovements: json("top_improvements").$type<string[]>().default([]).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTreatmentHypothesisSchema = createInsertSchema(treatmentHypotheses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTreatmentHypothesis = z.infer<typeof insertTreatmentHypothesisSchema>;
+export type TreatmentHypothesis = typeof treatmentHypotheses.$inferSelect;
+
+
+
+// Sling Failure Movement Visualizer — schemas for trigger-movement
+// playback with intended-vs-actual joint deltas, failure-frame timing,
+// narration, and reroute target.
+export const slingIdSchema = z.enum([
+  'posterior_oblique', 'anterior_oblique', 'lateral',
+  'deep_longitudinal', 'scapular_shoulder',
+]);
+
+export const slingFailureJointDeltaSchema = z.object({
+  joint: z.string().min(1).max(40),
+  axis: z.string().min(1).max(40),
+  intendedDeg: z.number().finite(),
+  actualDeg: z.number().finite(),
+  description: z.string().max(200).optional(),
+});
+
+export const slingFailureScenarioSchema = z.object({
+  slingId: slingIdSchema,
+  slingLabel: z.string().min(1).max(80),
+  triggerMovementId: z.string().min(1).max(80),
+  triggerMovementLabel: z.string().min(1).max(120),
+  triggerReason: z.string().min(1).max(400),
+  failureFrame: z.number().min(0).max(1),
+  weakSegmentMuscle: z.string().min(1).max(80),
+  weakSegmentBones: z.array(z.string().max(40)).max(8),
+  rerouteTargetMuscle: z.string().min(1).max(80),
+  rerouteTargetBones: z.array(z.string().max(40)).max(8),
+  jointDeltas: z.array(slingFailureJointDeltaSchema).max(12),
+  narration: z.string().min(1).max(800),
+  confidence: z.number().min(0).max(1),
+  source: z.enum(['ai', 'local']),
+});
+export type SlingFailureScenario = z.infer<typeof slingFailureScenarioSchema>;
+
+export const slingFailureScenarioRequestSchema = z.object({
+  caseId: z.string().min(1).max(120),
+  fingerprint: z.string().min(1).max(200),
+  condition: z.string().max(300).optional(),
+  patientFactors: z.array(z.string().max(120)).max(20).optional(),
+  refresh: z.boolean().optional(),
+  slings: z.array(z.object({
+    slingId: slingIdSchema,
+    slingLabel: z.string().min(1).max(80),
+    status: z.enum(['underperforming', 'overloaded', 'compensating', 'normal']),
+    activationScore: z.number(),
+    weakLinks: z.array(z.object({
+      muscle: z.string().max(80),
+      activationPct: z.number(),
+      boneSegmentIndices: z.array(z.number().int().min(0)).max(20).optional(),
+    })).max(8),
+    bonePathway: z.array(z.string().max(40)).max(20),
+    forceTransferQuality: z.enum(['good', 'reduced', 'poor']),
+  })).min(1).max(8),
+  markers: z.array(z.object({
+    nearestBone: z.string().max(40).optional(),
+    anatomicalLabel: z.string().max(120).optional(),
+    severity: z.number().min(0).max(10).optional(),
+  })).max(12).optional(),
+});
+export type SlingFailureScenarioRequest = z.infer<typeof slingFailureScenarioRequestSchema>;
+
+export const slingFailureScenarioResponseSchema = z.object({
+  scenarios: z.array(slingFailureScenarioSchema),
+  cached: z.boolean(),
+  source: z.enum(['ai', 'local', 'mixed']),
+});
+export type SlingFailureScenarioResponse = z.infer<typeof slingFailureScenarioResponseSchema>;

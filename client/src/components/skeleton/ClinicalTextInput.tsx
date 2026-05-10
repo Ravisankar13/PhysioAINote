@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb, FileText, Mic } from "lucide-react";
+import { Loader2, Brain, Sparkles, X, ChevronDown, ChevronUp, MessageCircle, HelpCircle, CheckCircle2, Lightbulb, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import ClinicalDiagnosisReport, { type DiagnosisReport } from "./ClinicalDiagnosisReport";
@@ -58,6 +58,13 @@ export interface ClinicalParseResult {
   follow_up_questions?: FollowUpQuestion[];
   predictions_confidence?: "high" | "moderate" | "low";
   compromised_tissues?: CompromisedTissue[];
+  /** Client-only flag (Task #390): true when this parse refines the
+   *  same prediction by re-running with follow-up Q&A context. The
+   *  consumer treats refinement as REPLACE rather than APPEND so
+   *  pain markers / region halos / muscle overrides from prior
+   *  intermediate predictions don't accumulate into "clouds". Stamped
+   *  in `doParseRequest` based on whether `context` was non-empty. */
+  __isRefinement?: boolean;
 }
 
 interface QAEntry {
@@ -78,20 +85,39 @@ export interface ForceAnalysisData {
 
 export interface ClinicalTextInputHandle {
   triggerParse: () => void;
-  triggerIncrementalParse: () => void;
+  /**
+   * Run the same parse pipeline as the textarea's "Predict & Visualize"
+   * but optionally with an externally-supplied transcript. When
+   * `textOverride` is provided, the parse uses that text without
+   * touching the textarea state. This is what the PhysioGPT page uses
+   * to drive auto-parses from voice without mirroring the transcript
+   * into the box.
+   */
+  /** Returns true when a parse request was actually dispatched.
+   *  Returns false when the input was too short, parse is already in
+   *  flight, or otherwise skipped — letting voice callers clear any
+   *  pending trigger metadata they staged before the call. */
+  triggerIncrementalParse: (textOverride?: string) => boolean;
   submitFollowUpAnswer: (questionId: string, answer: string) => void;
   getFollowUpQuestions: () => FollowUpQuestion[];
 }
 
 interface ClinicalTextInputProps {
   onParseResult: (result: ClinicalParseResult) => void;
+  /** Fired when an in-flight parse fails (network/server). Lets voice
+   *  callers clear pending trigger metadata so the next successful
+   *  parse isn't misattributed to a stale trigger. */
+  onParseError?: (err: unknown) => void;
   onClearFindings?: () => void;
   disabled?: boolean;
   chainIntegrityScores?: ChainIntegrityData[];
   forceAnalysis?: ForceAnalysisData[];
-  voiceText?: string;
-  isVoiceActive?: boolean;
   onFollowUpQuestionsChange?: (questions: FollowUpQuestion[]) => void;
+  /** Merged patient-context payload (free-form notes + AI-curated
+   *  prompt answers). When supplied it is forwarded as `patient_context`
+   *  in every parse / re-parse POST so the AI re-runs the prediction
+   *  with this patient in mind. */
+  patientContext?: import("@shared/schema").PatientContextPayload;
 }
 
 const EXAMPLE_DESCRIPTIONS = [
@@ -102,7 +128,7 @@ const EXAMPLE_DESCRIPTIONS = [
   "Elderly patient with lumbar spinal stenosis and kyphosis",
 ];
 
-const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputProps>(function ClinicalTextInput({ onParseResult, onClearFindings, disabled, chainIntegrityScores, forceAnalysis, voiceText, isVoiceActive, onFollowUpQuestionsChange }, ref) {
+const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputProps>(function ClinicalTextInput({ onParseResult, onParseError, onClearFindings, disabled, chainIntegrityScores, forceAnalysis, onFollowUpQuestionsChange, patientContext }, ref) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState<ClinicalParseResult | null>(null);
@@ -116,19 +142,32 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const originalTextRef = useRef("");
+  // Latest patient context lives in a ref so doParseRequest (wrapped in
+  // useCallback) always picks up the freshest answers without changing
+  // its identity — which would otherwise re-trigger every effect that
+  // closes over it.
+  const patientContextRef = useRef<typeof patientContext>(patientContext);
+  patientContextRef.current = patientContext;
+  // Mount guard — when the parent remounts this component (Task #394:
+  // bumping `caseInstanceId` on New Case forces a fresh key), in-flight
+  // parse / report responses from the previous case must not call
+  // setState or fire parent callbacks. Without this guard, a late
+  // /api/clinical-text/parse response would still invoke
+  // `onParseResult` on the parent and repaint stale findings into the
+  // brand-new case. The cleanup callback flips the ref to false so the
+  // post-await guards below early-return.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isVoiceActive) {
-      setText(voiceText || "");
-    }
-  }, [voiceText, isVoiceActive]);
-
-  useEffect(() => {
-    if (isVoiceActive && !expanded) {
-      setExpanded(true);
-    }
-  }, [isVoiceActive, expanded]);
+  // Voice transcript no longer mirrors into the textarea, and voice
+  // activity no longer auto-expands the box. Auto-parses driven by
+  // voice run on the in-memory transcript via `triggerIncrementalParse`
+  // (with a textOverride) and surface visibility through the floating
+  // Voice Activity dock on the page instead.
 
   useEffect(() => {
     if (onFollowUpQuestionsChange) {
@@ -139,11 +178,23 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
   const doParseRequest = useCallback(async (inputText: string, context: QAEntry[]) => {
     setLoading(true);
     try {
+      const pc = patientContextRef.current;
+      const pcPayload = pc && (pc.free_form?.trim() || (pc.answers && pc.answers.length > 0)) ? pc : undefined;
       const result: ClinicalParseResult = await apiRequest("/api/clinical-text/parse", "POST", {
         text: inputText.trim(),
         context: context.length > 0 ? context : undefined,
+        patient_context: pcPayload,
       });
+      // Drop the response entirely when the component has unmounted
+      // (e.g., parent bumped the case key on New Case). Without this
+      // guard, a late response would still call `onParseResult` on the
+      // parent and repaint stale findings into the new case.
+      if (!mountedRef.current) return;
       result.original_description = originalTextRef.current || inputText.trim();
+      // Task #390: stamp refinement flag so the consumer can REPLACE
+      // (not APPEND) prior parse contributions when answering follow-up
+      // Q&A. Fresh parses (no Q&A context yet) leave this falsy.
+      result.__isRefinement = context.length > 0;
       setLastResult(result);
       onParseResult(result);
 
@@ -167,11 +218,13 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
       });
     } catch (err) {
       console.error("Clinical text parse error:", err);
+      if (!mountedRef.current) return;
       toast({ title: "Parse Error", description: "Failed to analyze the clinical description. Please try again.", variant: "destructive" });
+      onParseError?.(err);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [onParseResult, toast]);
+  }, [onParseResult, onParseError, toast]);
 
   const handleParse = useCallback(async () => {
     if (!text.trim() || text.trim().length < 3) {
@@ -234,13 +287,20 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         doParseRequest(text.trim(), []);
       }
     },
-    triggerIncrementalParse: () => {
-      if (text.trim().length >= 3 && !loading) {
+    triggerIncrementalParse: (textOverride?: string): boolean => {
+      // When a textOverride is supplied (the path used by the voice
+      // auto-parses), parse that text directly without touching the
+      // textarea state. Otherwise fall back to the textarea contents
+      // — the historical behavior.
+      const parseText = (textOverride !== undefined ? textOverride : text).trim();
+      if (parseText.length >= 3 && !loading) {
         if (!originalTextRef.current) {
-          originalTextRef.current = text.trim();
+          originalTextRef.current = parseText;
         }
-        doParseRequest(text.trim(), qaHistory);
+        doParseRequest(parseText, qaHistory);
+        return true;
       }
+      return false;
     },
     submitFollowUpAnswer: (questionId: string, answer: string) => {
       handleAnswerSubmit(questionId, answer);
@@ -263,14 +323,17 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         chain_integrity: chainIntegrityScores && chainIntegrityScores.length > 0 ? chainIntegrityScores : undefined,
         force_analysis: forceAnalysis && forceAnalysis.length > 0 ? forceAnalysis : undefined,
       });
+      // Drop late report responses after a New Case remount.
+      if (!mountedRef.current) return;
       setDiagnosisReport(reportData);
       setReportOpen(true);
       toast({ title: "Report Generated", description: "Clinical diagnosis and treatment plan ready." });
     } catch (err) {
       console.error("Diagnosis report error:", err);
+      if (!mountedRef.current) return;
       toast({ title: "Report Error", description: "Failed to generate diagnosis report. Please try again.", variant: "destructive" });
     } finally {
-      setReportLoading(false);
+      if (mountedRef.current) setReportLoading(false);
     }
   }, [lastResult, qaHistory, toast, chainIntegrityScores, forceAnalysis]);
 
@@ -288,18 +351,9 @@ const ClinicalTextInput = forwardRef<ClinicalTextInputHandle, ClinicalTextInputP
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-1.5">
-          {isVoiceActive ? (
-            <Mic className="h-3.5 w-3.5 text-red-400 animate-pulse" />
-          ) : (
-            <Brain className="h-3.5 w-3.5 text-blue-400" />
-          )}
+          <Brain className="h-3.5 w-3.5 text-blue-400" />
           <span className="text-xs font-semibold text-blue-300">Clinical Prediction</span>
-          {isVoiceActive && (
-            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-red-900/40 text-red-300 border-red-700/40 animate-pulse">
-              Voice
-            </Badge>
-          )}
-          {lastResult && !isVoiceActive && (
+          {lastResult && (
             <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-900/40 text-blue-300 border-blue-700/40">
               Active
             </Badge>

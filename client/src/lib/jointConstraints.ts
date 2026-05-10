@@ -39,6 +39,19 @@ export interface CompensationPattern {
   compensationRatio: number; // How much the compensating joint takes over (0-1)
   additionalLoad: number; // Percentage increase in load
   clinicalNote: string;
+  /** Optional enrichment populated by the Compensation Re-Education engine
+   *  (see `client/src/lib/compensationReEducation.ts`). Detectors must leave
+   *  this undefined; only the post-processor sets it. The grouped
+   *  `enrichment` object and the top-level `driver` / `verdict` / `cost` /
+   *  `betterPatternId` / `retrainingPlanId` fields are written together so
+   *  downstream consumers can read either form. */
+  enrichment?: import('./compensationReEducation').CompensationEnrichment;
+  driver?: import('./compensationReEducation').CompensationDriver;
+  drivers?: import('./compensationReEducation').CompensationDriver[];
+  verdict?: import('./compensationReEducation').CompensationVerdict;
+  cost?: import('./compensationLibrary').CompensationCostProfile;
+  betterPatternId?: string | null;
+  retrainingPlanId?: string | null;
 }
 
 export type WarningSeverity = 'moderate' | 'severe';
@@ -151,7 +164,9 @@ export const NORMAL_ROM: Record<JointType, Record<string, number>> = {
 };
 
 // Compensation chains - when one joint is restricted, adjacent joints compensate
-const COMPENSATION_CHAINS: Array<{
+// Exported (Task #301) so the active-movement viewer can redistribute
+// residual angles into the chain when the active limit is exceeded.
+export const COMPENSATION_CHAINS: Array<{
   source: { joint: JointType; movement: MovementType };
   compensators: Array<{
     joint: JointType;

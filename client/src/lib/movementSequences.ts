@@ -1,3 +1,7 @@
+import { JOINT_VOCABULARY as SHARED_JOINT_VOCABULARY } from "@shared/jointVocabulary";
+
+export { JOINT_VOCABULARY } from "@shared/jointVocabulary";
+
 export interface JointKeyframe {
   time: number;
   value: number;
@@ -55,6 +59,15 @@ export interface JointLimits {
   };
 }
 
+/**
+ * Engine-wide joint limits. The engine super-set is broader than the shared
+ * safe vocabulary (`@shared/jointVocabulary`) — it includes engine-only
+ * properties (`pelvis.drop`, `pelvis.zShift`, `scapula.posteriorTilt`, etc.)
+ * and a wider visual range (e.g. shoulder flexion -180..180 vs the AI-safe
+ * -60..180). Both are kept in sync at module load by `assertSharedVocabIsSubset`
+ * which throws in development if the shared safe vocab ever exceeds these
+ * engine limits.
+ */
 export const DEFAULT_JOINT_LIMITS: JointLimits = {
   leftHip: {
     flexion: { min: -30, max: 140 },
@@ -144,6 +157,58 @@ export const DEFAULT_JOINT_LIMITS: JointLimits = {
     lateralFlexion: { min: -45, max: 45 },
   },
 };
+
+/**
+ * Throws in development if the shared safe vocabulary references a joint or
+ * property that doesn't exist in DEFAULT_JOINT_LIMITS, or specifies a range
+ * that exceeds engine limits. Catches drift between the AI vocabulary and
+ * the engine vocabulary at load time.
+ */
+function assertSharedVocabIsSubset(): void {
+  // Hard violations: shared range exceeds the engine's enumerated safe range.
+  // This is a real safety risk (the AI could compose end-ranges the engine
+  // would otherwise clamp), so it throws in dev to surface drift fast.
+  const hardViolations: string[] = [];
+  // Soft gaps: shared joint/property has no entry in DEFAULT_JOINT_LIMITS.
+  // The engine treats unknown joints/properties as "no limit" (passes value
+  // through unchanged), so this is not unsafe — it just means the engine
+  // map is less specific than the AI vocab. Warn only.
+  const softGaps: string[] = [];
+
+  for (const [joint, def] of Object.entries(SHARED_JOINT_VOCABULARY)) {
+    const engine = DEFAULT_JOINT_LIMITS[joint];
+    if (!engine) {
+      softGaps.push(`shared joint "${joint}" not enumerated in DEFAULT_JOINT_LIMITS`);
+      continue;
+    }
+    for (const [prop, range] of Object.entries(def.properties)) {
+      const engRange = engine[prop];
+      if (!engRange) {
+        softGaps.push(`shared "${joint}.${prop}" not enumerated in engine limits`);
+        continue;
+      }
+      if (range.min < engRange.min || range.max > engRange.max) {
+        hardViolations.push(
+          `shared "${joint}.${prop}" (${range.min}..${range.max}) exceeds engine (${engRange.min}..${engRange.max})`,
+        );
+      }
+    }
+  }
+
+  if (softGaps.length > 0) {
+    console.warn(
+      `[jointVocabulary] shared vocab has entries not enumerated in DEFAULT_JOINT_LIMITS (engine will pass these through unconstrained):\n  - ${softGaps.join("\n  - ")}`,
+    );
+  }
+  if (hardViolations.length > 0) {
+    throw new Error(
+      `[jointVocabulary] shared vocab range exceeds DEFAULT_JOINT_LIMITS:\n  - ${hardViolations.join("\n  - ")}`,
+    );
+  }
+}
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  assertSharedVocabIsSubset();
+}
 
 export function applyJointConstraints(
   value: number, 
@@ -1535,8 +1600,18 @@ export const MOVEMENT_RESTRICTIONS: Record<string, MovementRestriction[]> = {
   ],
 };
 
+const dynamicMovements = new Map<string, MovementSequence>();
+
+export function registerDynamicMovement(seq: MovementSequence): void {
+  dynamicMovements.set(seq.id, seq);
+}
+
+export function unregisterDynamicMovement(id: string): void {
+  dynamicMovements.delete(id);
+}
+
 export function getMovementById(id: string): MovementSequence | undefined {
-  return MOVEMENT_SEQUENCES.find(m => m.id === id);
+  return MOVEMENT_SEQUENCES.find(m => m.id === id) || dynamicMovements.get(id);
 }
 
 export function getMovementCategories(): typeof MOVEMENT_CATEGORIES {

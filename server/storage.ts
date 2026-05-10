@@ -167,6 +167,19 @@ import {
   patientClones,
   type PatientClone,
   type InsertPatientClone,
+  electroConditionPresets,
+  type ElectroConditionPreset,
+  type InsertElectroConditionPreset,
+  recoveryWeeklyCheckIns,
+  type RecoveryWeeklyCheckIn,
+  type InsertRecoveryWeeklyCheckIn,
+  caseResearchSyntheses,
+  type CaseResearchSynthesis,
+  type InsertCaseResearchSynthesis,
+  type TreatmentState,
+  treatmentHypotheses,
+  type TreatmentHypothesis,
+  type InsertTreatmentHypothesis,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, isNull, sql, ilike, not } from "drizzle-orm";
@@ -176,6 +189,31 @@ import {
   extractCondition,
 } from "./utilities/deIdentify";
 import { patientSessionStorage } from "./patientSessionStorage";
+
+/**
+ * Thrown by storage methods when an inbound payload would otherwise
+ * forward invalid data (e.g. an empty string for an integer column)
+ * to Postgres. Routes catch this to return a 400 with the offending
+ * field name, instead of leaking a Postgres "invalid input syntax"
+ * 500 to the clinician (see Task #257).
+ */
+export class CheckInValidationError extends Error {
+  readonly field: string;
+  constructor(field: string, message: string) {
+    super(message);
+    this.name = "CheckInValidationError";
+    this.field = field;
+  }
+}
+
+/** Render a value for an error message without dumping huge objects. */
+function describeValue(raw: unknown): string {
+  if (raw === null) return "null";
+  if (raw === undefined) return "undefined";
+  if (typeof raw === "string") return JSON.stringify(raw);
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  return typeof raw;
+}
 
 export interface IStorage {
   // User Operations
@@ -754,6 +792,32 @@ export interface IStorage {
   getUserPatientClones(userId: number): Promise<PatientClone[]>;
   updatePatientClone(id: number, data: Partial<InsertPatientClone>): Promise<PatientClone>;
   deletePatientClone(id: number): Promise<void>;
+
+  // Electrophysical Engine condition presets
+  listElectroConditionPresets(userId: number, patientId: number | null): Promise<ElectroConditionPreset[]>;
+  getElectroConditionPreset(id: number): Promise<ElectroConditionPreset | undefined>;
+  upsertElectroConditionPreset(preset: InsertElectroConditionPreset): Promise<ElectroConditionPreset>;
+  renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset>;
+  touchElectroConditionPreset(id: number): Promise<void>;
+  deleteElectroConditionPreset(id: number): Promise<void>;
+
+  // Recovery Simulator weekly check-ins (Task #241)
+  listRecoveryWeeklyCheckIns(userId: number, caseId: string): Promise<RecoveryWeeklyCheckIn[]>;
+  upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn>;
+  deleteRecoveryWeeklyCheckIn(userId: number, caseId: string, week: number): Promise<void>;
+
+  // Case-Aware Research Engine (Task #281)
+  getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined>;
+  upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis>;
+
+  // Task #376 — Treatment Mode persistent state
+  getTreatmentState(userId: number, caseId: string): Promise<TreatmentState | null>;
+  updateTreatmentState(userId: number, caseId: string, next: TreatmentState): Promise<TreatmentState>;
+
+  // Task #338 — Movement Mode "What-If" Treatment Hypotheses
+  createTreatmentHypothesis(hypothesis: InsertTreatmentHypothesis): Promise<TreatmentHypothesis>;
+  listTreatmentHypotheses(userId: number, caseId: string): Promise<TreatmentHypothesis[]>;
+  deleteTreatmentHypothesis(userId: number, id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4848,6 +4912,324 @@ export class DatabaseStorage implements IStorage {
 
   async deletePatientClone(id: number): Promise<void> {
     await db.delete(patientClones).where(eq(patientClones.id, id));
+  }
+
+  // Electrophysical Engine condition presets
+  async listElectroConditionPresets(userId: number, patientId: number | null): Promise<ElectroConditionPreset[]> {
+    return await db
+      .select()
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, userId),
+          patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, patientId),
+        ),
+      )
+      .orderBy(desc(electroConditionPresets.lastUsedAt));
+  }
+
+  async getElectroConditionPreset(id: number): Promise<ElectroConditionPreset | undefined> {
+    const result = await db
+      .select()
+      .from(electroConditionPresets)
+      .where(eq(electroConditionPresets.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertElectroConditionPreset(preset: InsertElectroConditionPreset): Promise<ElectroConditionPreset> {
+    const existing = await db
+      .select()
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, preset.userId),
+          preset.patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, preset.patientId),
+          eq(electroConditionPresets.name, preset.name),
+        ),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      const result = await db
+        .update(electroConditionPresets)
+        .set({
+          condition: preset.condition ?? "",
+          stage: preset.stage ?? "",
+          irritability: preset.irritability ?? "",
+          tissueType: preset.tissueType ?? "",
+          primaryGoal: preset.primaryGoal ?? "",
+          contraindicationFlags: preset.contraindicationFlags ?? [],
+          lastUsedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(electroConditionPresets.id, existing[0].id))
+        .returning();
+      return result[0];
+    }
+
+    const result = await db
+      .insert(electroConditionPresets)
+      .values({ ...preset, lastUsedAt: new Date() })
+      .returning();
+    return result[0];
+  }
+
+  async renameElectroConditionPreset(id: number, name: string): Promise<ElectroConditionPreset> {
+    // Enforce (userId, patientId, name) uniqueness explicitly so a rename
+    // can't silently collide with another preset in the same scope. The DB
+    // also has a UNIQUE NULLS NOT DISTINCT index as a final safety net.
+    const current = await this.getElectroConditionPreset(id);
+    if (!current) {
+      throw new Error('Preset not found');
+    }
+    if (current.name === name) return current;
+    const collision = await db
+      .select({ id: electroConditionPresets.id })
+      .from(electroConditionPresets)
+      .where(
+        and(
+          eq(electroConditionPresets.userId, current.userId),
+          current.patientId == null
+            ? isNull(electroConditionPresets.patientId)
+            : eq(electroConditionPresets.patientId, current.patientId),
+          eq(electroConditionPresets.name, name),
+        ),
+      )
+      .limit(1);
+    if (collision[0] && collision[0].id !== id) {
+      const err: Error & { code?: string } = new Error(`A preset named "${name}" already exists in this scope`);
+      err.code = 'PRESET_NAME_CONFLICT';
+      throw err;
+    }
+    const result = await db
+      .update(electroConditionPresets)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(electroConditionPresets.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async touchElectroConditionPreset(id: number): Promise<void> {
+    await db
+      .update(electroConditionPresets)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(electroConditionPresets.id, id));
+  }
+
+  async deleteElectroConditionPreset(id: number): Promise<void> {
+    await db.delete(electroConditionPresets).where(eq(electroConditionPresets.id, id));
+  }
+
+  // ─── Recovery weekly check-ins (Task #241) ──────────────────────
+  // All operations are scoped by userId so one clinician's check-ins
+  // can never be read or modified by another (IDOR-safe even with
+  // guessable case slugs).
+  async listRecoveryWeeklyCheckIns(userId: number, caseId: string): Promise<RecoveryWeeklyCheckIn[]> {
+    return await db
+      .select()
+      .from(recoveryWeeklyCheckIns)
+      .where(and(
+        eq(recoveryWeeklyCheckIns.userId, userId),
+        eq(recoveryWeeklyCheckIns.caseId, caseId),
+      ))
+      .orderBy(recoveryWeeklyCheckIns.week);
+  }
+
+  async upsertRecoveryWeeklyCheckIn(userId: number, checkIn: InsertRecoveryWeeklyCheckIn): Promise<RecoveryWeeklyCheckIn> {
+    // Final, defense-in-depth validation right before the data hits
+    // Drizzle. The Zod schema in @shared/schema is the first line of
+    // defense, but the storage layer must ALSO refuse to forward an
+    // empty string to Postgres so a future caller (script, internal
+    // tool, second route) cannot reintroduce the Task #257 500. Any
+    // failure throws CheckInValidationError, which the route turns
+    // into a clean 400 with the offending field name.
+    const requireInt = (field: string, raw: unknown): number => {
+      if (typeof raw === "number" && Number.isFinite(raw) && Number.isInteger(raw)) {
+        return raw;
+      }
+      throw new CheckInValidationError(field, `${field} must be an integer (got ${describeValue(raw)})`);
+    };
+    const optionalInt = (field: string, raw: unknown): number | null => {
+      if (raw === null || raw === undefined) return null;
+      if (typeof raw === "number" && Number.isFinite(raw) && Number.isInteger(raw)) {
+        return raw;
+      }
+      throw new CheckInValidationError(field, `${field} must be an integer or null (got ${describeValue(raw)})`);
+    };
+    const optionalNumericString = (field: string, raw: unknown): string | null => {
+      if (raw === null || raw === undefined) return null;
+      if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+      // The shared Zod schema preprocesses strings → numbers, so reaching
+      // this branch means a caller bypassed validation. Refuse explicitly
+      // — never let a raw string (especially "") reach the numeric column.
+      throw new CheckInValidationError(field, `${field} must be a finite number or null (got ${describeValue(raw)})`);
+    };
+
+    const values = {
+      userId,
+      caseId: typeof checkIn.caseId === "string" && checkIn.caseId.trim() !== ""
+        ? checkIn.caseId
+        : (() => { throw new CheckInValidationError("caseId", "caseId is required"); })(),
+      week: requireInt("week", checkIn.week),
+      pain: requireInt("pain", checkIn.pain),
+      flareSeverity: optionalInt("flareSeverity", checkIn.flareSeverity),
+      sessionsCompleted: requireInt("sessionsCompleted", checkIn.sessionsCompleted),
+      sessionsPrescribed: requireInt("sessionsPrescribed", checkIn.sessionsPrescribed),
+      sleepHours: optionalNumericString("sleepHours", checkIn.sleepHours),
+      notes: checkIn.notes == null || (typeof checkIn.notes === "string" && checkIn.notes.trim() === "")
+        ? null
+        : checkIn.notes,
+    };
+    const [row] = await db
+      .insert(recoveryWeeklyCheckIns)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [recoveryWeeklyCheckIns.userId, recoveryWeeklyCheckIns.caseId, recoveryWeeklyCheckIns.week],
+        set: {
+          pain: values.pain,
+          flareSeverity: values.flareSeverity,
+          sessionsCompleted: values.sessionsCompleted,
+          sessionsPrescribed: values.sessionsPrescribed,
+          sleepHours: values.sleepHours,
+          notes: values.notes,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteRecoveryWeeklyCheckIn(userId: number, caseId: string, week: number): Promise<void> {
+    await db
+      .delete(recoveryWeeklyCheckIns)
+      .where(and(
+        eq(recoveryWeeklyCheckIns.userId, userId),
+        eq(recoveryWeeklyCheckIns.caseId, caseId),
+        eq(recoveryWeeklyCheckIns.week, week),
+      ));
+  }
+
+  // ==========================================================
+  // Case-Aware Research Engine (Task #281)
+  // ==========================================================
+  async getCaseResearchSynthesis(userId: number, caseId: string): Promise<CaseResearchSynthesis | undefined> {
+    const [row] = await db
+      .select()
+      .from(caseResearchSyntheses)
+      .where(and(
+        eq(caseResearchSyntheses.userId, userId),
+        eq(caseResearchSyntheses.caseId, caseId),
+      ))
+      .limit(1);
+    return row;
+  }
+
+  async upsertCaseResearchSynthesis(synthesis: InsertCaseResearchSynthesis): Promise<CaseResearchSynthesis> {
+    const now = new Date();
+    const [row] = await db
+      .insert(caseResearchSyntheses)
+      .values({ ...synthesis, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [caseResearchSyntheses.userId, caseResearchSyntheses.caseId],
+        set: {
+          contentHash: synthesis.contentHash,
+          condition: synthesis.condition,
+          caseSummary: synthesis.caseSummary,
+          phenotype: synthesis.phenotype,
+          inferredVariables: synthesis.inferredVariables,
+          queriesRan: synthesis.queriesRan,
+          seedBroadenings: synthesis.seedBroadenings,
+          retrievedPapers: synthesis.retrievedPapers,
+          retrievedTrials: synthesis.retrievedTrials,
+          synthesizedAnswer: synthesis.synthesizedAnswer,
+          confidence: synthesis.confidence,
+          confidenceReason: synthesis.confidenceReason,
+          droppedVariables: synthesis.droppedVariables,
+          activeCapacities: synthesis.activeCapacities,
+          researchTreatmentPlan: synthesis.researchTreatmentPlan,
+          treatmentState: synthesis.treatmentState,
+          updatedAt: now,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  // ==========================================================
+  // Task #376 — Treatment Mode persistent state
+  // ==========================================================
+  async getTreatmentState(userId: number, caseId: string): Promise<TreatmentState | null> {
+    const row = await this.getCaseResearchSynthesis(userId, caseId);
+    return (row?.treatmentState ?? null) as TreatmentState | null;
+  }
+
+  async updateTreatmentState(userId: number, caseId: string, next: TreatmentState): Promise<TreatmentState> {
+    const existing = await this.getCaseResearchSynthesis(userId, caseId);
+    if (existing) {
+      const saved = await this.upsertCaseResearchSynthesis({
+        ...existing,
+        treatmentState: next,
+      } as InsertCaseResearchSynthesis);
+      return (saved.treatmentState ?? next) as TreatmentState;
+    }
+    // No synthesis yet — create a minimal placeholder row so we can
+    // persist treatment state even before research has been run.
+    const saved = await this.upsertCaseResearchSynthesis({
+      caseId,
+      userId,
+      contentHash: `treatment-only:${caseId}`,
+      condition: 'Treatment Mode session',
+      caseSummary: '',
+      phenotype: undefined,
+      inferredVariables: [],
+      queriesRan: [],
+      seedBroadenings: [],
+      retrievedPapers: [],
+      retrievedTrials: [],
+      synthesizedAnswer: '',
+      confidence: 'Extrapolated',
+      confidenceReason: 'Treatment state created without prior research synthesis.',
+      droppedVariables: [],
+      activeCapacities: undefined,
+      researchTreatmentPlan: undefined,
+      treatmentState: next,
+    } as InsertCaseResearchSynthesis);
+    return (saved.treatmentState ?? next) as TreatmentState;
+  }
+
+  // ==========================================================
+  // Task #338 — Movement Mode "What-If" Treatment Hypotheses
+  // ==========================================================
+  async createTreatmentHypothesis(hypothesis: InsertTreatmentHypothesis): Promise<TreatmentHypothesis> {
+    const [row] = await db
+      .insert(treatmentHypotheses)
+      .values(hypothesis)
+      .returning();
+    return row;
+  }
+
+  async listTreatmentHypotheses(userId: number, caseId: string): Promise<TreatmentHypothesis[]> {
+    return db
+      .select()
+      .from(treatmentHypotheses)
+      .where(and(
+        eq(treatmentHypotheses.userId, userId),
+        eq(treatmentHypotheses.caseId, caseId),
+      ))
+      .orderBy(desc(treatmentHypotheses.createdAt));
+  }
+
+  async deleteTreatmentHypothesis(userId: number, id: number): Promise<void> {
+    await db
+      .delete(treatmentHypotheses)
+      .where(and(
+        eq(treatmentHypotheses.userId, userId),
+        eq(treatmentHypotheses.id, id),
+      ));
   }
 }
 

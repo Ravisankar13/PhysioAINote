@@ -7,6 +7,13 @@ export interface RegionHighlight {
   type: HighlightType;
   severity: number; // 0-1
   label: string;
+  /**
+   * Optional stable id stamped at insertion time when highlights need
+   * to be removed by exact attribution (e.g. Voice Activity per-entry
+   * undo). Label-based removal can collide because fallback labels
+   * like `ctp_${region}_${type}` repeat across parses.
+   */
+  instanceId?: string;
 }
 
 export interface ParsedClinicalContext {

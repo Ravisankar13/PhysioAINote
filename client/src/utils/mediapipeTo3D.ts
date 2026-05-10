@@ -14,6 +14,10 @@
  */
 
 import { NormalizedLandmark } from '@mediapipe/pose';
+import { FootLockTracker, FootSupportState, FootVisibilityState, solveLegIK, defaultTorsoBasisSmoother } from './footLock';
+
+export type { FootSupportPhase, FootSupportState, FootVisibilityState } from './footLock';
+export { FootLockTracker, solveLegIK } from './footLock';
 
 export interface Joint3DRotation {
   x: number; // Typically flexion/extension
@@ -90,6 +94,11 @@ export interface BodyProportions {
   shinRatio: number;
 }
 
+export interface BodyVisibility {
+  upperBody: boolean;
+  lowerBody: boolean;
+}
+
 export interface SmoothedPoseOutput extends Skeleton3DPose {
   pelvisTilt: number;
   pelvisObliquity: number;
@@ -99,6 +108,10 @@ export interface SmoothedPoseOutput extends Skeleton3DPose {
   globalTranslation?: GlobalTranslation;
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
+  footSupport?: FootSupportState;
+  feetVisible?: FootVisibilityState;
+  legDepthConfidence?: number;
+  bodyVisibility?: BodyVisibility;
   handBoneRotations?: HandBoneRotations;
 }
 
@@ -266,11 +279,27 @@ function calculateHipAbduction(
 }
 
 const MIN_VISIBILITY = 0.5;
+// Off-frame margin: MediaPipe still emits landmark coordinates outside [0,1]
+// for body parts that have left the camera view, frequently with surprisingly
+// high visibility scores (it "extrapolates" from the visible torso). Treat
+// any landmark whose normalized x/y exits this padded range as not really
+// observed, regardless of MediaPipe's own visibility number.
+const ON_FRAME_MIN = -0.05;
+const ON_FRAME_MAX = 1.05;
+
+function isOnFrame(lm: NormalizedLandmark | undefined): boolean {
+  if (!lm) return false;
+  return lm.x >= ON_FRAME_MIN && lm.x <= ON_FRAME_MAX
+      && lm.y >= ON_FRAME_MIN && lm.y <= ON_FRAME_MAX;
+}
 
 function landmarksVisible(landmarks: NormalizedLandmark[], indices: number[]): boolean {
   return indices.every(i => {
     const lm = landmarks[i];
-    return lm && (lm.visibility === undefined || lm.visibility >= MIN_VISIBILITY);
+    if (!lm) return false;
+    if (lm.visibility !== undefined && lm.visibility < MIN_VISIBILITY) return false;
+    if (!isOnFrame(lm)) return false;
+    return true;
   });
 }
 
@@ -280,7 +309,10 @@ function getLandmarkConfidence(landmarks: NormalizedLandmark[], indices: number[
   for (const i of indices) {
     const lm = landmarks[i];
     if (lm) {
-      totalVis += lm.visibility ?? 0.5;
+      let v = lm.visibility ?? 0.5;
+      // Penalise off-frame extrapolations so the smoother's confidence gate trips.
+      if (!isOnFrame(lm)) v = Math.min(v, 0.1);
+      totalVis += v;
       count++;
     }
   }
@@ -305,7 +337,7 @@ function depthWeightedZ(z: number, depthConf: number): number {
  * All rotations are in radians
  * Returns null for joints whose key landmarks have low visibility
  */
-export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode: boolean = false): PartialSkeleton3DPose {
+export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode: boolean = false, footLockTracker?: FootLockTracker | null): PartialSkeleton3DPose {
   // Mirror mode handling:
   // - Keep all calculations in the original anatomical coordinate frame
   // - After computing joint rotations, swap left/right outputs if mirrored
@@ -321,14 +353,16 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   const rightWrist = landmarks[LANDMARKS.RIGHT_WRIST];
   const leftHip = landmarks[LANDMARKS.LEFT_HIP];
   const rightHip = landmarks[LANDMARKS.RIGHT_HIP];
-  const leftKnee = landmarks[LANDMARKS.LEFT_KNEE];
-  const rightKnee = landmarks[LANDMARKS.RIGHT_KNEE];
-  const leftAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
-  const rightAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
-  const leftHeel = landmarks[LANDMARKS.LEFT_HEEL] || leftAnkle;
-  const rightHeel = landmarks[LANDMARKS.RIGHT_HEEL] || rightAnkle;
-  const leftFootIndex = landmarks[LANDMARKS.LEFT_FOOT_INDEX] || leftAnkle;
-  const rightFootIndex = landmarks[LANDMARKS.RIGHT_FOOT_INDEX] || rightAnkle;
+  // Lower-body landmarks may be re-solved by 2-bone IK below when the
+  // corresponding foot is planted, so keep them mutable.
+  let leftKnee = landmarks[LANDMARKS.LEFT_KNEE];
+  let rightKnee = landmarks[LANDMARKS.RIGHT_KNEE];
+  let leftAnkle = landmarks[LANDMARKS.LEFT_ANKLE];
+  let rightAnkle = landmarks[LANDMARKS.RIGHT_ANKLE];
+  let leftHeel = landmarks[LANDMARKS.LEFT_HEEL] || leftAnkle;
+  let rightHeel = landmarks[LANDMARKS.RIGHT_HEEL] || rightAnkle;
+  let leftFootIndex = landmarks[LANDMARKS.LEFT_FOOT_INDEX] || leftAnkle;
+  let rightFootIndex = landmarks[LANDMARKS.RIGHT_FOOT_INDEX] || rightAnkle;
   const leftIndex = landmarks[LANDMARKS.LEFT_INDEX];
   const rightIndex = landmarks[LANDMARKS.RIGHT_INDEX];
 
@@ -494,22 +528,132 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
   };
 
   // === TORSO COORDINATE FRAME ===
-  const torsoUp = normalize({
+  // Raw vectors first (pre-normalize) so we can measure their magnitude for
+  // a degeneracy check. A near-zero up-vector means shoulderMid ≈ hipMid
+  // (torso landmarks collapsed onto each other) and a tiny cross-product
+  // magnitude means torsoUp and torsoRight are near-parallel — both
+  // produce wildly unstable bases that flip the avatar around. In either
+  // case we want to hold the previous filtered basis instead of writing
+  // garbage into it, otherwise a single bad frame propagates through
+  // every shoulder/hip dot-product downstream.
+  const upRaw: Vec3 = {
     x: shoulderMid.x - hipMid.x,
     y: shoulderMid.y - hipMid.y,
     z: shoulderMid.z - hipMid.z
-  });
+  };
+  const upMag = Math.sqrt(upRaw.x * upRaw.x + upRaw.y * upRaw.y + upRaw.z * upRaw.z);
   const shoulderVec: Vec3 = {
     x: (rightShoulder.x - leftShoulder.x),
     y: -(rightShoulder.y - leftShoulder.y),
     z: -(rightShoulder.z - leftShoulder.z)
   };
-  const torsoRight = normalize(shoulderVec);
-  const torsoForward = normalize({
+  const rightMag = Math.sqrt(shoulderVec.x * shoulderVec.x + shoulderVec.y * shoulderVec.y + shoulderVec.z * shoulderVec.z);
+  let torsoUp = normalize(upRaw);
+  let torsoRight = normalize(shoulderVec);
+  const fwdRaw: Vec3 = {
     x: torsoUp.y * torsoRight.z - torsoUp.z * torsoRight.y,
     y: torsoUp.z * torsoRight.x - torsoUp.x * torsoRight.z,
     z: torsoUp.x * torsoRight.y - torsoUp.y * torsoRight.x
-  });
+  };
+  const fwdMag = Math.sqrt(fwdRaw.x * fwdRaw.x + fwdRaw.y * fwdRaw.y + fwdRaw.z * fwdRaw.z);
+  let torsoForward = normalize(fwdRaw);
+
+  // Validity: shoulders + hips must each be visible AND on-frame, the
+  // torso must have non-trivial extent (>5% of normalized image), and
+  // the up/right cross product must produce a meaningful forward axis
+  // (>0.10 — roughly 6° away from parallel). Anything less and we
+  // hold the previous filtered basis.
+  const torsoLandmarksOK =
+    (leftShoulder.visibility ?? 1) >= 0.4 && isOnFrame(leftShoulder) &&
+    (rightShoulder.visibility ?? 1) >= 0.4 && isOnFrame(rightShoulder) &&
+    (leftHip.visibility ?? 1) >= 0.4 && isOnFrame(leftHip) &&
+    (rightHip.visibility ?? 1) >= 0.4 && isOnFrame(rightHip);
+  const torsoBasisValid = torsoLandmarksOK && upMag > 0.05 && rightMag > 0.05 && fwdMag > 0.10;
+
+  // Low-pass filter torso basis with degenerate-frame hold (uses tracker's
+  // smoother when foot lock is on, module fallback otherwise).
+  let footLockUpdate: ReturnType<FootLockTracker['update']> | null = null;
+  const torsoSmoothed = footLockTracker
+    ? footLockTracker.smoothTorsoBasis(torsoUp, torsoForward, torsoRight, torsoBasisValid)
+    : defaultTorsoBasisSmoother.smooth(torsoUp, torsoForward, torsoRight, torsoBasisValid);
+  torsoUp = torsoSmoothed.up;
+  torsoForward = torsoSmoothed.forward;
+  torsoRight = torsoSmoothed.right;
+  if (footLockTracker) {
+    footLockUpdate = footLockTracker.update(landmarks);
+  }
+
+  // Lower-body depth confidence: blends landmark visibility with the actual
+  // Z spread across hip/knee/ankle (both sides). A frontal low-parallax
+  // pose collapses the legs onto a single Z plane → tiny zSpread → low
+  // confidence even when visibility is high, which is exactly when the
+  // Posesmoother needs to damp leg joints harder.
+  const legVisConf = getDepthConfidence(landmarks, [
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+    LANDMARKS.LEFT_KNEE, LANDMARKS.RIGHT_KNEE,
+    LANDMARKS.LEFT_ANKLE, LANDMARKS.RIGHT_ANKLE
+  ]);
+  const legZs = [
+    leftHip.z, rightHip.z,
+    landmarks[LANDMARKS.LEFT_KNEE]?.z ?? 0, landmarks[LANDMARKS.RIGHT_KNEE]?.z ?? 0,
+    landmarks[LANDMARKS.LEFT_ANKLE]?.z ?? 0, landmarks[LANDMARKS.RIGHT_ANKLE]?.z ?? 0,
+  ];
+  const zSpread = Math.max(...legZs) - Math.min(...legZs);
+  // 0.20 normalized-Z spread is a healthy 3/4-view; below ~0.05 is a head-on view.
+  const legGeomConf = Math.max(0, Math.min(1, zSpread / 0.20));
+  // Only emit `legDepthConfidence` when the foot-lock tracker is present.
+  // The depth-aware leg damping in `Posesmoother` is part of the foot-lock
+  // family of behaviors, so when the operator turns Foot lock OFF (the
+  // caller passes a null tracker) it must turn off cleanly too — leaving
+  // `legDepthConfidence` undefined makes the smoother skip the extra
+  // damping multiplier entirely.
+  const legDepthConf: number | undefined = footLockTracker
+    ? Math.min(legVisConf, legGeomConf)
+    : undefined;
+
+  // === FOOT LOCK 2-BONE IK ===
+  // For each planted leg, re-solve the knee position so that the FK foot
+  // (hip → knee → ankle) lands exactly on the captured anchor instead of the
+  // drifting raw ankle landmark. Heel and foot-index landmarks are translated
+  // by the same delta so ankle dorsi/inversion calcs stay coherent.
+  if (footLockUpdate) {
+    if (footLockUpdate.support.left === 'planted' && footLockUpdate.leftAnchor) {
+      const thighLen = Math.sqrt(
+        (leftHip.x - leftKnee.x) ** 2 + (leftHip.y - leftKnee.y) ** 2 + (leftHip.z - leftKnee.z) ** 2
+      );
+      const shinLen = Math.sqrt(
+        (leftKnee.x - leftAnkle.x) ** 2 + (leftKnee.y - leftAnkle.y) ** 2 + (leftKnee.z - leftAnkle.z) ** 2
+      );
+      if (thighLen > 1e-4 && shinLen > 1e-4) {
+        const ik = solveLegIK(leftHip, leftKnee, footLockUpdate.leftAnchor, thighLen, shinLen);
+        const dx = ik.ankle.x - leftAnkle.x;
+        const dy = ik.ankle.y - leftAnkle.y;
+        const dz = ik.ankle.z - leftAnkle.z;
+        leftKnee = { ...leftKnee, x: ik.knee.x, y: ik.knee.y, z: ik.knee.z };
+        leftAnkle = { ...leftAnkle, x: ik.ankle.x, y: ik.ankle.y, z: ik.ankle.z };
+        leftHeel = { ...leftHeel, x: leftHeel.x + dx, y: leftHeel.y + dy, z: leftHeel.z + dz };
+        leftFootIndex = { ...leftFootIndex, x: leftFootIndex.x + dx, y: leftFootIndex.y + dy, z: leftFootIndex.z + dz };
+      }
+    }
+    if (footLockUpdate.support.right === 'planted' && footLockUpdate.rightAnchor) {
+      const thighLen = Math.sqrt(
+        (rightHip.x - rightKnee.x) ** 2 + (rightHip.y - rightKnee.y) ** 2 + (rightHip.z - rightKnee.z) ** 2
+      );
+      const shinLen = Math.sqrt(
+        (rightKnee.x - rightAnkle.x) ** 2 + (rightKnee.y - rightAnkle.y) ** 2 + (rightKnee.z - rightAnkle.z) ** 2
+      );
+      if (thighLen > 1e-4 && shinLen > 1e-4) {
+        const ik = solveLegIK(rightHip, rightKnee, footLockUpdate.rightAnchor, thighLen, shinLen);
+        const dx = ik.ankle.x - rightAnkle.x;
+        const dy = ik.ankle.y - rightAnkle.y;
+        const dz = ik.ankle.z - rightAnkle.z;
+        rightKnee = { ...rightKnee, x: ik.knee.x, y: ik.knee.y, z: ik.knee.z };
+        rightAnkle = { ...rightAnkle, x: ik.ankle.x, y: ik.ankle.y, z: ik.ankle.z };
+        rightHeel = { ...rightHeel, x: rightHeel.x + dx, y: rightHeel.y + dy, z: rightHeel.z + dz };
+        rightFootIndex = { ...rightFootIndex, x: rightFootIndex.x + dx, y: rightFootIndex.y + dy, z: rightFootIndex.z + dz };
+      }
+    }
+  }
 
   // === ARM CALCULATIONS ===
   // armDepthConf is used ONLY for joint confidence display, not for angle attenuation.
@@ -791,11 +935,40 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     y: -((leftHip.y + rightHip.y) / 2),
     z: -((leftHip.z + rightHip.z) / 2)
   };
+  // Foot lock root anchoring: the 2-bone IK above pins the leg vector so
+  // FK from hip lands on the anchor, but the avatar root itself is still
+  // driven by the raw hip midpoint and would jitter with hipRaw noise.
+  // Apply the planted-foot hipOffset (in hipMidNorm coord space — x raw,
+  // y negated, z negated) before computing globalTranslation. For rigid-body
+  // motion this cancels root drift; for articulated motion the IK absorbs
+  // the residual. Mirror mode negates lateralShift downstream, which
+  // correctly mirrors the offset since the offset has already been folded
+  // into hipMidNorm.x.
+  if (footLockUpdate && footLockUpdate.hasAnchor) {
+    hipMidNorm.x += footLockUpdate.hipOffset.x;
+    hipMidNorm.y += footLockUpdate.hipOffset.y;
+    hipMidNorm.z += footLockUpdate.hipOffset.z;
+  }
   const globalTranslation: GlobalTranslation = {
     lateralShift: clamp((hipMidNorm.x - 0.0) * 2.0, -0.3, 0.3),
     forwardShift: clamp(hipMidNorm.z * 2.0, -0.3, 0.3),
     verticalShift: clamp((hipMidNorm.y + 0.5) * 1.5, -0.2, 0.2),
   };
+  const footSupport: FootSupportState | undefined = footLockUpdate ? footLockUpdate.support : undefined;
+  const mirroredFootSupport: FootSupportState | undefined = footSupport
+    ? { left: footSupport.right, right: footSupport.left }
+    : undefined;
+  // feetVisible is the per-foot on-frame + ankle-visibility flag from
+  // the foot lock tracker. Surface it on the pose output so UI badges
+  // (foot-support indicators, etc.) can hide whenever the actual foot
+  // landmark is off-frame, instead of using bodyVisibility.lowerBody —
+  // which can read "lower body visible" while the feet themselves are
+  // still off the bottom of the frame (hips + knees are enough to flip
+  // bodyVisibility.lowerBody true).
+  const feetVisible: FootVisibilityState | undefined = footLockUpdate ? footLockUpdate.feetVisible : undefined;
+  const mirroredFeetVisible: FootVisibilityState | undefined = feetVisible
+    ? { left: feetVisible.right, right: feetVisible.left }
+    : undefined;
 
   if (mirrorMode) {
     return {
@@ -832,6 +1005,10 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
       } : undefined,
       jointConfidence: buildJointConfidence(landmarks, armDepthConf),
       globalTranslation: { ...globalTranslation, lateralShift: -globalTranslation.lateralShift },
+      footSupport: mirroredFootSupport,
+      feetVisible: mirroredFeetVisible,
+      legDepthConfidence: legDepthConf,
+      bodyVisibility: computeBodyVisibility(landmarks),
       spineSegments: {
         ...spineSegments,
         cervicalRotation: -spineSegments.cervicalRotation,
@@ -874,6 +1051,10 @@ export function convertMediaPipeTo3D(landmarks: NormalizedLandmark[], mirrorMode
     scapulaData,
     jointConfidence: buildJointConfidence(landmarks, armDepthConf),
     globalTranslation,
+    footSupport,
+    feetVisible,
+    legDepthConfidence: legDepthConf,
+    bodyVisibility: computeBodyVisibility(landmarks),
     spineSegments,
     bodyProportions,
   };
@@ -970,7 +1151,41 @@ export type PartialSkeleton3DPose = {
   globalTranslation?: GlobalTranslation;
   spineSegments?: SpineSegmentation;
   bodyProportions?: BodyProportions;
+  footSupport?: FootSupportState;
+  feetVisible?: FootVisibilityState;
+  legDepthConfidence?: number;
+  bodyVisibility?: BodyVisibility;
 };
+
+/**
+ * Determine which halves of the body are actually observed by the camera.
+ * Combines MediaPipe visibility scores with on-frame coordinate checks so
+ * extrapolated landmarks don't falsely report "visible". Used by the
+ * avatar-driver to skip writes for body regions that aren't really there.
+ */
+export function computeBodyVisibility(landmarks: NormalizedLandmark[]): BodyVisibility {
+  const upperIds = [
+    LANDMARKS.LEFT_SHOULDER, LANDMARKS.RIGHT_SHOULDER,
+    LANDMARKS.LEFT_ELBOW, LANDMARKS.RIGHT_ELBOW,
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+  ];
+  const lowerIds = [
+    LANDMARKS.LEFT_HIP, LANDMARKS.RIGHT_HIP,
+    LANDMARKS.LEFT_KNEE, LANDMARKS.RIGHT_KNEE,
+    LANDMARKS.LEFT_ANKLE, LANDMARKS.RIGHT_ANKLE,
+  ];
+  const visibleCount = (ids: number[]) => ids.reduce((n, i) => {
+    const lm = landmarks[i];
+    if (!lm) return n;
+    if (lm.visibility !== undefined && lm.visibility < 0.4) return n;
+    if (!isOnFrame(lm)) return n;
+    return n + 1;
+  }, 0);
+  return {
+    upperBody: visibleCount(upperIds) >= 4,
+    lowerBody: visibleCount(lowerIds) >= 4,
+  };
+}
 
 function detectCameraView(landmarks: NormalizedLandmark[]): { viewType: CameraViewType; confidence: number } {
   const lShoulder = landmarks[LANDMARKS.LEFT_SHOULDER];
@@ -1527,6 +1742,12 @@ export function convertPartialMediaPipeTo3D(
     }
   }
 
+  // Populate metadata so handlePartialPoseUpdate can run the same per-joint/region gating.
+  const jointConfidence = buildJointConfidence(landmarks);
+  const bodyVisibility = computeBodyVisibility(landmarks);
+  result.jointConfidence = jointConfidence;
+  result.bodyVisibility = bodyVisibility;
+
   if (mirrorMode) {
     const swapped: PartialSkeleton3DPose = { ...result };
     swapped.leftShoulder = result.rightShoulder;
@@ -1543,6 +1764,23 @@ export function convertPartialMediaPipeTo3D(
     swapped.rightAnkle = result.leftAnkle;
     if (swapped.spine) swapped.spine = { ...swapped.spine, z: -swapped.spine.z };
     if (swapped.neck) swapped.neck = { ...swapped.neck, y: -swapped.neck.y, z: -swapped.neck.z };
+    // Swap L/R confidence to align with mirrored joints; bodyVisibility is symmetric.
+    swapped.jointConfidence = {
+      ...jointConfidence,
+      leftShoulder: jointConfidence.rightShoulder,
+      rightShoulder: jointConfidence.leftShoulder,
+      leftElbow: jointConfidence.rightElbow,
+      rightElbow: jointConfidence.leftElbow,
+      leftHip: jointConfidence.rightHip,
+      rightHip: jointConfidence.leftHip,
+      leftKnee: jointConfidence.rightKnee,
+      rightKnee: jointConfidence.leftKnee,
+      leftWrist: jointConfidence.rightWrist,
+      rightWrist: jointConfidence.leftWrist,
+      leftAnkle: jointConfidence.rightAnkle,
+      rightAnkle: jointConfidence.leftAnkle,
+    };
+    swapped.bodyVisibility = bodyVisibility;
     return swapped;
   }
 
@@ -1593,7 +1831,13 @@ export class PartialPoseSmoother {
       return newPose;
     }
 
-    const smoothed: PartialSkeleton3DPose = {} as PartialSkeleton3DPose;
+    const smoothed: PartialSkeleton3DPose = {
+      // Carry through the gating metadata so handlePartialPoseUpdate
+      // sees real values (otherwise its `?? 0.7` fallback would always
+      // permit writes and the gate would be a no-op).
+      jointConfidence: newPose.jointConfidence,
+      bodyVisibility: newPose.bodyVisibility,
+    } as PartialSkeleton3DPose;
 
     for (const jointName of PartialPoseSmoother.ALL_JOINTS) {
       const newVal = newPose[jointName];
@@ -1732,6 +1976,10 @@ export class Posesmoother {
         globalTranslation: this.prevGlobalTranslation,
         spineSegments: this.prevSpineSegments,
         bodyProportions: this.prevBodyProportions,
+        footSupport: newPose.footSupport,
+        feetVisible: newPose.feetVisible,
+        legDepthConfidence: newPose.legDepthConfidence,
+        bodyVisibility: newPose.bodyVisibility,
       };
     }
     
@@ -1758,8 +2006,30 @@ export class Posesmoother {
         continue;
       }
 
-      const noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
-      
+      let noiseScale = Posesmoother.JOINT_NOISE_PROFILE[jointName] ?? 1.0;
+
+      // Adaptive smoothing for lower body:
+      //   1. Planted-leg joints get 2.5× damping to keep feet still.
+      //   2. Low lower-body depth confidence (Z separation < ~0.15 normalized)
+      //      additionally scales noise by up to 3× so a head-on view of the
+      //      leg doesn't translate Z noise into joint jitter.
+      const isLegJoint =
+        jointName === 'leftHip' || jointName === 'leftKnee' || jointName === 'leftAnkle' ||
+        jointName === 'rightHip' || jointName === 'rightKnee' || jointName === 'rightAnkle';
+      const support = newPose.footSupport;
+      if (support) {
+        const PLANTED_LEG_NOISE_MULT = 2.5;
+        if (support.left === 'planted' && (jointName === 'leftHip' || jointName === 'leftKnee' || jointName === 'leftAnkle')) {
+          noiseScale *= PLANTED_LEG_NOISE_MULT;
+        }
+        if (support.right === 'planted' && (jointName === 'rightHip' || jointName === 'rightKnee' || jointName === 'rightAnkle')) {
+          noiseScale *= PLANTED_LEG_NOISE_MULT;
+        }
+      }
+      if (isLegJoint && typeof newPose.legDepthConfidence === 'number' && newPose.legDepthConfidence < 0.5) {
+        noiseScale *= 1 + (0.5 - newPose.legDepthConfidence) * 4; // up to 3× at conf=0
+      }
+
       const deltaX = rotation.x - prevRotation.x;
       const deltaY = rotation.y - prevRotation.y;
       const deltaZ = rotation.z - prevRotation.z;
@@ -1859,6 +2129,10 @@ export class Posesmoother {
       globalTranslation: smoothedTranslation,
       spineSegments: smoothedSegments,
       bodyProportions: this.prevBodyProportions,
+      footSupport: newPose.footSupport,
+      feetVisible: newPose.feetVisible,
+      legDepthConfidence: newPose.legDepthConfidence,
+      bodyVisibility: newPose.bodyVisibility,
     };
   }
   

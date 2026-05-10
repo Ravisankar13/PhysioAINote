@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers } from 'lucide-react';
+import { Activity, Shield, Dumbbell, Scale, Lock, Link2, Brain, Layers, ArrowUp, ArrowDown, Clock, ChevronRight, Weight, Cloud } from 'lucide-react';
 import type { ForceAnalysisResult, WeightDistribution } from '@/lib/posturalForceEngine';
 import { computeMuscleBalanceRatios, type MuscleAnalysisResult } from '@/lib/muscleBiomechanicsEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { BiomechanicsOutput } from '@/lib/unifiedBiomechanicsEngine';
+import type { ForceTimeMetrics } from '@/lib/forceTimeBuffer';
+import { citationsFor, getThresholdsFor, type PatientState } from '@/lib/forceCitations';
 
 interface ChainIntegrityEntry {
   score: number;
@@ -25,8 +27,29 @@ interface BiomechanicsHUDProps {
   onOpenMuscleOverlay: () => void;
   onOpenChainExplorer: () => void;
   onOpenSlings: () => void;
+  /** Task #323: when true, the on-skeleton sling overlay is pinned and the
+   * Slings circle renders in a pressed/active visual state. Independent of
+   * which side-panel tab is active. */
+  slingsOverlayPinned?: boolean;
+  /** Task #323: primary-click handler on the Slings circle. Toggles the
+   * on-skeleton sling overlay. `onOpenSlings` is preserved as a secondary
+   * affordance (chevron button + double-click). */
+  onToggleSlingsOverlay?: () => void;
+  /** Task #323 — review-3 fix: when false, the Slings circle is omitted
+   * from the HUD entirely. PhysioGPT passes `false` outside Movement
+   * Mode so the toggle control isn't visible where it has no meaning. */
+  showSlings?: boolean;
   onOpenBiomechanics: () => void;
   onToggleTissueView: () => void;
+  timeMetrics?: ForceTimeMetrics | null;
+  onOpenForceTime?: () => void;
+  patientForceState?: PatientState;
+  /** Live patient body weight (kg). Used to dual-label tooltip values in
+   * both BW multiples and Newtons so units stay consistent. */
+  bodyWeightKg?: number;
+  externalLoadKg?: number;
+  externalLoadHand?: 'left' | 'right' | 'both';
+  onChangeExternalLoad?: (kg: number, hand: 'left' | 'right' | 'both') => void;
 }
 
 function getForceColor(status: string): string {
@@ -77,10 +100,42 @@ export default function BiomechanicsHUD({
   onOpenMuscleOverlay,
   onOpenChainExplorer,
   onOpenSlings,
+  slingsOverlayPinned = false,
+  onToggleSlingsOverlay,
+  showSlings = true,
   onOpenBiomechanics,
   onToggleTissueView,
+  timeMetrics,
+  onOpenForceTime,
+  patientForceState,
+  bodyWeightKg = 70,
+  externalLoadKg = 0,
+  externalLoadHand = 'both',
+  onChangeExternalLoad,
 }: BiomechanicsHUDProps) {
   const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
+  const [loadPopoverOpen, setLoadPopoverOpen] = useState(false);
+  // Task #381 — Clean/Detailed toggle for the on-skeleton stress
+  // visualization. Default Clean so the skeleton anatomy is never occluded.
+  // The PureThreeGLBViewer mirrors this preference via a window event.
+  const [stressVizMode, setStressVizMode] = useState<'clean' | 'detailed'>(() => {
+    if (typeof window === 'undefined') return 'clean';
+    const stored = window.localStorage.getItem('physiogpt:stressVizMode');
+    return stored === 'detailed' ? 'detailed' : 'clean';
+  });
+  const toggleStressVizMode = () => {
+    setStressVizMode((prev) => {
+      const next = prev === 'clean' ? 'detailed' : 'clean';
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('physiogpt:stressVizMode', next);
+        window.dispatchEvent(
+          new CustomEvent('physiogpt:stress-viz-mode-change', { detail: { mode: next } })
+        );
+      }
+      return next;
+    });
+  };
+  const [directions, setDirections] = useState<Record<string, 'up' | 'down' | null>>({});
   const prevThresholdsRef = useRef<{
     forceStatus: string;
     chainScore: number;
@@ -98,6 +153,8 @@ export default function BiomechanicsHUD({
     romCount: 0,
     tissueCount: 0,
   });
+  const prevNumericRef = useRef<Record<string, number>>({});
+  const directionTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     const prev = prevThresholdsRef.current;
@@ -128,11 +185,60 @@ export default function BiomechanicsHUD({
       tissueCount: curTissueCount,
     };
 
+    // Track numeric value changes for ALL circles to drive pulse + direction indicator on any edit.
+    const numericNow: Record<string, number> = {
+      controls: curRomCount,
+      slings: curSlingScore,
+      biomechanics: curBioScore,
+      tissue: curTissueCount,
+      forces: forceAnalysis?.joints?.[0]?.totalForce ?? 0,
+      chains: curChainScore,
+      muscle: curSyndromes,
+      weight: weightDistribution?.asymmetryPercent ?? 0,
+    };
+    const dirThresholds: Record<string, number> = {
+      controls: 0.5, slings: 0.5, biomechanics: 0.5, tissue: 0.5,
+      forces: 0.005, chains: 0.5, muscle: 0.5, weight: 0.3,
+    };
+    const directionDeltas: Record<string, 'up' | 'down'> = {};
+    Object.entries(numericNow).forEach(([id, v]) => {
+      const prevV = prevNumericRef.current[id];
+      if (prevV !== undefined && Math.abs(v - prevV) >= (dirThresholds[id] ?? 0.5)) {
+        newPulse.add(id);
+        directionDeltas[id] = v > prevV ? 'up' : 'down';
+      }
+      prevNumericRef.current[id] = v;
+    });
+
     if (newPulse.size > 0) {
-      setPulsingIds(newPulse);
-      setTimeout(() => setPulsingIds(new Set()), 600);
+      setPulsingIds(prev => {
+        const next = new Set(prev);
+        newPulse.forEach(id => next.add(id));
+        return next;
+      });
+      setTimeout(() => {
+        setPulsingIds(prev => {
+          const next = new Set(prev);
+          newPulse.forEach(id => next.delete(id));
+          return next;
+        });
+      }, 600);
     }
-  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis, slingAnalysis, biomechanicsOutput, romRestrictionCount, tissueConcernCount]);
+
+    if (Object.keys(directionDeltas).length > 0) {
+      setDirections(prev => ({ ...prev, ...directionDeltas }));
+      Object.keys(directionDeltas).forEach(id => {
+        if (directionTimeoutsRef.current[id]) clearTimeout(directionTimeoutsRef.current[id]);
+        directionTimeoutsRef.current[id] = setTimeout(() => {
+          setDirections(prev => ({ ...prev, [id]: null }));
+        }, 900);
+      });
+    }
+  }, [forceAnalysis, chainIntegrityScores, muscleAnalysis, slingAnalysis, biomechanicsOutput, romRestrictionCount, tissueConcernCount, weightDistribution]);
+
+  useEffect(() => () => {
+    Object.values(directionTimeoutsRef.current).forEach(t => clearTimeout(t));
+  }, []);
 
   const topJoint = useMemo(() => {
     if (!forceAnalysis) return null;
@@ -174,6 +280,14 @@ export default function BiomechanicsHUD({
     value: string;
     valueColor: string;
     onClick: () => void;
+    onDoubleClick?: () => void;
+    tooltip?: string;
+    /** Task #323: render a pressed/active visual state for togglable circles. */
+    pressed?: boolean;
+    /** Task #323: a small secondary affordance rendered in the bottom-right
+     * of the circle (used for the Slings chevron that opens the side panel
+     * while the primary click toggles the on-skeleton overlay). */
+    secondary?: { tooltip: string; onClick: () => void; icon: typeof Activity; testId: string };
   }> = [
     {
       id: 'controls',
@@ -181,7 +295,7 @@ export default function BiomechanicsHUD({
       color: 'text-orange-400',
       bgColor: 'bg-orange-500/15',
       ringColor: 'ring-orange-500/30',
-      label: 'Controls',
+      label: 'Pose',
       value: romRestrictionCount > 0 ? `${romRestrictionCount}` : 'OK',
       valueColor: romRestrictionCount >= 4 ? '#ef4444' : romRestrictionCount >= 2 ? '#f97316' : romRestrictionCount >= 1 ? '#eab308' : '#22c55e',
       onClick: onOpenForceOverlay,
@@ -195,18 +309,20 @@ export default function BiomechanicsHUD({
       label: 'Slings',
       value: slingScore !== null ? `${Math.round(slingScore)}%` : '--',
       valueColor: slingScore !== null ? getScoreColor(slingScore) : '#6b7280',
-      onClick: onOpenSlings,
-    },
-    {
-      id: 'biomechanics',
-      icon: Brain,
-      color: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/15',
-      ringColor: 'ring-cyan-500/30',
-      label: 'Biomech',
-      value: bioQualityScore !== null ? `${Math.round(bioQualityScore)}%` : '--',
-      valueColor: bioQualityScore !== null ? getScoreColor(bioQualityScore) : '#6b7280',
-      onClick: onOpenBiomechanics,
+      // Task #323: primary click toggles the on-skeleton sling overlay
+      // (when a toggle handler is provided), regardless of side-panel
+      // tab. Falls back to opening the panel when no toggle wired up.
+      onClick: onToggleSlingsOverlay ?? onOpenSlings,
+      // Task #323: double-click is the keyboard-free secondary affordance
+      // mirroring the chevron — opens the full Slings side panel.
+      onDoubleClick: onToggleSlingsOverlay ? onOpenSlings : undefined,
+      pressed: !!slingsOverlayPinned,
+      tooltip: onToggleSlingsOverlay
+        ? `${slingsOverlayPinned ? 'Hide' : 'Show'} on-skeleton sling overlay (chevron / double-click for panel)`
+        : 'Slings',
+      secondary: onToggleSlingsOverlay
+        ? { tooltip: 'Open Slings panel', onClick: onOpenSlings, icon: ChevronRight, testId: 'hud-slings-open-panel' }
+        : undefined,
     },
     {
       id: 'tissue',
@@ -228,6 +344,44 @@ export default function BiomechanicsHUD({
       label: 'Forces',
       value: topJoint ? `${abbreviateJoint(topJoint.label)} ${(topJoint.totalForce * 100).toFixed(0)}%` : '--',
       valueColor: topJoint ? getForceColor(topJoint.status) : '#6b7280',
+      // Inline citation + ±7% anthropometric confidence band so every HUD
+      // force readout carries provenance (the trust-layer requirement).
+      tooltip: (() => {
+        if (!topJoint) return 'Forces';
+        const cits = citationsFor(topJoint.id);
+        const band = patientForceState ? getThresholdsFor(topJoint.id, patientForceState) : null;
+        const bw = topJoint.totalForce;
+        const bwLow = bw * 0.93;
+        const bwHigh = bw * 1.07;
+        // Body weight in Newtons (g = 9.81) so every value can be shown in
+        // both BW multiples and N (clinicians read both).
+        const bwN = (bodyWeightKg > 0 ? bodyWeightKg : 70) * 9.81;
+        const peakN = bw * bwN;
+        const lowN = bwLow * bwN;
+        const highN = bwHigh * bwN;
+        const fmt = (b: number, n: number) => `${b.toFixed(2)} BW (${Math.round(n)} N)`;
+        const lines: string[] = [
+          `Peak: ${abbreviateJoint(topJoint.label)} ${fmt(bw, peakN)}`,
+          `Confidence ±7% (de Leva 1996): ${fmt(bwLow, lowN)} – ${fmt(bwHigh, highN)}`,
+        ];
+        if (band) {
+          const safeBw = band.safeN / bwN;
+          const warnBw = band.warnN / bwN;
+          lines.push(
+            `Safe < ${fmt(safeBw, band.safeN)} · Warn ${fmt(warnBw, band.warnN)} — ${band.note}`
+          );
+        }
+        if (cits.length > 0) {
+          const label = cits.length === 1 ? 'Source' : 'Sources';
+          lines.push(
+            `${label}:\n` +
+            cits
+              .map((c, i) => `  ${i + 1}. ${c.authors} (${c.year}). ${c.title}. ${c.source}`)
+              .join('\n')
+          );
+        }
+        return lines.join('\n');
+      })(),
       onClick: onOpenForceOverlay,
     },
     {
@@ -247,49 +401,45 @@ export default function BiomechanicsHUD({
       color: 'text-rose-400',
       bgColor: 'bg-rose-500/15',
       ringColor: 'ring-rose-500/30',
-      label: 'Balance',
+      label: 'Muscles',
       value: syndromeCount > 0 ? `${syndromeCount} syn` : imbalanceCount > 0 ? `${imbalanceCount} imb` : 'OK',
       valueColor: syndromeCount > 0 ? '#ef4444' : imbalanceCount > 0 ? '#f97316' : '#22c55e',
       onClick: onOpenMuscleOverlay,
-    },
-    {
-      id: 'weight',
-      icon: Scale,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/15',
-      ringColor: 'ring-blue-500/30',
-      label: 'Weight',
-      value: weightDistribution
-        ? weightDistribution.asymmetryPercent > 3
-          ? `${weightDistribution.asymmetryPercent.toFixed(0)}%`
-          : 'Even'
-        : '--',
-      valueColor: weightDistribution
-        ? weightDistribution.asymmetryPercent > 15 ? '#ef4444'
-          : weightDistribution.asymmetryPercent > 10 ? '#f97316'
-          : weightDistribution.asymmetryPercent > 5 ? '#eab308'
-          : '#22c55e'
-        : '#6b7280',
-      onClick: onOpenForceOverlay,
     },
   ];
 
   return (
     <>
-    <style>{`@keyframes hud-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }`}</style>
+    <style>{`
+      @keyframes hud-pulse { 0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0); } 50% { transform: scale(1.2); box-shadow: 0 0 0 6px rgba(255,255,255,0.18); } }
+      @keyframes hud-arrow-fade { 0% { opacity: 0; transform: translateY(4px); } 20%,80% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-4px); } }
+    `}</style>
     <div
       className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 flex-wrap justify-center max-w-[500px]"
     >
-      {circles.map((c) => {
+      {circles.filter((c) => c.id !== 'slings' || showSlings).map((c) => {
         const Icon = c.icon;
         const isPulsing = pulsingIds.has(c.id);
+        const dir = directions[c.id];
+        const SecondaryIcon = c.secondary?.icon;
+        // Task #323: pressed circles get a brighter ring + an inset glow so
+        // the toggle state reads at a glance even while a pulse is firing.
+        const ringClass = c.pressed
+          ? 'ring-2 ring-white/80'
+          : isPulsing ? 'ring-2 ring-white/70' : c.ringColor;
         return (
           <button
             key={c.id}
             onClick={c.onClick}
-            className={`w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${c.ringColor} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer`}
+            onDoubleClick={c.onDoubleClick}
+            className={`relative w-[52px] h-[52px] rounded-full ${c.bgColor} backdrop-blur-md ring-1 ${ringClass} shadow-lg flex flex-col items-center justify-center gap-0.5 hover:scale-110 hover:ring-2 transition-all duration-200 cursor-pointer ${c.pressed ? 'shadow-inner brightness-125' : ''}`}
             style={isPulsing ? { animation: 'hud-pulse 0.3s ease-in-out 2' } : undefined}
-            title={c.label}
+            title={c.tooltip ?? c.label}
+            data-testid={`hud-circle-${c.id}`}
+            data-pulsing={isPulsing ? 'true' : 'false'}
+            data-direction={dir ?? 'none'}
+            data-pressed={c.pressed ? 'true' : 'false'}
+            aria-pressed={c.pressed === undefined ? undefined : c.pressed}
           >
             <Icon className={`h-3 w-3 ${c.color}`} />
             <span
@@ -301,10 +451,98 @@ export default function BiomechanicsHUD({
             <span className="text-[6px] text-gray-400 uppercase tracking-wider leading-none">
               {c.label}
             </span>
+            {dir && (
+              <span
+                className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full shadow"
+                style={{
+                  background: dir === 'up' ? '#ef4444' : '#22c55e',
+                  animation: 'hud-arrow-fade 0.9s ease-in-out forwards',
+                }}
+                aria-label={dir === 'up' ? 'increased' : 'decreased'}
+              >
+                {dir === 'up' ? <ArrowUp className="h-2.5 w-2.5 text-white" /> : <ArrowDown className="h-2.5 w-2.5 text-white" />}
+              </span>
+            )}
+            {c.secondary && SecondaryIcon && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); c.secondary!.onClick(); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    c.secondary!.onClick();
+                  }
+                }}
+                className="absolute -bottom-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full bg-slate-900/90 ring-1 ring-white/30 text-slate-200 hover:text-white hover:bg-slate-800 cursor-pointer"
+                title={c.secondary.tooltip}
+                data-testid={c.secondary.testId}
+                aria-label={c.secondary.tooltip}
+              >
+                <SecondaryIcon className="h-2.5 w-2.5" />
+              </span>
+            )}
           </button>
         );
       })}
     </div>
+    {loadPopoverOpen && onChangeExternalLoad && (
+      <div
+        className="absolute top-[72px] left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md ring-1 ring-yellow-500/40 rounded-lg shadow-xl p-3 min-w-[260px]"
+        data-testid="hud-load-popover"
+      >
+        <div className="text-[11px] font-semibold text-yellow-300 uppercase tracking-wider mb-2">
+          External Load (Hand-Held)
+        </div>
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {[0, 2.5, 5, 10, 20].map((kg) => (
+            <button
+              key={kg}
+              onClick={() => onChangeExternalLoad(kg, externalLoadHand)}
+              className={`px-1 py-1.5 rounded text-[11px] font-bold tabular-nums transition-colors ${
+                externalLoadKg === kg
+                  ? 'bg-yellow-500 text-slate-900'
+                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+              }`}
+              data-testid={`hud-load-preset-${kg}`}
+            >
+              {kg === 0 ? 'Off' : `${kg}kg`}
+            </button>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Carried in</div>
+        <div className="grid grid-cols-3 gap-1.5 mb-2">
+          {(['left', 'both', 'right'] as const).map((h) => (
+            <button
+              key={h}
+              onClick={() => onChangeExternalLoad(externalLoadKg, h)}
+              className={`px-1 py-1.5 rounded text-[11px] font-medium capitalize transition-colors ${
+                externalLoadHand === h
+                  ? 'bg-yellow-500 text-slate-900'
+                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+              }`}
+              data-testid={`hud-load-hand-${h}`}
+            >
+              {h}
+            </button>
+          ))}
+        </div>
+        <div className="text-[10px] text-slate-400 leading-snug">
+          Total {externalLoadKg} kg → {externalLoadHand === 'both'
+            ? `${(externalLoadKg / 2).toFixed(1)} kg per hand`
+            : `${externalLoadKg} kg in ${externalLoadHand} hand`}.
+          Lever physics: de Leva 1996; lumbar amplification: Marras 1995.
+        </div>
+        <button
+          onClick={() => setLoadPopoverOpen(false)}
+          className="mt-2 w-full py-1 text-[10px] text-slate-400 hover:text-slate-200 uppercase tracking-wider"
+        >
+          Close
+        </button>
+      </div>
+    )}
     </>
   );
 }

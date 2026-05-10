@@ -1,49 +1,74 @@
 # PhysioGPT Platform
+An AI-powered physiotherapy platform providing clinical decision support, enhancing efficiency, accuracy, and educational capabilities for practitioners and students.
 
-## Overview
-PhysioGPT is an AI-powered physiotherapy platform designed to provide clinical decision support for practitioners and students. Its primary purpose is to enhance efficiency, accuracy, and educational capabilities in physiotherapy, ultimately improving patient outcomes and practitioner workflow. Key capabilities include SOAP note generation, virtual patient analysis, evidence-based exercise prescription, and extensive research integration. The project aims to become a leading AI solution in physiotherapy, with significant market potential for improving diagnostic precision and treatment efficacy.
+## Run & Operate
+- `npm install`: Install dependencies.
+- `npm run dev`: Start the development server.
+- `npm run build`: Build the frontend and backend.
+- `npm run typecheck`: Run TypeScript type checking.
+- `npm run codegen`: Generate API client code.
+- `npm run db:push`: Apply database schema changes (see Gotchas for non-interactive environments).
 
-## User Preferences
+**Required Environment Variables:**
+- `DATABASE_URL`: PostgreSQL connection string (Neon serverless).
+- `OPENAI_API_KEY`: API key for OpenAI services.
+- `AWS_S3_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: For AWS S3 storage.
+- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: For PayPal integration.
+- `STRIPE_SECRET_KEY`: For Stripe integration.
+- `SENDGRID_API_KEY`: For SendGrid email service.
+- `SESSION_SECRET`: For Express session management.
+
+## Stack
+- **Frontend**: React 18 (TypeScript), Shadcn/ui, Radix UI, Tailwind CSS
+- **Backend**: Node.js 20 (TypeScript), Express.js, Passport.js
+- **Database**: PostgreSQL (Neon serverless)
+- **ORM**: Drizzle ORM
+- **Validation**: Zod
+- **Build Tool**: Vite
+
+## Where things live
+- `client/`: Frontend React application.
+- `server/`: Backend Node.js application.
+- `shared/schema.ts`: Database schema definition (source of truth).
+- `server/db.ts`: Drizzle ORM configuration and database connection.
+- `client/src/utils/footLock.ts`: Foot lock logic for pose tracking.
+- `server/api/`: Backend API routes.
+- `client/src/components/ui/`: Shared UI components.
+
+## Architecture decisions
+- **WebSocket Transport for Drizzle**: The Drizzle pool uses WebSocket transport (`@neondatabase/serverless`) to avoid issues with the Replit-hosted Neon-compatible HTTP gateway (e.g., `rows: null` for empty results, dropped rows from `INSERT/UPDATE … RETURNING`).
+- **On-Frame Check for MediaPipe Landmarks**: To prevent avatar contortions from extrapolated MediaPipe landmarks, `mediapipeTo3D.ts` enforces an "on-frame check" (`[-0.05, 1.05]`) for landmark visibility and confidence, and `bodyVisibility` flags (upper/lower) are used to gate joint writes.
+- **Foot Lock System**: A sophisticated foot lock system is implemented in `client/src/utils/footLock.ts` using a two-stage IK pass and `hipOffset` adjustments to stabilize the avatar's feet during pose tracking.
+- **Real-time 3D Biomechanics**: The platform integrates a biomechanical engine with a Time-Aware Force Engine and a trust layer, providing realistic segment-chain moment calculations using de Leva (1996) mass fractions and Marras (1995) L1/L2 → L5/S1 amplification.
+- **Manual Therapy Simulation**: A dedicated "Treatment Mode" (Manual-Therapy Simulation) runs three deterministic engines (Mechanical, Neuromuscular, Clinical) in tandem to simulate manual therapy techniques, persist state, and integrate with the Plan Cart.
+
+## Product
+- AI-powered clinical decision support for physiotherapy.
+- SOAP note generation and clinical documentation.
+- Virtual patient analysis and management.
+- Evidence-based exercise prescription and treatment planning.
+- Real-time motion capture and biomechanical analysis.
+- Advanced anatomical visualization with pathology layers.
+- Research integration and evidence scoring.
+- Simulated manual therapy and treatment timeline engine.
+- Goal-driven recovery engine.
+- Secure user authentication and data handling.
+
+## User preferences
 Preferred communication style: Simple, everyday language.
 
-## System Architecture
+## Gotchas
+- **`assessment_sessions` is a NEW table, not a rename.** Drizzle's rename detector previously asked whether `assessment_sessions` was a rename of `session`, `exercises`, or `temp_soap_note`. Decision: it is a fresh `CREATE TABLE`. To prevent the prompt from stalling non-interactive `db:push` runs, the legacy tables `session` (auth, 14 rows), `exercises` (272 rows), and `temp_soap_note` (1 row) are kept declared as bare stubs in `shared/schema.ts` (~L4628) alongside the `difficulty` and `exercise_type` enums. Do not delete those stubs — they exist purely so the rename detector sees both sides of the diff and skips the prompt.
+- **PG enum name collision required `assessment_type` → `education_assessment_type`.** Both `shared/schema.ts` and `shared/movementAnalysisSchema.ts` defined a `pgEnum("assessment_type", …)` with different value sets — Drizzle treats that as one enum with conflicting definitions. The `schema.ts` copy was renamed to `educationAssessmentTypeEnum` (PG name `education_assessment_type`); the `movementAnalysisSchema.ts` copy keeps `assessment_type`. Renaming only the TS variable is not sufficient because Drizzle keys on the PG name.
+- **Verified live (May 2026):** after the above + a one-time DB normalization pass, `npm run db:push --force` completed non-interactively (`[✓] Changes applied`) and `case_research_syntheses.treatment_state` is present as `jsonb`, queryable via `GET/PATCH /api/treatment-state/:caseId`.
+- **If `db:push` stalls again:** pre-create new enums in DB; rename `*_key` → `*_unique` indexes; `DROP CASCADE` empty tables Drizzle wants to recreate; for data-bearing tables, fix type mismatches with explicit `ALTER … TYPE … USING` (drop the default first if it isn't castable); backfill `.notNull()` columns that contain NULLs (`'{}'::jsonb`, `'[]'::json`, `0`, `NOW()`, `''`); null out orphan FK rows; remap stray enum literals not in the schema enum (e.g. `body_part='lower_back'` → `'back'` on `exercise_images`).
 
-### Core Architecture
-The platform is built with a React 18 (TypeScript) frontend using Shadcn/ui and Radix UI for components, styled with Tailwind CSS, and managed with React hooks. The backend utilizes Node.js 20 (Express.js) with TypeScript, employing Passport.js for authentication and a RESTful API design. Data is stored in a PostgreSQL database (Neon serverless) managed with Drizzle ORM.
-
-### Key Features & Design Patterns
-- **AI Integration**: Leverages OpenAI GPT-4o for a wide range of clinical analyses, content generation, and decision support, including virtual patient analysis, exercise generation, and real-time movement analysis.
-- **Biomechanical Systems**: Incorporates a bidirectional muscle-joint system, 3D force visualization, and a biomechanical clinical assessment system for patient digital twins and injury risk scoring, featuring an "Influence Ripple System."
-- **Motion Capture & Virtual Patient System**: Integrates WebRTC for real-time pose detection and skeleton overlay, AI-powered virtual patient generation, and detailed movement analysis. This includes a Focused Clinical Camera System with GPT-4o Vision AI for detecting clinical signs, joint angle computation, and automated postural analysis. A WebSocket-based phone-to-desktop camera link is supported.
-- **Virtual Patient Management**: Provides CRUD operations for managing 3D patient models, with procedural generation or Mixamo integration, customizable pathologies, and animation playback.
-- **Enhanced Anatomical Visualization**: Features a high-fidelity 138MB muscled skeleton GLB model with 94 bones and 25+ named muscle meshes, offering Multi-View Skeleton Visualization and an Enhanced Body Scanner X-Ray Alternative. A Tissue-Specific Pathology Layer provides unified "Tissue View" modes with specialized clinical insights.
-- **Advanced Clinical Analysis**:
-    - **Running Gait Analysis**: Professional-grade biomechanical analysis with 25+ real-time metrics.
-    - **Clinical Bubble**: An AI-powered floating panel for differential diagnoses and treatment guidance.
-    - **Kinetic Chain Connection System**: Analyzes connected regions for pain markers.
-    - **Shoulder Assessment System**: Deep clinical shoulder assessment with AI-powered differential diagnosis.
-    - **Pain & Symptom Intelligence Layer**: Classifies pain mechanisms and provides nerve root analysis and trigger point referral patterns.
-    - **Injury Mechanism Engine**: Explains injury causation through causal chain flowcharts and load redistribution analysis.
-    - **What-If Clinical Simulation**: Allows simulation of interventions and prediction of changes in risk scores.
-    - **Treatment Simulation Timeline Engine**: Projects recovery based on prescribed treatments, featuring a visual multi-phase timeline, recovery curve charts, milestone tracking, and a Treatment Progression Re-query Engine that dynamically adjusts treatment plans based on recovery phases.
-    - **Goal-Driven Recovery Engine**: Defines measurable recovery targets per condition and drives treatments to close the gap. Uses local-first computation with background AI refinement via `POST /api/recovery-goals/generate` (GPT-4o). Features pathology-aware goal overrides (PATHOLOGY_GOAL_OVERRIDES) for 10+ conditions including stenosis, OA, frozen shoulder, post-surgical, spondylolisthesis, myelopathy, and joint replacements. Goals are skeleton-aware: they read current ROM measurements, scar/adhesion data, fascial chain tensions, and posture angles to set realistic improvement-based targets with pathology-specific ROM caps, pain tolerances, and functional goal swaps.
-    - **Patient Factors & Condition Recovery Engine**: Personalizes recovery predictions using 17 patient-specific factors and 15 evidence-based condition recovery profiles, adjusting timelines based on patient-specific modifiers.
-    - **Sling Engine**: Analyzes 5 functional slings to detect weak links, force rerouting, and cross-sling compensation, generating per-sling treatment targets.
-- **Clinical Documentation**: AI-enhanced SOAP note generation, OpenAI Whisper for audio transcription, automated PII de-identification, and an Interactive Skeleton-to-Text System that visualizes clinical conversations on the skeleton.
-- **Treatment & Exercise Management**:
-    - **Exercise Prescription**: AI-powered, evidence-based recommendations from a comprehensive exercise database.
-    - **Treatment Priority Engine**: Auto-generates ranked treatment targets with clinical status and techniques.
-    - **Evidence Engine**: A unified queryable catalog consolidating core and expert libraries, scoring treatment options by relevance.
-    - **Treatment Decision Engine**: An 8-module pipeline transforming clinical reasoning into actionable, evidence-graded treatment plans.
-    - **Treatment Plan Generator**: Creates adaptive, phased rehabilitation plans from Decision Engine output.
-    - **Intake & Extraction Engine**: Consolidates clinical data from various inputs into a structured `ClinicalExtractionResult`.
-- **Dynamic 3D Interactions**: Includes a Zoom Tool with Anatomical Landmark System, Direct Bone Manipulation (Pose Mode), Extended Pain Marker Types, 15 Symptom Types, Postural-Pain Correlation System, Real-Time Postural Force Analysis, Fascial Chain 3D Visualization, Scar Tissue & Adhesion Mapping, and a Pathology Compensation Engine.
-- **Research Integration**: AI-analyzed research database with bias assessment and clinical application insights, providing PubMed/PEDro-equivalent evidence and citations within AI clinical reasoning.
-- **Security**: Implements encrypted session secrets, robust CORS configuration, Zod schema validation, and secure file upload handling.
-
-## External Dependencies
-- **AI Services**: OpenAI API (GPT-4o, Whisper), Leonardo AI, Runway ML.
-- **Cloud Storage**: AWS S3.
-- **Payment Processing**: PayPal SDK, Stripe.
-- **Database Services**: Neon PostgreSQL.
-- **Email Service**: SendGrid.
+## Pointers
+- **React Documentation**: [https://react.dev/](https://react.dev/)
+- **Node.js Documentation**: [https://nodejs.org/docs/](https://nodejs.org/docs/)
+- **Express.js Documentation**: [https://expressjs.com/](https://expressjs.com/)
+- **Drizzle ORM Documentation**: [https://orm.drizzle.team/docs/overview](https://orm.drizzle.team/docs/overview)
+- **OpenAI API Documentation**: [https://platform.openai.com/docs/overview](https://platform.openai.com/docs/overview)
+- **MediaPipe Pose Documentation**: [https://developers.google.com/mediapipe/solutions/vision/pose_landmarker](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker)
+- **Shadcn/ui Documentation**: [https://ui.shadcn.com/docs](https://ui.shadcn.com/docs)
+- **Tailwind CSS Documentation**: [https://tailwindcss.com/docs](https://tailwindcss.com/docs)

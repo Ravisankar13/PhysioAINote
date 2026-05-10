@@ -160,6 +160,7 @@ interface SimulationTimelinePanelProps {
   clinicalPlan?: ClinicalPlanResult | null;
   playbackRef?: React.MutableRefObject<import("./TimelineBottomBar").TimelinePlaybackRef | null>;
   onPlaybackStateChange?: (state: import("./TimelineBottomBar").PlaybackSyncState | null) => void;
+  onConditionPhasesChange?: (phases: import("./TimelineBottomBar").ConditionPhaseInfo[] | null) => void;
 }
 
 const PHASE_COLORS = [
@@ -2663,6 +2664,26 @@ function SessionTimelineView({
     muscleStatePredictions: s.muscleStatePredictions.map(m => ({ muscleId: m.muscleId, predictedTension: m.predictedTension })),
   })), [sessionTimeline.sessions]);
 
+  const phaseSegments = useMemo(() => {
+    const segs: import("./TimelineBottomBar").PhaseSegment[] = [];
+    if (bottomBarSessions.length === 0) return segs;
+    let currentLabel = bottomBarSessions[0].recoveryPhaseLabel;
+    let startSession = bottomBarSessions[0].sessionNumber;
+    for (let i = 1; i < bottomBarSessions.length; i++) {
+      if (bottomBarSessions[i].recoveryPhaseLabel !== currentLabel) {
+        segs.push({ label: currentLabel, startSession, endSession: bottomBarSessions[i - 1].sessionNumber, durationFraction: 0 });
+        currentLabel = bottomBarSessions[i].recoveryPhaseLabel;
+        startSession = bottomBarSessions[i].sessionNumber;
+      }
+    }
+    segs.push({ label: currentLabel, startSession, endSession: bottomBarSessions[bottomBarSessions.length - 1].sessionNumber, durationFraction: 0 });
+    const total = sessionTimeline.totalSessions;
+    for (const seg of segs) {
+      seg.durationFraction = total > 0 ? (seg.endSession - seg.startSession + 1) / total : 1 / segs.length;
+    }
+    return segs;
+  }, [bottomBarSessions, sessionTimeline.totalSessions]);
+
   useEffect(() => {
     if (!onPlaybackStateChange) return;
     onPlaybackStateChange({
@@ -2675,8 +2696,9 @@ function SessionTimelineView({
       activePhaseLabel: activePhaseForSession?.phaseLabel ?? '',
       activePhaseGoals: activePhaseForSession?.skeletonGoals ?? [],
       goalProfile,
+      phaseSegments,
     });
-  }, [selectedSession, isPlaying, appliedSession, bottomBarSessions, sessionTimeline.totalSessions, sessionTimeline.totalDays, activePhaseForSession, goalProfile, onPlaybackStateChange]);
+  }, [selectedSession, isPlaying, appliedSession, bottomBarSessions, sessionTimeline.totalSessions, sessionTimeline.totalDays, activePhaseForSession, goalProfile, onPlaybackStateChange, phaseSegments]);
 
   const currentGoalGap = useMemo<GoalGapAnalysis | null>(() => {
     if (!goalProfile || !currentSnapshot) return null;
@@ -4381,6 +4403,7 @@ export default function SimulationTimelinePanel({
   clinicalPlan,
   playbackRef,
   onPlaybackStateChange,
+  onConditionPhasesChange,
 }: SimulationTimelinePanelProps) {
   const [patientFactors, setPatientFactors] = useState<PatientFactors>(DEFAULT_PATIENT_FACTORS);
   const [hasAutoPopulated, setHasAutoPopulated] = useState(false);
@@ -4435,6 +4458,19 @@ export default function SimulationTimelinePanel({
     }
     return detectedCondition;
   }, [conditionOverrideId, detectedCondition]);
+
+  useEffect(() => {
+    if (!onConditionPhasesChange) return;
+    if (activeCondition && activeCondition.phases.length > 0) {
+      onConditionPhasesChange(activeCondition.phases.map(p => ({
+        name: p.name,
+        durationWeeksMin: p.durationWeeksMin,
+        durationWeeksMax: p.durationWeeksMax,
+      })));
+    } else {
+      onConditionPhasesChange(null);
+    }
+  }, [activeCondition, onConditionPhasesChange]);
 
   const clinicalStateForGoals = useMemo<ClinicalStateInput | null>(() => {
     const state: ClinicalStateInput = {};

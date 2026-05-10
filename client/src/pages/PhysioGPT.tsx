@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   MessageCircle,
@@ -47,16 +50,13 @@ import {
   SlidersHorizontal,
   MapPin,
   Crosshair,
-  Ruler,
   Activity,
   Weight,
-  Scan,
   Camera,
   CameraOff,
   Pause,
   Sparkles,
   Zap,
-  Search,
   Check,
   Scale,
   GitBranch,
@@ -65,30 +65,48 @@ import {
   Layers,
   Network,
   Radio,
-  Palette,
-  Scissors,
   Grid2X2,
   RefreshCw,
   ExternalLink,
   Pill,
   Microscope,
-  Link2,
   FlaskConical,
   GraduationCap,
+  Leaf,
+  ScrollText,
+  Copy,
+  Save,
+  FilePlus2,
+  Layers3,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
-import type { PhysioGptConversation, PhysioGptMessage } from "@shared/schema";
+import type { PhysioGptConversation, PhysioGptMessage, NaturalTimelineRequestContext } from "@shared/schema";
+import { useNaturalTimeline } from "@/hooks/useNaturalTimeline";
+import { useCaseSpecificPlan } from "@/hooks/useCaseSpecificPlan";
+import { RECOVERY_ARCHETYPES, getArchetypeForCondition } from "@/lib/recoveryArchetypes";
+const NaturalTimelinePanel = lazy(() => import("@/components/skeleton/NaturalTimelinePanel"));
 import ClinicalResponseDisplay from "@/components/clinical/ClinicalResponseDisplay";
 import VisualContentDisplay from "@/components/clinical/VisualContentDisplay";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import PureThreeGLBViewer from "@/components/skeleton/PureThreeGLBViewer";
+import HipZoomPanel, { type HipPathology } from "@/components/skeleton/HipZoomPanel";
 import type { AnatomicalRegion, PainMarker, PainMarkerType, RomJointDefinition, RomMeasurement, SymptomType, AnimationState, AnimationConstraint } from "@/components/skeleton/PureThreeGLBViewer";
 import { REGION_BONE_MAPPING, SYMPTOM_TYPES } from "@/components/skeleton/PureThreeGLBViewer";
+import ActiveCapacitiesPanel from "@/components/skeleton/ActiveCapacitiesPanel";
+import MovementFindingsStream, { type MovementFinding, type MovementFindingVerdict } from "@/components/skeleton/MovementFindingsStream";
+import MovementReEducationPanel from "@/components/skeleton/MovementReEducationPanel";
+import MovementAiSimulatorPanel, { describeIntervention, type Intervention as MovementSimIntervention, type MovementSimResult, type MovementSimContext } from "@/components/skeleton/MovementAiSimulatorPanel";
+import { useActiveCapacities } from "@/hooks/useActiveCapacities";
+import type {
+  DiagnosisProvocationMovement,
+  ProvocationComposeResponse,
+  ProvocationContextPainMarker,
+} from "@shared/jointVocabulary";
 import type { CompensationResult } from "@/lib/jointConstraints";
 import { type FocusedRegion, FOCUSED_REGIONS } from "@/lib/focusedRegions";
 import { type FocusedCameraResult } from "@/components/skeleton/FocusedCameraCapture";
-import { type ClinicalBubbleData } from "@/components/skeleton/ClinicalBubble";
+import { type ClinicalBubbleData, type MarkerRationale } from "@/components/skeleton/ClinicalBubble";
 import type { KineticChainConnection } from "@/lib/kineticChainMap";
 import { poseToControllerValues, ControllerSmoother } from "@/utils/poseToControllerMap";
 import type { ExtendedPoseInput } from "@/utils/poseToControllerMap";
@@ -98,37 +116,86 @@ import type { ClinicalReasoningData, BiomechanicalLink, VisualizationRequest, Cl
 import type { StructuredReasoningResult, ReasoningHypothesis as StructuredHypothesis } from "@/components/skeleton/StructuredReasoningTab";
 import type { TreatmentDecisionResult } from "@/components/skeleton/DecisionTab";
 import type { TreatmentPlanResult } from "@/components/skeleton/PlanTab";
-import { type HypothesisData } from "@/components/skeleton/HypothesisChatPanel";
+import { type HypothesisData, type RefinedHypothesisSuggestion } from "@/components/skeleton/HypothesisChatPanel";
+import HypothesisTestBench, { type BenchHypothesisInput, type BenchSkeletonOverlay, type BenchUpdate, type HypothesisFingerprint } from "@/components/skeleton/HypothesisTestBench";
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
-import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
+import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution, type ExternalLoadConfig } from "@/lib/posturalForceEngine";
+import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type ClinicalStatus, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
-import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
+import { DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPosturePreset } from "@/lib/clinicalPosturePresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, FUNCTIONAL_SLINGS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
-import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
+import { type ScarMarker, type AdhesionBand, SCAR_TYPES, getScarImpact } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
 import { classifyPainMechanism } from "@/lib/neurologyMap";
 import { computeTreatmentPriorities as computeFullTreatmentPriorities, computeJointMobilizationTargets, type TreatmentPriorityResult, type TreatmentTarget, type SyndromeProtocol, type PainMarkerSimple } from "@/lib/treatmentPriorityEngine";
 import { computePredictedPain, type PredictedPainSpot } from "@/lib/predictedPainEngine";
 import BiomechanicsHUD from "@/components/skeleton/BiomechanicsHUD";
+import ForceTimePanel from "@/components/skeleton/ForceTimePanel";
+import GRFOverlay from "@/components/skeleton/GRFOverlay";
+import { forceTimeBuffer, type ForceTimeMetrics, subscribeForceBuffer, augmentForceAnalysisDynamics, EMPTY_FORCE_RESULT } from "@/lib/forceTimeBuffer";
+import type { PatientState } from "@/lib/forceCitations";
 import { TreatmentOverlayBridge, type BoneScreenPosition, getRequiredBoneNames } from "@/components/skeleton/TreatmentOverlay";
 import { type ClinicalParseResult, type CompromisedTissue, type ClinicalTextInputHandle, type FollowUpQuestion } from "@/components/skeleton/ClinicalTextInput";
+import {
+  type AutopilotStability,
+  type AutopilotStageId,
+  type AutopilotStageStatus,
+  type VoiceActivityEntry,
+  type VoiceTriggerReason,
+} from "@/components/skeleton/VoiceActivityDock";
+import type { CaseResearchPanelHandle } from "@/components/skeleton/CaseResearchPanel";
+import type { CaseResearchContext } from "@shared/schema";
+import { computeAiContextSignature } from "@shared/aiContextSignature";
+import {
+  PatientContextPanel,
+  EMPTY_PATIENT_CONTEXT_STATE,
+  buildPatientContextPayload,
+  patientContextHasContent,
+  type PatientContextState,
+} from "@/components/skeleton/PatientContextPanel";
+import { buildPatientContextSig, predictionFingerprintFor } from "@/lib/patientContextSig";
+import { PatientContextStatusBadge } from "@/components/skeleton/PatientContextStatusBadge";
 import { computeUnifiedBiomechanics, type BiomechanicsOutput, type FaultRuleConfig } from "@/lib/unifiedBiomechanicsEngine";
 import { generateMechanismTreatments } from "@/lib/mechanismTreatmentEngine";
 import { analyzeInjuryMechanism } from "@/lib/injuryMechanismEngine";
-import { type WhatIfScenario, type WhatIfComparisonResult, computeWhatIfComparison } from "@/lib/whatIfSimulationEngine";
+import { type WhatIfScenario, type WhatIfComparisonResult, type PainfulTissueRegion, computeWhatIfComparison, applyFlareUpPose, tissuePainLoadIndex, FLARE_UP_SCENARIOS } from "@/lib/whatIfSimulationEngine";
 import { type TissueViewMode, type NervePathwayEntry, type TendonEntry, type JointSurfaceEntry, type FascialLayerEntry, TISSUE_MODE_COLORS, getAllHighlightBonesForMode, getTissueEntriesForMode, getEntryByBone, getAllEntriesForBone, TENDON_DATA, NERVE_PATHWAY_DATA, JOINT_SURFACE_DATA, FASCIAL_LAYER_DATA } from "@/lib/tissueViewData";
-import { computeSlingAnalysis, getSlingBonePathway, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import { aggregateTissueIntelligence, filterInflammationIntelligence, type TissueIntelligence } from "@/lib/tissueIntelligence";
+import { tissueIntelligenceToOverlayHighlight, paletteForState, TISSUE_ANCHOR_CATALOGUE } from "@/lib/tissueOverlayCatalogue";
+import { computeSlingAnalysis, getSlingBonePathway, SLING_ACTIVATION_BASELINE, type SlingAnalysisResult, type SlingId, type SlingAnalysisInput } from "@/lib/slingEngine";
+import MovementSlingSpotlight, { type SlingPartTreatmentRecord } from "@/components/skeleton/MovementSlingSpotlight";
+import SlingFailureVisualizerPanel, { type SlingFailureVisualizerSelection } from "@/components/skeleton/SlingFailureVisualizerPanel";
+import SlingFailureVisualizerOverlay from "@/components/skeleton/SlingFailureVisualizerOverlay";
+import { pickSpotlightSling, type SpotlightPick, type SpotlightInputMarker } from "@/lib/movementSlingSpotlight";
+import { runDriverAnalysis as runSlingDriverAnalysis } from "@/lib/slingDriverAnalysis";
 import { computeSlingTissueRisks, type SlingTissueRisk } from "@/lib/slingTissuePressure";
 import { synthesizeClinicalPlan, type ClinicalPlanResult } from "@/lib/clinicalPlanSynthesizer";
+import { enrichCompensations, type EnrichedCompensation, type EnrichmentOutput, type ReEdPainMarker, type ReEdPatientFlags } from "@/lib/compensationReEducation";
+
+// Maps modelConfig group keys (e.g. `leftHip`, `rightShoulder`) to the
+// corresponding GLB bone name. Used to translate Pose / Auto-pose
+// interactions into a "last interacted bone" signal for the movement
+// spotlight selector.
+const MOVEMENT_GROUP_TO_BONE: Record<string, string> = {
+  leftHip: 'Hip_L', rightHip: 'Hip_R',
+  leftKnee: 'Knee_L', rightKnee: 'Knee_R',
+  leftAnkle: 'Ankle_L', rightAnkle: 'Ankle_R',
+  leftShoulder: 'Shoulder_L', rightShoulder: 'Shoulder_R',
+  leftElbow: 'Elbow_L', rightElbow: 'Elbow_R',
+  leftWrist: 'Wrist_L', rightWrist: 'Wrist_R',
+  cervical: 'Neck_M', neck: 'Neck_M',
+  thoracic: 'Spine1_M', lumbar: 'RootPart1_M',
+  pelvis: 'Root_M', spine: 'Spine1_M',
+  trunk: 'Chest_M', head: 'Head_M',
+};
 
 const MovementPlayer = lazy(() => import("@/components/skeleton/MovementPlayer"));
 const FocusedCameraCapture = lazy(() => import("@/components/skeleton/FocusedCameraCapture"));
@@ -147,14 +214,130 @@ const ManualTherapyEngineTab = lazy(() => import("@/components/skeleton/ManualTh
 import type { TissueTarget } from "@/components/skeleton/ManualTherapyEngineTab";
 const ElectrophysicalEngineTab = lazy(() => import("@/components/skeleton/ElectrophysicalEngineTab"));
 const PatientEducationEngineTab = lazy(() => import("@/components/skeleton/PatientEducationEngineTab"));
+const MyPlanPanel = lazy(() => import("@/components/skeleton/MyPlanPanel"));
+import MasterPlanCard from "@/components/skeleton/MasterPlanCard";
+import { PlanCartProvider, usePlanCart, type PlanCartItem } from "@/lib/planCart";
+import { TreatmentSimulationProvider } from "@/lib/treatmentSimulationContext";
+// Task #376 — Treatment Mode (manual-therapy simulation) wiring.
+import {
+  JOINT_ACCESSORY_CATALOG,
+  getJointEntry,
+  computePositionAdvantage,
+  type JointAccessoryEntry,
+} from "@/lib/jointAccessoryMotions";
+import {
+  computeMechanicalResponse,
+  type TreatmentTechnique,
+  type PatientTreatmentState,
+  type MechanicalResponse,
+} from "@/lib/treatmentMechanicalEngine";
+import {
+  computeNeuromuscularResponse,
+  type NeuromuscularResponse,
+  type SessionHistoryEntry,
+} from "@/lib/treatmentNeuromuscularEngine";
+import {
+  computeClinicalOutcome,
+  computeTechniqueQuality,
+  type ClinicalOutcome,
+} from "@/lib/treatmentClinicalEngine";
+import {
+  applyTreatmentToPatientState,
+  buildLogEntry,
+  defaultTreatmentState,
+  type PersistedTreatmentState,
+} from "@/lib/treatmentStateReducer";
+import {
+  deriveIrritabilityProfile,
+  getRegionIrritability,
+  regionForBone,
+} from "@/lib/patientIrritabilityProfile";
+import TreatmentTechniqueHUD, { type PatientPositionPreset } from "@/components/skeleton/TreatmentTechniqueHUD";
+import TreatmentResponsePanel from "@/components/skeleton/TreatmentResponsePanel";
+import { OrchestratePlanProvider } from "@/lib/orchestratePlanContext";
+import { TreatmentRationaleProvider, type RationaleClinicalContextInput } from "@/lib/treatmentRationaleContext";
+import type { PhysioGptCaseSnapshot } from "@shared/schema";
+
+/** Bridges the plan cart context to refs/state in the parent PhysioGPT
+ *  component so case-snapshot persistence can read the cart contents and
+ *  call replaceAll on restore without restructuring the whole page. */
+// Task #376 — Bridge from PlanCart context into the parent's
+// `planCartTreatmentRef` so `handlePerformTreatment` can call .add()
+// without restructuring the page.
+function TreatmentPlanCartBridge({
+  registerAdd,
+}: {
+  registerAdd: (fn: ((item: PlanCartItem) => void) | null) => void;
+}) {
+  const { add } = usePlanCart();
+  useEffect(() => {
+    registerAdd(add);
+    return () => registerAdd(null);
+  }, [add, registerAdd]);
+  return null;
+}
+
+function PlanCartHydrationBridge({
+  onItemsChange,
+  registerReplaceAll,
+}: {
+  onItemsChange: (items: PlanCartItem[]) => void;
+  registerReplaceAll: (fn: ((items: PlanCartItem[]) => void) | null) => void;
+}) {
+  const { items, replaceAll } = usePlanCart();
+  useEffect(() => {
+    onItemsChange(items);
+  }, [items, onItemsChange]);
+  useEffect(() => {
+    registerReplaceAll(replaceAll);
+    return () => registerReplaceAll(null);
+  }, [replaceAll, registerReplaceAll]);
+  return null;
+}
+
+function MyPlanTabButton({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const { count } = usePlanCart();
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${active ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+      data-testid="button-tab-my-plan"
+    >
+      <Sparkles className="h-3 w-3" />
+      My Plan
+      {count > 0 && (
+        <span className="ml-0.5 text-[9px] font-bold px-1 rounded-full bg-cyan-400/30 text-cyan-100 min-w-[14px] text-center">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+const AdjunctTherapiesEngineTab = lazy(() => import("@/components/skeleton/AdjunctTherapiesEngineTab"));
+const LifestyleAdjunctEngineTab = lazy(() => import("@/components/skeleton/LifestyleAdjunctEngineTab"));
 const UnifiedBiomechanicsPanel = lazy(() => import("@/components/skeleton/UnifiedBiomechanicsPanel"));
 const WhatIfSimulationPanel = lazy(() => import("@/components/skeleton/WhatIfSimulationPanel"));
 const SimulationTimelinePanel = lazy(() => import("@/components/skeleton/SimulationTimelinePanel"));
+const RecoverySimulationPanel = lazy(() => import("@/components/skeleton/RecoverySimulationPanel"));
+const RecoverySimulatorDashboard = lazy(() => import("@/components/skeleton/RecoverySimulatorDashboard"));
+const MechanicsAnalyserDashboard = lazy(() => import("@/components/skeleton/MechanicsAnalyserDashboard"));
+import { buildConditionContext, buildCustomExerciseId, buildCustomTechniqueId, classifyCondition, extractJointLoadVectors, MAX_SIMULATION_WEEKS, type ConditionContext, type CustomExerciseInput, type CustomManualTechniqueInput, type JointLoadVector } from "@/lib/recoverySimulationEngine";
+import { computeNaturalProgression, resolveNaturalProgressionConditionId } from "@/lib/naturalProgressionEngine";
+import { buildPrescriptionContext } from "@/lib/prescriptionAdapterEngine";
+import type { PhaseRxRequest } from "@/components/skeleton/RecoverySimulatorDashboard";
+import { DEFAULT_PATIENT_FACTORS, autoPopulateFromPipeline, computePatientModifiers, derivePsychosocialAndOccupationalDrivers, findConditionProfile, type PatientFactors } from "@/lib/patientFactorsEngine";
+import { generateGoalProfile, generateGenericGoalProfile, computeGoalGap } from "@/lib/goalStateEngine";
+import type { SessionSnapshot, RomPrediction } from "@/lib/simulationTimelineEngine";
+const PatientFactorsForm = lazy(() => import("@/components/skeleton/PatientFactorsForm"));
+import { countFactorOverrides } from "@/components/skeleton/PatientFactorsForm";
+import { CaseResearchPanel } from "@/components/skeleton/CaseResearchPanel";
+import { computePatientFactorsFilledCount } from "@/lib/recoveryUncertainty";
 const TimelineBottomBar = lazy(() => import("@/components/skeleton/TimelineBottomBar"));
-import type { PlaybackSyncState, TimelinePlaybackRef } from "@/components/skeleton/TimelineBottomBar";
+import type { PlaybackSyncState, TimelinePlaybackRef, ConditionPhaseInfo } from "@/components/skeleton/TimelineBottomBar";
 const MechanismTreatmentTab = lazy(() => import("@/components/skeleton/MechanismTreatmentTab"));
 const SlingAnalysisPanel = lazy(() => import("@/components/skeleton/SlingAnalysisPanel"));
 const ClinicalTextInput = lazy(() => import("@/components/skeleton/ClinicalTextInput"));
+const VoiceActivityDock = lazy(() => import("@/components/skeleton/VoiceActivityDock"));
 
 const LazyPanelFallback = () => (
   <div className="flex items-center justify-center p-8">
@@ -372,6 +555,40 @@ interface ModelConfig {
   rightWrist: { deviation: number; flexion: number };
 }
 
+type OverlayKey =
+  | 'tissueIntelligence'
+  | 'fascialChains'
+  | 'painMarkers'
+  | 'forceArrows'
+  | 'muscleGlow'
+  | 'scarAdhesion'
+  | 'dermatomeNerve'
+  | 'slingPathways'
+  | 'boneGlow'
+  | 'compensationGlow'
+  | 'compensationReEd';
+
+const OVERLAY_DEFINITIONS: Array<{ key: OverlayKey; label: string; chipColor: string; description: string }> = [
+  { key: 'tissueIntelligence', label: 'Tissue intelligence', chipColor: '#eab308', description: 'Inflamed / at-risk tissue overlays (rings, tubes, glow spheres)' },
+  { key: 'fascialChains',      label: 'Fascial chains',      chipColor: '#a855f7', description: 'Myofascial chain lines, nodes & propagation glow' },
+  { key: 'painMarkers',        label: 'Pain markers',        chipColor: '#ef4444', description: 'User-placed and AI-predicted pain spots' },
+  { key: 'scarAdhesion',       label: 'Scar / adhesion',     chipColor: '#f97316', description: 'Scar markers and adhesion bands' },
+  { key: 'forceArrows',        label: 'Forces / GRF',        chipColor: '#22d3ee', description: 'Joint reaction force arrows and ground reaction force' },
+  { key: 'muscleGlow',         label: 'Muscle glow',         chipColor: '#84cc16', description: 'Muscle-state highlights and manual-therapy targets' },
+  { key: 'boneGlow',           label: 'Bone glow',           chipColor: '#fbbf24', description: 'Joint highlights from kinetic chains, injury mechanism & biomechanics faults' },
+  { key: 'compensationGlow',   label: 'Compensating-joint glow', chipColor: '#fb7185', description: 'Causal-chain compensation highlights and Influence Ripple bone glow' },
+  { key: 'dermatomeNerve',     label: 'Dermatome / nerve',   chipColor: '#60a5fa', description: 'Dermatome shading, nerve-root labels, referral zones' },
+  { key: 'slingPathways',      label: 'Sling pathways',      chipColor: '#f59e0b', description: 'Functional sling pathways and cross-sling compensations' },
+  { key: 'compensationReEd',   label: 'Comp re-ed halos',    chipColor: '#10b981', description: 'On-skeleton cost halos for the Re-Education engine (verdict-colored bone glow on compensating joints). Does not hide the panel itself.' },
+];
+
+const DEFAULT_OVERLAY_VISIBILITY: Record<OverlayKey, boolean> = OVERLAY_DEFINITIONS.reduce(
+  (acc, d) => { acc[d.key] = true; return acc; },
+  {} as Record<OverlayKey, boolean>,
+);
+
+const OVERLAY_VISIBILITY_STORAGE_KEY = 'physiogpt:overlayVisibility:v1';
+
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   limbScales: { upperArm: 0, forearm: 0, thigh: 0, shin: 0, overall: 1 },
   spine: { cervicalLordosis: 0, thoracicKyphosis: 0, lumbarLordosis: 0, scoliosis: 0, forwardHead: 0, lateralShift: 0, cervicalRotation: 0, cervicalLateralFlexion: 0, thoracicRotation: 0, lumbarRotation: 0, flexion: 0, lateralFlexion: 0, lumbarScoliosis: 0, thoracicScoliosis: 0, cervicalScoliosis: 0 },
@@ -530,17 +747,28 @@ export default function PhysioGPT() {
   }, []);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+  const selectedConversationIdRef = useRef<number | null>(null);
+  selectedConversationIdRef.current = selectedConversationId;
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(true);
   const [hypothesisChatOpen, setHypothesisChatOpen] = useState(false);
   const [selectedHypothesisForChat, setSelectedHypothesisForChat] = useState<HypothesisData | null>(null);
+  const [lastRefinedCommit, setLastRefinedCommit] = useState<{ id: string; condition: string; supportingEvidence: string[]; rulingOutFactors: string[] } | null>(null);
+  const [testBenchOpen, setTestBenchOpen] = useState(false);
+  const [testBenchHypothesis, setTestBenchHypothesis] = useState<BenchHypothesisInput | null>(null);
+  const benchSnapshotRef = useRef<{
+    modelConfig: ModelConfig;
+    painMarkers: PainMarker[];
+    biomechanicalMuscleHighlights: string[];
+    muscleHighlightColors: Record<string, string>;
+    visualizationBoneHighlights: Array<{ boneName: string; color: number; intensity: number }>;
+  } | null>(null);
   const [showJointControls, setShowJointControls] = useState(false);
   const [showClinicalPresets, setShowClinicalPresets] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
   const [environmentPreset, setEnvironmentPreset] = useState(DEFAULT_ENVIRONMENT);
-  const [showEnvironmentPicker, setShowEnvironmentPicker] = useState(false);
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
   const [showSpecialTests, setShowSpecialTests] = useState(false);
@@ -561,8 +789,33 @@ export default function PhysioGPT() {
   const [painMarkers, setPainMarkers] = useState<PainMarker[]>([]);
   const [painMarkerMode, setPainMarkerMode] = useState(false);
   const [forceMode, setForceMode] = useState(false);
+  const [showForceTimePanel, setShowForceTimePanel] = useState(false);
+  const [patientForceState, setPatientForceState] = useState<PatientState>('default');
+  const [forceTimeMetrics, setForceTimeMetrics] = useState<ForceTimeMetrics | null>(null);
+  const [grfOverlayEnabled, setGrfOverlayEnabled] = useState(true);
   const [selectedForceJoint, setSelectedForceJoint] = useState<string | null>(null);
   const [bodyWeightKg, setBodyWeightKg] = useState(70);
+  const [externalLoadKg, setExternalLoadKg] = useState(0);
+  const [externalLoadHand, setExternalLoadHand] = useState<'left' | 'right' | 'both'>('both');
+  const externalLoads = useMemo<ExternalLoadConfig | undefined>(() => {
+    const k = Math.max(0, externalLoadKg);
+    if (k === 0) return undefined;
+    if (externalLoadHand === 'left')  return { leftHandKg: k };
+    if (externalLoadHand === 'right') return { rightHandKg: k };
+    const half = k / 2;
+    return { leftHandKg: half, rightHandKg: half };
+  }, [externalLoadKg, externalLoadHand]);
+  // Inject externalLoads + bodyWeightKg into model configs. Short-circuits
+  // to preserve memoized identity when there is nothing to add.
+  const withForceContext = useCallback(<T extends ModelConfig>(cfg: T): T => {
+    if (!externalLoads && bodyWeightKg === 70) return cfg;
+    const augmented: T & { externalLoads?: ExternalLoadConfig; bodyWeightKg?: number } = {
+      ...cfg,
+      externalLoads,
+      bodyWeightKg,
+    };
+    return augmented as T;
+  }, [externalLoads, bodyWeightKg]);
   const [enabledForceJoints, setEnabledForceJoints] = useState<Set<string>>(new Set());
   const [collapsedForceCategories, setCollapsedForceCategories] = useState<Set<string>>(new Set());
   const [muscleMode, setMuscleMode] = useState(false);
@@ -577,13 +830,16 @@ export default function PhysioGPT() {
   const [showTreatmentPriority, setShowTreatmentPriority] = useState(false);
   const [showUnifiedChainPanel, setShowUnifiedChainPanel] = useState(false);
   const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
+  // Task #399b — L/R/Both side selector for kinetic chains in the Explorer tab,
+  // so clinicians can isolate unilateral pathways (e.g. only the right
+  // superficial back line) instead of always seeing both sides at once.
+  const [selectedChainSide, setSelectedChainSide] = useState<'both' | 'left' | 'right'>('both');
   const [forceAiSuggestions, setForceAiSuggestions] = useState<string | null>(null);
   const [forceAiLoading, setForceAiLoading] = useState(false);
   const [activePainMarkerType, setActivePainMarkerType] = useState<PainMarkerType>('point');
   const [activeSymptomType, setActiveSymptomType] = useState<SymptomType>('pain');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
-  const [romMode, setRomMode] = useState(false);
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
@@ -611,12 +867,327 @@ export default function PhysioGPT() {
   const [showRiskDashboard, setShowRiskDashboard] = useState(false);
   const [showInjuryMechanism, setShowInjuryMechanism] = useState(false);
   const [showSimTimeline, setShowSimTimeline] = useState(false);
+  const [showRecoverySim, setShowRecoverySim] = useState(false);
+  const [skeletonMode, setSkeletonMode] = useState<'posture' | 'movement' | 'treatment'>('posture');
+  // Task #376 — Treatment Mode local state. The persisted server-side
+  // treatment state lives on case_research_syntheses.treatmentState
+  // (loaded via /api/treatment-state/:caseId below); this local state
+  // covers the live HUD parameters + the in-session ephemeral state.
+  const [treatmentJointKey, setTreatmentJointKey] = useState<string>('GHJ_R');
+  const [treatmentTechnique, setTreatmentTechnique] = useState<TreatmentTechnique>(() => ({
+    jointKey: 'GHJ_R',
+    directionId: 'posterior_glide',
+    liveAxis: { x: 0, y: 0, z: -1 },
+    gradeSystem: 'maitland',
+    grade: 3,
+    amplitudeMm: 5,
+    frequencyHz: 1,
+    durationSec: 30,
+    holdSec: 0,
+  }));
+  const [treatmentPositionPreset, setTreatmentPositionPreset] = useState<PatientPositionPreset>('loose-packed');
+  const [treatmentContactRegion, setTreatmentContactRegion] = useState<string>('');
+  const [persistedTreatmentState, setPersistedTreatmentState] = useState<PersistedTreatmentState>(() => defaultTreatmentState());
+  const [persistedTreatmentBaseline, setPersistedTreatmentBaseline] = useState<PersistedTreatmentState | null>(null);
+  const [treatmentSessionHistory, setTreatmentSessionHistory] = useState<SessionHistoryEntry[]>([]);
+  const [treatmentPerforming, setTreatmentPerforming] = useState(false);
+  const [overlayVisibility, setOverlayVisibility] = useState<Record<OverlayKey, boolean>>(() => {
+    if (typeof window === 'undefined') return DEFAULT_OVERLAY_VISIBILITY;
+    try {
+      const raw = sessionStorage.getItem(OVERLAY_VISIBILITY_STORAGE_KEY);
+      if (!raw) return DEFAULT_OVERLAY_VISIBILITY;
+      const parsed = JSON.parse(raw);
+      const merged = { ...DEFAULT_OVERLAY_VISIBILITY };
+      for (const k of Object.keys(merged) as OverlayKey[]) {
+        if (typeof parsed?.[k] === 'boolean') merged[k] = parsed[k];
+      }
+      return merged;
+    } catch { return DEFAULT_OVERLAY_VISIBILITY; }
+  });
+  const [showOverlayPopover, setShowOverlayPopover] = useState(false);
+  useEffect(() => {
+    try { sessionStorage.setItem(OVERLAY_VISIBILITY_STORAGE_KEY, JSON.stringify(overlayVisibility)); } catch {}
+  }, [overlayVisibility]);
+  const overlayHiddenCount = useMemo(
+    () => OVERLAY_DEFINITIONS.reduce((n, d) => n + (overlayVisibility[d.key] ? 0 : 1), 0),
+    [overlayVisibility],
+  );
+  const [movementFindings, setMovementFindings] = useState<MovementFinding[]>([]);
+  /** When the Recovery Sim dashboard is mounted with its Skeleton View tab,
+   *  it gives us a DOM container into which we portal the SAME live
+   *  PureThreeGLBViewer instance — so the user is never looking at a
+   *  duplicated viewer; the existing one is reparented into the dashboard. */
+  const [recoverySimSlot, setRecoverySimSlot] = useState<HTMLDivElement | null>(null);
+  // Task #294 — Mechanics Analyser bottom-tab dashboard. Same portal pattern
+  // as Recovery Sim: the live PureThreeGLBViewer is reparented into the
+  // dashboard's central skeleton slot so the analyser shares the SAME viewer
+  // instance + overlays + animation state instead of mounting a duplicate.
+  const [showMechanicsAnalyser, setShowMechanicsAnalyser] = useState(false);
+  const [mechanicsAnalyserSlot, setMechanicsAnalyserSlot] = useState<HTMLDivElement | null>(null);
+  const [mechanicsOverlay, setMechanicsOverlay] = useState<{
+    comTrail: boolean; stabilityCone: boolean; plantarHeatmap: boolean; jointReactionArrows: boolean;
+  }>({ comTrail: true, stabilityCone: true, plantarHeatmap: false, jointReactionArrows: true });
   const [timelinePlaybackState, setTimelinePlaybackState] = useState<PlaybackSyncState | null>(null);
+  const [conditionPhases, setConditionPhases] = useState<ConditionPhaseInfo[] | null>(null);
   const timelinePlaybackRef = useRef<TimelinePlaybackRef | null>(null);
-  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'patientEd'>('mechanism');
+  const [mechanismActiveTab, setMechanismActiveTab] = useState<'mechanism' | 'treatment' | 'whatif' | 'exercise' | 'manualRx' | 'electroRx' | 'adjunctRx' | 'lifestyleRx' | 'patientEd' | 'myPlan'>('mechanism');
+  // Lifted Electrophysical Agents (EPA) state so the Recovery Simulator phase cards can read
+  // the latest plan without re-fetching, and so phase-card "Generate" CTAs
+  // can pre-fill the Electro tab and auto-run the engine.
+  const [electroPlan, setElectroPlan] = useState<import('@/components/skeleton/ElectrophysicalEngineTab').ElectrophysicalPlan | null>(null);
+  const [electroPrefill, setElectroPrefill] = useState<{ condition: string; stage: 'acute' | 'subacute' | 'chronic'; nonce: number } | null>(null);
   const [hasClinicalTextData, setHasClinicalTextData] = useState(false);
+  const hasClinicalTextDataRef = useRef(hasClinicalTextData);
+  hasClinicalTextDataRef.current = hasClinicalTextData;
+  // Master Plan auto-organize: nonce bumped only when the "Build full plan"
+  // settle effect needs the OrchestratePlanProvider to fire orchestration on
+  // its own (no click). Manual "Organize with AI" clicks call the provider's
+  // organize() directly. Cleared once the provider consumes the nonce.
+  const [orchestrateAutoNonce, setOrchestrateAutoNonce] = useState<number | null>(null);
+  // Bump signal that asks MasterPlanCard to expand its inline section
+  // (e.g. after a successful Build-full-plan cascade). The card only reacts
+  // to *changes* of this value, so manual collapse is preserved between
+  // bumps.
+  const [masterPlanExpandSignal, setMasterPlanExpandSignal] = useState(0);
+  // ----- Master Plan auto-build (Task #267) -----
+  // When the user clicks "Build full plan", the four engines are mounted as
+  // hidden phantom instances (alongside any visible tab) and triggered to
+  // generate concurrently. As each engine returns, its `autoAddOnGenerate`
+  // path adds every generated item to the plan cart in a staggered cascade
+  // (~110ms per item) so the existing MasterPlanCard flash + line-draw
+  // animations fire item-by-item. When all four engines settle we hold a
+  // brief tick (so the last cart-add animations can paint) before navigating
+  // to My Plan and bumping the existing organize nonce.
+  //
+  // State machine: 'idle' → 'generating' (all four engines in flight) →
+  //                'organizing' (post-settle nav + nonce bump) → 'idle'.
+  // Re-clicking the button is a no-op while state !== 'idle'.
+  type AutoBuildState = 'idle' | 'generating' | 'organizing';
+  const [autoBuildState, setAutoBuildState] = useState<AutoBuildState>('idle');
+  const autoBuildStateRef = useRef<AutoBuildState>('idle');
+  autoBuildStateRef.current = autoBuildState;
+  // One-shot trigger flags driving each engine's `pendingGenerate` prop.
+  // Cleared by the engine's `onGenerateStarted` callback as soon as
+  // generation begins — they say nothing about completion.
+  const [autoBuildTriggerExercise, setAutoBuildTriggerExercise] = useState(false);
+  const [autoBuildTriggerMT, setAutoBuildTriggerMT] = useState(false);
+  const [autoBuildTriggerAdjunct, setAutoBuildTriggerAdjunct] = useState(false);
+  // In-flight flags for each engine. Set true alongside the trigger on click,
+  // cleared only when the engine fires `onGenerateComplete` (which itself is
+  // deferred until after the staggered cart-add cascade finishes). The settle
+  // effect transitions to 'organizing' only when ALL four are false.
+  const [autoBuildInFlightExercise, setAutoBuildInFlightExercise] = useState(false);
+  const [autoBuildInFlightMT, setAutoBuildInFlightMT] = useState(false);
+  const [autoBuildInFlightEPA, setAutoBuildInFlightEPA] = useState(false);
+  const [autoBuildInFlightAdjunct, setAutoBuildInFlightAdjunct] = useState(false);
+  // EPA uses a monotonic nonce instead of a boolean trigger (per its existing
+  // autoGenerate contract). Bumped on each click; engine de-dupes via its
+  // own lastNonceRef.
+  const [autoBuildElectroNonce, setAutoBuildElectroNonce] = useState(0);
+  // Names of engines that returned an error during the current build (cleared
+  // when state cycles back to 'idle'). Drives the failure toast.
+  const [autoBuildFailures, setAutoBuildFailures] = useState<Set<string>>(new Set());
+  // Refs for the 4 quick-launch pills (Exercise/Manual/Electro/Adjunct) and the
+  // wrapping container so the convergence overlay can compute SVG anchor points.
+  // pillRefs object is memoized so its identity is stable across renders — this
+  // prevents the overlay's effects from re-initializing on every parent render.
+  const masterPlanContainerRef = useRef<HTMLDivElement>(null);
+  const masterPlanExerciseRef = useRef<HTMLButtonElement>(null);
+  const masterPlanManualRef = useRef<HTMLButtonElement>(null);
+  const masterPlanElectroRef = useRef<HTMLButtonElement>(null);
+  const masterPlanAdjunctRef = useRef<HTMLButtonElement>(null);
+  const masterPlanPillRefs = useMemo(
+    () => ({
+      exercise: masterPlanExerciseRef,
+      manual: masterPlanManualRef,
+      electro: masterPlanElectroRef,
+      adjunct: masterPlanAdjunctRef,
+    }),
+    [],
+  );
+  // Latest clinical-text parse result, retained at page level so the
+  // Patient Context panel can fingerprint the prediction (for stale
+  // detection) and the AI prompt-generation request can quote the
+  // findings the parse produced. Distinct from `clinicalTextAppliedRef`
+  // which only tracks what was applied to the skeleton.
+  const [lastClinicalParseResult, setLastClinicalParseResult] = useState<ClinicalParseResult | null>(null);
+  // Stable per-case ID from the same FNV hash used by the CaseResearchPanel
+  // below. Hoisted up here (before the SFV reset effect at ~L1144 that
+  // references it in its dep array) to avoid a TDZ ReferenceError on
+  // component render. Also used by the saved-hypotheses query and the
+  // active-capacities pipeline far below — both pick up the same memo.
+  const activeCaseId = useMemo(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    if (!desc) return null;
+    const fnv32 = (s: string) => {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16).padStart(8, '0');
+    };
+    return `case-${fnv32(desc)}`;
+  }, [lastClinicalParseResult]);
+  // AI-driven Patient Context state — session-level only (intentionally
+  // not persisted across reloads, per task spec).
+  const [patientContextState, setPatientContextState] = useState<PatientContextState>(EMPTY_PATIENT_CONTEXT_STATE);
+  // Task #240 — Structured Patient Factors live alongside the AI Q&A
+  // panel. They start as the pipeline-derived auto-population and are
+  // overridden by the clinician via the new PatientFactorsForm. The
+  // overrides are persisted to localStorage keyed by case fingerprint
+  // so opening the same case in a future session restores the edits.
+  const [patientFactorOverrides, setPatientFactorOverrides] = useState<Partial<PatientFactors> | null>(null);
+  // Hoisted from later in the component so the patient-factors memos
+  // below (autoDetectedPatientFactors / effectivePatientFactors) can
+  // read these values without hitting a temporal dead zone.
+  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
+  const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
+  const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
+  const patientContextPayload = useMemo(
+    () => buildPatientContextPayload(patientContextState),
+    [patientContextState],
+  );
+  const hasPatientContext = useMemo(
+    () => patientContextHasContent(patientContextState),
+    [patientContextState],
+  );
+  /** True when the prompts were generated against an older prediction
+   *  text — mirrored to the downstream panel header badges so the
+   *  clinician sees the "regenerate prompts" hint everywhere, not only
+   *  on the Patient Context card. */
+  const patientContextPromptsStale = useMemo(() => {
+    if (!patientContextState.predictionFingerprint) return false;
+    const live = predictionFingerprintFor(lastClinicalParseResult);
+    if (!live) return false;
+    return live !== patientContextState.predictionFingerprint;
+  }, [patientContextState.predictionFingerprint, lastClinicalParseResult]);
+
+  // ───── Task #240 — Effective patient factors + persistence ─────
+  // The pipeline-derived `autoFactors` is the baseline; clinician edits
+  // are stored in `patientFactorOverrides` and merged on top. We
+  // persist overrides to localStorage keyed by case fingerprint so the
+  // same case re-opened in a future session restores its structured
+  // patient context.
+  const patientFactorsCaseKey = useMemo(() => {
+    const fp = predictionFingerprintFor(lastClinicalParseResult);
+    return fp ? `physiogpt:patientFactors:${fp}` : null;
+  }, [lastClinicalParseResult]);
+
+  const autoDetectedPatientFactors = useMemo(() => {
+    return autoPopulateFromPipeline(
+      extractionResult ?? null,
+      structuredReasoningData ?? null,
+      DEFAULT_PATIENT_FACTORS,
+    );
+  }, [extractionResult, structuredReasoningData]);
+
+  const effectivePatientFactors = useMemo<PatientFactors>(() => {
+    if (!patientFactorOverrides) return autoDetectedPatientFactors;
+    return {
+      ...autoDetectedPatientFactors,
+      ...patientFactorOverrides,
+      currentMedications: {
+        ...autoDetectedPatientFactors.currentMedications,
+        ...(patientFactorOverrides.currentMedications ?? {}),
+      },
+    };
+  }, [autoDetectedPatientFactors, patientFactorOverrides]);
+
+  // Load persisted overrides whenever the case fingerprint changes
+  useEffect(() => {
+    if (!patientFactorsCaseKey) {
+      setPatientFactorOverrides(null);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(patientFactorsCaseKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setPatientFactorOverrides(parsed as Partial<PatientFactors>);
+          return;
+        }
+      }
+    } catch {/* ignore localStorage failures */}
+    setPatientFactorOverrides(null);
+  }, [patientFactorsCaseKey]);
+
+  // Persist overrides on change
+  useEffect(() => {
+    if (!patientFactorsCaseKey) return;
+    try {
+      if (patientFactorOverrides && Object.keys(patientFactorOverrides).length > 0) {
+        window.localStorage.setItem(patientFactorsCaseKey, JSON.stringify(patientFactorOverrides));
+      } else {
+        window.localStorage.removeItem(patientFactorsCaseKey);
+      }
+    } catch {/* ignore localStorage failures (quota, private mode) */}
+  }, [patientFactorsCaseKey, patientFactorOverrides]);
+
+  // Compute overrides as the diff between user-edited factors and the
+  // auto-detected baseline so persistence stays minimal and the
+  // clinician can always click Reset to drop back to pipeline values.
+  const handlePatientFactorsChange = useCallback((next: PatientFactors) => {
+    const auto = autoDetectedPatientFactors;
+    const overrides: Partial<PatientFactors> = {};
+    const keys: (keyof PatientFactors)[] = [
+      // Pre-existing fields now exposed in the form
+      "diabetes", "smoking", "previousEpisodes", "sleepQuality",
+      // Group 1–5 structured fields
+      "menopausalStatus", "bmiNumeric", "timeSinceLastEpisodeMonths", "priorSurgeryArea",
+      "keyImagingFindings", "sleepHours", "proteinIntake", "dailyStepsBand", "trainingAgeYears",
+      "kinesiophobia", "painCatastrophizing", "selfEfficacy", "perceivedStress", "socialSupport",
+      "sittingHoursPerDay", "liftingFrequency", "repetitiveTaskExposure", "sportPosition", "sportSurface",
+    ];
+    for (const k of keys) {
+      if (JSON.stringify(next[k]) !== JSON.stringify(auto[k])) {
+        // @ts-expect-error — generic key copy across union types
+        overrides[k] = next[k];
+      }
+    }
+    if (JSON.stringify(next.currentMedications) !== JSON.stringify(auto.currentMedications)) {
+      overrides.currentMedications = next.currentMedications;
+    }
+    setPatientFactorOverrides(Object.keys(overrides).length > 0 ? overrides : null);
+  }, [autoDetectedPatientFactors]);
+
+  // Pre-computed modifiers + derived workDemand/fearAvoidance for the
+  // recovery sim and the "What's affecting this curve" panel.
+  const effectivePatientModifiers = useMemo(() => {
+    return computePatientModifiers(effectivePatientFactors, null);
+  }, [effectivePatientFactors]);
+
+  const derivedDrivers = useMemo(() => {
+    // The engine returns weighted contributors as {factor, weight}[]
+    // for traceability, but the downstream dashboard panel only needs
+    // human-readable strings — flatten here so the prop contract is
+    // a plain `string[]` and the chip tooltips render real labels.
+    const raw = derivePsychosocialAndOccupationalDrivers(effectivePatientFactors);
+    return {
+      fearAvoidance: raw.fearAvoidance,
+      workDemand: raw.workDemand,
+      fearAvoidanceContributors: raw.fearAvoidanceContributors.map(c => `${c.factor} (w${c.weight})`),
+      workDemandContributors: raw.workDemandContributors.map(c => `${c.factor} (+${c.weight})`),
+    };
+  }, [effectivePatientFactors]);
+
+  const patientFactorsOverrideCount = useMemo(() => {
+    return countFactorOverrides(effectivePatientFactors, autoDetectedPatientFactors);
+  }, [effectivePatientFactors, autoDetectedPatientFactors]);
+  /** Task #242 — total filled (clinician- or pipeline-set) structured
+   *  fields, used by the recovery dashboards' confidence-band model.
+   *  Lines up 1:1 with the "X filled" badge on PatientFactorsForm. */
+  const patientFactorsFilledCount = useMemo(() => {
+    return computePatientFactorsFilledCount(effectivePatientFactors);
+  }, [effectivePatientFactors]);
+  // ─────────────────────────────────────────────────────────────────
+
   const [whatIfScenarios, setWhatIfScenarios] = useState<WhatIfScenario[]>([]);
   const [whatIfComparisonBScenarios, setWhatIfComparisonBScenarios] = useState<WhatIfScenario[]>([]);
+  const [whatIfFlareUpId, setWhatIfFlareUpId] = useState<string | null>(null);
+  const [whatIfFlareUpBaseline, setWhatIfFlareUpBaseline] = useState<Record<string, Record<string, number>> | null>(null);
+  const [whatIfPainfulTissue, setWhatIfPainfulTissue] = useState<PainfulTissueRegion | null>(null);
   const [mechanismBoneIds, setMechanismBoneIds] = useState<string[]>([]);
   const mechanismHighlightBones = useMemo(() => {
     if (!showInjuryMechanism || mechanismBoneIds.length === 0) return [];
@@ -629,8 +1200,6 @@ export default function PhysioGPT() {
   }, [showInjuryMechanism, mechanismBoneIds]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
-  const [zoomToolMode, setZoomToolMode] = useState(false);
-  const [expandedZoomRegion, setExpandedZoomRegion] = useState<string | null>(null);
   const [correlationMode, setCorrelationMode] = useState(false);
   const [expandedCorrelation, setExpandedCorrelation] = useState<string | null>(null);
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
@@ -640,24 +1209,131 @@ export default function PhysioGPT() {
   const [tensionTabActive, setTensionTabActive] = useState(false);
   const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
   const [manualChainTensions, setManualChainTensions] = useState<Record<string, number>>({});
-  const [showScarPanel, setShowScarPanel] = useState(false);
   const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
   const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
-  const [editingScar, setEditingScar] = useState<string | null>(null);
-  const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
-  const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
-  const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
   const [reasoningRequestedTab, setReasoningRequestedTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null>(null);
   const [reasoningActiveTab, setReasoningActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
   const [selectedSlingId, setSelectedSlingId] = useState<SlingId | null>(null);
   const [slingOverlayVisible, setSlingOverlayVisible] = useState(true);
+  // Task #323: when the clinician toggles the Slings circle in the
+  // BiomechanicsHUD, the on-skeleton sling overlay is "pinned" — it
+  // renders independently of which side-panel tab is active. The chevron
+  // (or double-click) on the same circle still opens the side panel.
+  // Defaults OFF; auto-clears when leaving Movement Mode below.
+  const [slingsOverlayPinned, setSlingsOverlayPinned] = useState(false);
+  const [pinnedSpotlightSlingId, setPinnedSpotlightSlingId] = useState<SlingId | null>(null);
+  const [slingPartTreatments, setSlingPartTreatments] = useState<Record<string, SlingPartTreatmentRecord>>({});
+  // Per-part muscle adjustments fed into the sling engine so per-part
+  // treatments actually re-simulate weak links / status. The engine
+  // consumes the duck-typed `{ tension?: number; pathology? }` shape.
+  const [slingPartMuscleAdjustments, setSlingPartMuscleAdjustments] = useState<Record<string, { tension?: number; pathology?: PathologyType }>>({});
+  // Movement-mode sling spotlight is ON by default in Movement Mode and can
+  // be toggled from the toolbar pill or dismissed via the panel X. Persists
+  // in the case snapshot.
+  const [movementSpotlightEnabled, setMovementSpotlightEnabled] = useState(true);
+  // Compensation Re-Education panel visibility (Task #373). Mirrors the
+  // Sling Spotlight enable flag — hidden when the panel is closed or
+  // when there are no enriched compensations to render.
+  const [movementReEdPanelEnabled, setMovementReEdPanelEnabled] = useState(true);
+  // Sling Failure Movement Visualizer: which sling+scenario
+  // is currently being played (drives the SVG overlay over the 3D viewer).
+  const [activeFailureSel, setActiveFailureSel] = useState<SlingFailureVisualizerSelection | null>(null);
+  const sfvFailureBoneSet = useMemo(() => {
+    if (!activeFailureSel) return undefined as Set<string> | undefined;
+    const scen = activeFailureSel.scenario;
+    return new Set<string>([
+      ...(scen.weakSegmentBones ?? []),
+      ...(scen.rerouteTargetBones ?? []),
+    ]);
+  }, [activeFailureSel]);
+  const sfvAtBeat = useMemo(() => {
+    if (!activeFailureSel) return false;
+    const ff = activeFailureSel.scenario.failureFrame;
+    if (typeof ff !== 'number') return false;
+    return Math.abs(animationState.progress - ff) < 0.06;
+  }, [activeFailureSel, animationState.progress]);
+  const [sfvIntendedVisible, setSfvIntendedVisible] = useState(true);
+  const [sfvActualVisible, setSfvActualVisible] = useState(true);
+  const [sfvGhostOpacity, setSfvGhostOpacity] = useState(0.45);
+  const sfvStallArmedRef = useRef(true);
+  const sfvStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!activeFailureSel) {
+      sfvStallArmedRef.current = true;
+      if (sfvStallTimerRef.current) {
+        clearTimeout(sfvStallTimerRef.current);
+        sfvStallTimerRef.current = null;
+      }
+      return;
+    }
+    if (!sfvAtBeat) {
+      sfvStallArmedRef.current = true;
+      return;
+    }
+    if (!sfvStallArmedRef.current) return;
+    if (!animationState.isPlaying) return;
+    sfvStallArmedRef.current = false;
+    setAnimationState(prev => ({ ...prev, isPlaying: false }));
+    if (sfvStallTimerRef.current) clearTimeout(sfvStallTimerRef.current);
+    sfvStallTimerRef.current = setTimeout(() => {
+      sfvStallTimerRef.current = null;
+      setAnimationState(prev => ({ ...prev, isPlaying: true }));
+    }, 280);
+  }, [sfvAtBeat, activeFailureSel, animationState.isPlaying]);
+  useEffect(() => () => {
+    if (sfvStallTimerRef.current) clearTimeout(sfvStallTimerRef.current);
+  }, []);
+  const [slingFailureVisualizerOpen, setSlingFailureVisualizerOpen] = useState(true);
+  const [sfvPanelPosition, setSfvPanelPosition] = useState<{ left: number; top: number } | null>(null);
+  // Reset SFV visibility + dragged position whenever the active case
+  // changes so a freshly loaded case opens with the panel in its
+  // default top-right slot — prevents a closed panel or a stale
+  // off-screen position from carrying over between cases. (Task #361)
+  const lastSfvCaseIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeCaseId !== lastSfvCaseIdRef.current) {
+      lastSfvCaseIdRef.current = activeCaseId;
+      setSlingFailureVisualizerOpen(true);
+      setSfvPanelPosition(null);
+    }
+  }, [activeCaseId]);
+  // Movement Findings panel position — lifted so the panel keeps its
+  // dragged spot across skeleton-mode re-mounts within the session.
+  const [movementFindingsPosition, setMovementFindingsPosition] = useState<{ left: number; top: number } | null>(null);
+  // Master on/off for the currently-active sling's on-skeleton
+  // visualization (pathway tube, weak-link highlight, intended/actual
+  // ghost layer, reroute arrow, hotspot pulse). When the user activates
+  // a different sling card we reset this to true so the new sling shows
+  // its visualization by default. (Task #358)
+  const [sfvSlingVisualizationVisible, setSfvSlingVisualizationVisible] = useState(true);
+  const lastSfvActiveSlingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = activeFailureSel?.sling.slingId ?? null;
+    if (currentId !== lastSfvActiveSlingIdRef.current) {
+      lastSfvActiveSlingIdRef.current = currentId;
+      setSfvSlingVisualizationVisible(true);
+    }
+  }, [activeFailureSel]);
+  // True when the SFV is currently driving overlays on the 3D skeleton —
+  // i.e. the panel is open, a sling card is active, and the user has not
+  // toggled the per-sling eye off. Used to hide pain markers so the sling
+  // visualization isn't visually drowned out (Task #358).
+  const sfvOverlayActive = !!(slingFailureVisualizerOpen && activeFailureSel && sfvSlingVisualizationVisible);
+  // Last bone the clinician interacted with via Pose / Auto-pose. Drives
+  // a "focus bonus" in the spotlight selector so dragging a bone that
+  // belongs to a sling's pathway nudges the spotlight toward it.
+  const [lastInteractedBone, setLastInteractedBone] = useState<string | null>(null);
   const [expandedSlingDetailId, setExpandedSlingDetailId] = useState<string | null>(null);
   const [unifiedBiomechanicsMovementTask, setUnifiedBiomechanicsMovementTask] = useState<string | undefined>(undefined);
   const [unifiedBiomechanicsProgress, setUnifiedBiomechanicsProgress] = useState(0.5);
   const [unifiedBiomechanicsFaultOverrides, setUnifiedBiomechanicsFaultOverrides] = useState<Partial<FaultRuleConfig>[]>([]);
   const [previousBiomechanicsOutput, setPreviousBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
   const [cachedBiomechanicsOutput, setCachedBiomechanicsOutput] = useState<BiomechanicsOutput | null>(null);
+  const [isPoseDragging, setIsPoseDragging] = useState(false);
+  const hudMuscleAnalysisRef = useRef<ReturnType<typeof applyOverridesToAnalysis> | null>(null);
+  const hudWeightDistributionRef = useRef<ReturnType<typeof computeWeightDistribution> | null>(null);
+  const [movementSimExpandSignal, setMovementSimExpandSignal] = useState(0);
 
   const [evidenceEngineResult, setEvidenceEngineResult] = useState<{
     options: Array<{
@@ -683,6 +1359,9 @@ export default function PhysioGPT() {
     totalSourcesReturned?: number;
   } | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const evidenceLoadingRef = useRef(false);
+  evidenceLoadingRef.current = evidenceLoading;
+  const evidenceErrorRef = useRef(false);
 
   const [expandedPhase, setExpandedPhase] = useState<string | null>('acute');
   const [expandedTreatmentSection, setExpandedTreatmentSection] = useState<string | null>(null);
@@ -691,17 +1370,54 @@ export default function PhysioGPT() {
   const [selectedRomJoint, setSelectedRomJoint] = useState<RomJointDefinition | null>(null);
   const [romValues, setRomValues] = useState<Record<string, number>>({});
   const [romMeasurements, setRomMeasurements] = useState<RomMeasurement[]>([]);
+  // Task #391 — Joint Zoom Mode (hip v1). Hip pick spheres on the main
+  // viewer are auto-enabled whenever Movement Mode is active; clicking
+  // L or R hip opens the docked HipZoomPanel for that side. The v1 lock
+  // is enforced in the click handler: if a panel is already open, the
+  // user must close it before clicking a different hip.
+  const [hipZoomSide, setHipZoomSide] = useState<'left' | 'right' | null>(null);
+  // Task #393 — viewer-relative position (px) for the draggable Joint
+  // Zoom panel. Per-session state (no DB persistence); preserved across
+  // L/R switches so the clinician's chosen spot stays put.
+  const [hipZoomPosition, setHipZoomPosition] = useState<{ left: number; top: number } | null>(null);
+  // Auto-derived hip pathology from the current Clinical Prediction. Scans
+  // clinical_summary + original_description for canonical hip-pathology
+  // keywords. Defaults to 'none' so the zoom panel shows normal morphology.
+  const hipZoomPathology = useMemo<HipPathology>(() => {
+    const haystack = `${lastClinicalParseResult?.clinical_summary || ''} ${lastClinicalParseResult?.original_description || ''}`.toLowerCase();
+    if (!haystack.trim()) return 'none';
+    if (/\bcam\b|cam[\s-]?impingement|cam[\s-]?lesion/.test(haystack)) return 'cam';
+    if (/pincer/.test(haystack)) return 'pincer';
+    if (/labral\s*tear|labrum\s*tear|acetabular\s*labr/.test(haystack)) return 'labral_tear';
+    if (/(hip\s*(oa|osteoarthrit)|coxarthros)/.test(haystack)) return 'oa';
+    return 'none';
+  }, [lastClinicalParseResult?.clinical_summary, lastClinicalParseResult?.original_description]);
+  const romMeasurementsRef = useRef<RomMeasurement[]>([]);
+  romMeasurementsRef.current = romMeasurements;
 
   const [clinicalReasoningData, setClinicalReasoningData] = useState<ClinicalReasoningData | null>(null);
+  const clinicalReasoningDataRef = useRef<ClinicalReasoningData | null>(null);
+  clinicalReasoningDataRef.current = clinicalReasoningData;
   const [clinicalReasoningOpen, setClinicalReasoningOpen] = useState(false);
   const [clinicalReasoningProcessing, setClinicalReasoningProcessing] = useState(false);
   const [clinicalReasoningPaused, setClinicalReasoningPaused] = useState(false);
-  const [structuredReasoningData, setStructuredReasoningData] = useState<StructuredReasoningResult | null>(null);
+  const [clinicalNotesOpen, setClinicalNotesOpen] = useState(false);
+  const [clinicalNotes, setClinicalNotes] = useState<import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes | null>(null);
+  const [isGeneratingClinicalNotes, setIsGeneratingClinicalNotes] = useState(false);
+  const [clinicalNotesError, setClinicalNotesError] = useState<string | null>(null);
+  const [copiedNotesSection, setCopiedNotesSection] = useState<string | null>(null);
+  const lastClinicalNotesKeyRef = useRef<string>("");
+  // `structuredReasoningData` was hoisted above to avoid a TDZ in the
+  // patient-factors memos near the top of the component. Do not
+  // redeclare here.
   const [structuredReasoningLoading, setStructuredReasoningLoading] = useState(false);
   const [treatmentDecisionData, setTreatmentDecisionData] = useState<TreatmentDecisionResult | null>(null);
   const [treatmentDecisionLoading, setTreatmentDecisionLoading] = useState(false);
   const [treatmentPlanData, setTreatmentPlanData] = useState<TreatmentPlanResult | null>(null);
   const [treatmentPlanLoading, setTreatmentPlanLoading] = useState(false);
+  // Bumped to force a re-fetch of /api/treatment-plan/generate after a
+  // clinician override or explicit "Recalculate now" — Optimal Loading Engine.
+  const [treatmentPlanReloadKey, setTreatmentPlanReloadKey] = useState(0);
   const [customExerciseResult, setCustomExerciseResult] = useState<import("@/components/skeleton/ExerciseEngineTab").CustomExerciseResult | null>(null);
   const [customManualTherapyResult, setCustomManualTherapyResult] = useState<import("@/components/skeleton/ManualTherapyEngineTab").CustomManualTherapyResult | null>(null);
   const [activeGoalProfile, setActiveGoalProfile] = useState<import("@/lib/goalStateEngine").RecoveryGoalProfile | null>(null);
@@ -714,17 +1430,154 @@ export default function PhysioGPT() {
   const [mtGeneratingSession, setMtGeneratingSession] = useState<number | null>(null);
   const [exerciseGeneratedSessions, setExerciseGeneratedSessions] = useState<Set<number>>(new Set());
   const [mtGeneratedSessions, setMtGeneratedSessions] = useState<Set<number>>(new Set());
-  const [extractionResult, setExtractionResult] = useState<ClinicalExtractionResult | null>(null);
-  const [extractionResultsOpen, setExtractionResultsOpen] = useState(false);
+  // `extractionResult` / `extractionResultsOpen` were hoisted above to
+  // avoid a TDZ in the patient-factors memos near the top of the
+  // component. Do not redeclare here.
   const [subjectiveHistoryInput, setSubjectiveHistoryInput] = useState('');
+
+  const hasReasoningContentForNotes = useMemo(() => {
+    const d = clinicalReasoningData;
+    if (!d) return false;
+    return (
+      d.hypotheses.length > 0 ||
+      d.findings.length > 0 ||
+      d.flags.length > 0 ||
+      d.reasoningChain.length > 0 ||
+      (d.treatmentPlan !== null && d.treatmentPlan !== undefined)
+    );
+  }, [clinicalReasoningData]);
+
+  const clinicalNotesReasoningKey = useMemo(() => {
+    const d = clinicalReasoningData;
+    if (!d) return "";
+    // Content-based signature so notes refresh whenever any meaningful
+    // field of the reasoning payload changes, not just counts/lengths.
+    const signaturePayload = {
+      hypotheses: d.hypotheses.map(h => ({ id: h.id, condition: h.condition, confidence: h.confidence, status: h.status })),
+      findings: d.findings.map(f => ({ id: f.id, category: f.category, text: f.text })),
+      flags: d.flags,
+      reasoningChain: d.reasoningChain,
+      biomechanicalLinks: d.biomechanicalLinks ?? [],
+      clinicalSummary: d.clinicalSummary || "",
+      assessmentPriorities: d.assessmentPriorities || [],
+      treatmentPlan: d.treatmentPlan ?? null,
+      posturalAnalysis: d.posturalAnalysis ?? null,
+      evidenceReferences: (d as { evidenceReferences?: unknown[] }).evidenceReferences ?? [],
+      subjectiveHistory: subjectiveHistoryInput || "",
+    };
+    return JSON.stringify(signaturePayload);
+  }, [clinicalReasoningData, subjectiveHistoryInput]);
+
+  useEffect(() => {
+    // Reasoning data was cleared (reset / new consultation / blank chat)
+    // or the signature changed — drop any cached notes so we never show
+    // SOAP from a previous consultation.
+    if (!hasReasoningContentForNotes || !clinicalNotesReasoningKey) {
+      if (clinicalNotes !== null) setClinicalNotes(null);
+      if (clinicalNotesError) setClinicalNotesError(null);
+      lastClinicalNotesKeyRef.current = "";
+      return;
+    }
+    if (
+      lastClinicalNotesKeyRef.current &&
+      lastClinicalNotesKeyRef.current !== clinicalNotesReasoningKey
+    ) {
+      setClinicalNotes(null);
+      setClinicalNotesError(null);
+    }
+  }, [clinicalNotesReasoningKey, hasReasoningContentForNotes, clinicalNotes, clinicalNotesError]);
+
+  // Kept current on every render so async response handlers can compare
+  // their captured request key against the latest reasoning signature.
+  const currentClinicalNotesKeyRef = useRef<string>("");
+  currentClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+
+  const generateClinicalNotesFromToolbar = useCallback(async () => {
+    if (!hasReasoningContentForNotes || isGeneratingClinicalNotes) return;
+    const requestKey = clinicalNotesReasoningKey;
+    setIsGeneratingClinicalNotes(true);
+    setClinicalNotesError(null);
+    try {
+      const notes = await apiRequest("/api/clinical-notes/generate", "POST", {
+        reasoningData: clinicalReasoningData,
+        subjectiveHistory: subjectiveHistoryInput,
+      });
+      // Drop the result if reasoning data has moved on since the
+      // request started — the cache-invalidation effect has already
+      // cleared `clinicalNotes`, and the auto-generate effect will
+      // kick off a fresh request once `isGenerating` flips to false.
+      if (currentClinicalNotesKeyRef.current !== requestKey) return;
+      setClinicalNotes(notes);
+      lastClinicalNotesKeyRef.current = requestKey;
+    } catch (err) {
+      if (currentClinicalNotesKeyRef.current !== requestKey) return;
+      console.error("Failed to generate clinical notes:", err);
+      setClinicalNotesError("Couldn't generate notes. Please try again.");
+    } finally {
+      setIsGeneratingClinicalNotes(false);
+    }
+  }, [hasReasoningContentForNotes, isGeneratingClinicalNotes, clinicalReasoningData, subjectiveHistoryInput, clinicalNotesReasoningKey]);
+
+  useEffect(() => {
+    if (!clinicalNotesOpen) return;
+    if (!hasReasoningContentForNotes) return;
+    if (clinicalNotes) return;
+    if (isGeneratingClinicalNotes) return;
+    void generateClinicalNotesFromToolbar();
+  }, [clinicalNotesOpen, hasReasoningContentForNotes, clinicalNotes, isGeneratingClinicalNotes, generateClinicalNotesFromToolbar]);
+
+  const copyClinicalNotesSection = useCallback((section: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedNotesSection(section);
+      setTimeout(() => setCopiedNotesSection(null), 2000);
+    });
+  }, []);
+
+  const copyAllClinicalNotes = useCallback(() => {
+    if (!clinicalNotes) return;
+    const fullText = `SUBJECTIVE:\n${clinicalNotes.subjective}\n\nOBJECTIVE:\n${clinicalNotes.objective}\n\nASSESSMENT:\n${clinicalNotes.assessment}\n\nPLAN:\n${clinicalNotes.plan}${clinicalNotes.additionalNotes ? `\n\nADDITIONAL NOTES:\n${clinicalNotes.additionalNotes}` : ''}`;
+    navigator.clipboard.writeText(fullText).then(() => {
+      setCopiedNotesSection('all');
+      setTimeout(() => setCopiedNotesSection(null), 2000);
+    });
+  }, [clinicalNotes]);
   const subjectiveHistoryRef = useRef('');
   const clinicalReasoningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slingAnalysisRef = useRef<ReturnType<typeof computeSlingAnalysis> | null>(null);
+  const [slingActivationOverrides, setSlingActivationOverrides] = useState<Partial<Record<SlingId, number>>>({});
   const triggerClinicalReasoningAnalysisRef = useRef<(forceRefresh?: boolean) => void>(() => {});
-  const handleEvidenceQueryRef = useRef<() => void>(() => {});
+  const handleEvidenceQueryRef = useRef<(opts?: { autopilot?: boolean }) => void>(() => {});
+  /** Forward-declared autopilot chain — implementation is bound near
+   *  `handleAutoBuildClick` (which depends on later state). The
+   *  reasoning trigger calls into this via the ref to avoid hoisting. */
+  const chainAutopilotAfterReasoningRef = useRef<(data: ClinicalReasoningData) => void>(() => {});
+  /** Forward-declared so the rerun-from-stage handler can fire master-
+   *  plan auto-build without depending on its render-order position. */
+  const handleAutoBuildClickRef = useRef<() => void>(() => {});
+  /** Forward-declared so the rerun-from-stage handler (declared early
+   *  for stable dock prop identity) can call into the stage tracker
+   *  helpers (declared a bit later in render order). */
+  const markStageStartRef = useRef<(id: AutopilotStageId) => void>(() => {});
+  const markStageEndRef = useRef<(id: AutopilotStageId, outcome: 'done' | 'error' | 'converged' | 'skipped', reason?: string) => void>(() => {});
   const autoEvidenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const evidenceAbortRef = useRef<AbortController | null>(null);
   const evidenceQueryIdRef = useRef(0);
+  // Reasoning fetch is conversation-scoped — bumping the request id on
+  // each call lets the response handler discard stale results landing
+  // after a case switch / new trigger.
+  const reasoningRequestIdRef = useRef(0);
+  const reasoningAbortRef = useRef<AbortController | null>(null);
+  // Set of stage ids the user explicitly asked to re-run "from here".
+  // Forced stages bypass the convergence governor on the very next chain
+  // pass so a converged top hypothesis cannot suppress an explicit rerun.
+  const forceRerunStagesRef = useRef<Set<AutopilotStageId>>(new Set());
+  // Cancellation for the in-flight async chain runner. Bumped on every
+  // chain entry; each await boundary checks the captured run id.
+  const chainRunIdRef = useRef(0);
+  // Mirror of patientContextSig so the autopilot chain (defined before
+  // patientContextSig in render order) can fold it into the research
+  // dedup hash without restructuring the component.
+  const patientContextSigRef = useRef<string>('');
   const [activeBiomechanicalLink, setActiveBiomechanicalLink] = useState<BiomechanicalLink | null>(null);
   const [biomechanicalMuscleHighlights, setBiomechanicalMuscleHighlights] = useState<string[]>([]);
   const [muscleHighlightColors, setMuscleHighlightColors] = useState<Record<string, string>>({});
@@ -732,7 +1585,25 @@ export default function PhysioGPT() {
   const [visualizationBoneHighlights, setVisualizationBoneHighlights] = useState<Array<{ boneName: string; color: number; intensity: number }>>([]);
   const [activeVisualizationId, setActiveVisualizationId] = useState<string | null>(null);
   const lastReasoningTriggerRef = useRef<string>('');
+  // Material-change signature: structural findings only (markers,
+  // ROM, posture, compensation) — excludes evolving subjective text
+  // so reasoning is not re-fired on every transcript chunk after
+  // convergence. Compared against monitorConvergedRef to gate the
+  // reasoning entry point.
+  const lastMaterialSignatureRef = useRef<string>('');
   const compensationDataRef = useRef<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
+  // Mirror of compensationDataRef as state so memoised re-ed enrichment
+  // re-runs when the joint-constraints detector reports a new pattern.
+  const [compensationDataState, setCompensationDataState] = useState<{ result: CompensationResult | null; movementName: string | null; restrictions: Record<string, number> }>({ result: null, movementName: null, restrictions: {} });
+  // Live enrichment output for the Movement-Mode Re-Ed UI panel
+  // (Task #373 will read this). Kept in a ref alongside the memo so any
+  // non-reactive consumer (cart, exports) can read the current snapshot.
+  const reEducationCompensationsRef = useRef<EnrichmentOutput | null>(null);
+  // Detector outputs cloned + stamped with enrichment so Findings Stream /
+  // Sling Spotlight / Plan Cart can read driver/verdict/cost/betterPatternId
+  // off the same arrays they already iterate. Refreshed on every memo run.
+  const [reEducationEnrichedOutputs, setReEducationEnrichedOutputs] = useState<EnrichmentOutput['enrichedDetectorOutputs']>({ jointConstraints: null, pathology: null, sling: null });
+  const reEducationEnrichedOutputsRef = useRef<EnrichmentOutput['enrichedDetectorOutputs']>({ jointConstraints: null, pathology: null, sling: null });
   const painMarkersRef = useRef(painMarkers);
   painMarkersRef.current = painMarkers;
 
@@ -746,6 +1617,265 @@ export default function PhysioGPT() {
   const VOICE_INTERVAL_MS = 10000;
   const VOICE_INTERVAL_MIN_NEW_CHARS = 50;
 
+  /** Anchor used to compute "00:42"-style stamps for voice-driven
+   *  events. Set when recording starts, cleared when recording stops.
+   *  Hoisted so the autopilot governor below can reference it. */
+  const recordingStartedAtRef = useRef<number | null>(null);
+
+  // Autopilot governor: input-hash dedup per stage + convergence
+  // (≥CONVERGENCE_RUNS at ≥CONVERGENCE_MIN_CONFIDENCE).
+  const AUTOPILOT_STORAGE_KEY = 'physiogpt:voice-autopilot:enabled';
+  const AUTOPILOT_PAUSED_STORAGE_KEY = 'physiogpt:voice-autopilot:paused';
+  // Legacy fallback for cases written before autopilotStatus moved into
+  // the case snapshot. New cases persist via PhysioGptCaseSnapshot.
+  const AUTOPILOT_STATUS_STORAGE_KEY = 'physiogpt:voice-autopilot:status-by-conv';
+  const CONVERGENCE_RUNS = 2;
+  const CONVERGENCE_MIN_CONFIDENCE = 0.6;
+
+  const [autopilotEnabled, setAutopilotEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STORAGE_KEY);
+      if (raw === null) return true; // default ON
+      return JSON.parse(raw) === true;
+    } catch { return true; }
+  });
+  const [autopilotPaused, setAutopilotPaused] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_PAUSED_STORAGE_KEY);
+      return raw !== null && JSON.parse(raw) === true;
+    } catch { return false; }
+  });
+  const autopilotEnabledRef = useRef(autopilotEnabled);
+  autopilotEnabledRef.current = autopilotEnabled;
+  const autopilotPausedRef = useRef(autopilotPaused);
+  autopilotPausedRef.current = autopilotPaused;
+
+  const handleAutopilotToggle = useCallback((next: boolean) => {
+    setAutopilotEnabled(next);
+    try { window.localStorage.setItem(AUTOPILOT_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+  }, []);
+  const handleAutopilotPauseToggle = useCallback((next: boolean) => {
+    setAutopilotPaused(next);
+    // Pause only suppresses NEW stage enqueues (the per-stage gates
+    // already check autopilotPausedRef). Resume re-engages immediately
+    // by re-firing the reasoning trigger; the existing input-hash dedup
+    // skips it if nothing changed since pause, otherwise the chain
+    // continues with whatever findings accumulated during the pause —
+    // no fresh voice trigger required.
+    if (!next) {
+      window.setTimeout(() => {
+        triggerClinicalReasoningAnalysisRef.current(false);
+      }, 100);
+    }
+    try { window.localStorage.setItem(AUTOPILOT_PAUSED_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+  }, []);
+  // Legacy localStorage map — read on hydration when the snapshot has
+  // no autopilotStatus, written alongside snapshot persistence.
+  const readAutopilotStatusMap = useCallback((): Record<string, 'done' | 'converged' | 'error'> => {
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }, []);
+  const writeAutopilotStatusForConv = useCallback((cid: number, status: 'done' | 'converged' | 'error' | null) => {
+    try {
+      const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      if (status === null) {
+        delete map[String(cid)];
+      } else {
+        map[String(cid)] = status;
+      }
+      window.localStorage.setItem(AUTOPILOT_STATUS_STORAGE_KEY, JSON.stringify(map));
+    } catch { /* quota */ }
+  }, []);
+
+  /** Re-run the AI chain starting from a specific stage. The chain
+   *  itself owns ordering — this just fires the right entry point and
+   *  invalidates downstream input-hash cache so the dedup governor
+   *  doesn't short-circuit it. The forceRerunStagesRef set is consulted
+   *  by the chain governor so a converged top hypothesis cannot suppress
+   *  an explicitly-requested rerun ("force this stage and everything
+   *  downstream even when converged"). */
+  const handleAutopilotRerunFromStage = useCallback((id: AutopilotStageId) => {
+    const order: AutopilotStageId[] = ['parse', 'reason', 'evidence', 'research', 'plan'];
+    const fromIdx = order.indexOf(id);
+    if (fromIdx >= 0) {
+      for (let i = fromIdx; i < order.length; i++) {
+        delete stageInputHashRef.current[order[i]];
+        forceRerunStagesRef.current.add(order[i]);
+      }
+    }
+    voiceTriggeredRef.current = true;
+    setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+    const cid = selectedConversationIdRef.current;
+    if (cid) writeAutopilotStatusForConv(cid, null);
+    if (id === 'parse') {
+      clinicalTextInputRef.current?.triggerIncrementalParse();
+      return;
+    }
+    // Reason: full reasoning rerun (cascades downstream itself).
+    if (id === 'reason') {
+      lastReasoningTriggerRef.current = '';
+      triggerClinicalReasoningAnalysisRef.current(true);
+      return;
+    }
+    // Evidence: fire evidence directly, then re-run downstream (research + plan)
+    // via chainAutopilotAfterReasoning using the already-cached reasoning data.
+    if (id === 'evidence') {
+      handleEvidenceQueryRef.current({ autopilot: true });
+      const cached = clinicalReasoningDataRef.current;
+      if (cached) chainAutopilotAfterReasoningRef.current(cached);
+      return;
+    }
+    // Research: fire research directly via the panel handle; chain
+    // closes the chip from the in-flight poll already wired below.
+    if (id === 'research') {
+      const cached = clinicalReasoningDataRef.current;
+      if (cached) {
+        chainAutopilotAfterReasoningRef.current(cached);
+      } else {
+        const r = caseResearchPanelRef.current;
+        if (r && !r.isRunning()) {
+          markStageStartRef.current('research');
+          try {
+            r.trigger(true);
+          } catch (e) {
+            markStageEndRef.current('research', 'error', e instanceof Error ? e.message : 'trigger failed');
+          }
+        }
+      }
+      return;
+    }
+    if (id === 'plan') {
+      markStageStartRef.current('plan');
+      try { handleAutoBuildClickRef.current(); }
+      catch (e) { markStageEndRef.current('plan', 'error', e instanceof Error ? e.message : 'auto-build failed'); }
+      return;
+    }
+  }, [writeAutopilotStatusForConv]);
+
+  // 5 stage chip statuses, keyed by stage id. Ordered for the dock.
+  const initialMonitorStages: AutopilotStageStatus[] = useMemo(() => ([
+    { id: 'parse',    label: 'Parse',     state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'reason',   label: 'Reason',    state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'evidence', label: 'Evidence',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'research', label: 'Research',  state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+    { id: 'plan',     label: 'Plan',      state: 'idle', callCount: 0, lastFiredSec: null, lastDurationMs: null },
+  ]), []);
+  const [monitorStages, setMonitorStages] = useState<AutopilotStageStatus[]>(initialMonitorStages);
+  const [monitorStability, setMonitorStability] = useState<AutopilotStability>({
+    topLabel: null, stableForRuns: 0, converged: false, destabilized: false,
+  });
+  // Orchestrator state machine — derived/observable. Tracks the
+  // currently active stage and the rollup status of the autopilot
+  // run. Persisted into the session snapshot so reopening a
+  // historical case does NOT auto-rerun the chain.
+  const [autopilotStage, setAutopilotStage] = useState<AutopilotStageId | 'idle'>('idle');
+  const [autopilotStatus, setAutopilotStatus] = useState<'idle' | 'running' | 'done' | 'converged' | 'error'>('idle');
+  const autopilotStatusRef = useRef(autopilotStatus);
+  autopilotStatusRef.current = autopilotStatus;
+  // Voice-only gate — chain only runs for voice-triggered case
+  // workups. Set true when pendingVoiceTriggerRef is consumed by
+  // handleClinicalTextParse, cleared when chain settles or user
+  // pauses autopilot.
+  const voiceTriggeredRef = useRef<boolean>(false);
+  const monitorStabilityRef = useRef(monitorStability);
+  monitorStabilityRef.current = monitorStability;
+  // Mirrors `monitorStages` so the chain timers can read the
+  // current chip state without re-subscribing.
+  const monitorStagesRef = useRef(monitorStages);
+  monitorStagesRef.current = monitorStages;
+  // Convenience flag mirrored from monitorStability for use inside
+  // triggers/effects without re-reading the full state. When true,
+  // governor-driven re-runs are suppressed for ALL stages until the
+  // structural input hash changes (which destabilizes the ribbon and
+  // automatically clears this flag) or the user manually re-runs a
+  // stage from the dock (which calls handleAutopilotRerunFromStage
+  // and resets the per-stage input-hash cache).
+  const monitorConvergedRef = useRef<boolean>(false);
+  monitorConvergedRef.current = monitorStability.converged && !monitorStability.destabilized;
+
+  // Per-stage input-hash for dedup. Key: stage id → last hash run.
+  const stageInputHashRef = useRef<Partial<Record<AutopilotStageId, string>>>({});
+  // Stage start timestamps so we can compute duration on completion.
+  const stageStartedAtRef = useRef<Partial<Record<AutopilotStageId, number>>>({});
+
+  /** Compute a recording-time stamp for a stage chip. */
+  const recordingTimeSec = useCallback((): number | null => {
+    return recordingStartedAtRef.current
+      ? (Date.now() - recordingStartedAtRef.current) / 1000
+      : null;
+  }, []);
+
+  /** Stable monitor-stage mutator. Merges patch into the named stage. */
+  const updateStage = useCallback((id: AutopilotStageId, patch: Partial<AutopilotStageStatus>) => {
+    setMonitorStages(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  }, []);
+
+  /** Mark a stage as starting. Bumps callCount, stamps start time, sets state=running. */
+  const markStageStart = useCallback((id: AutopilotStageId) => {
+    stageStartedAtRef.current[id] = Date.now();
+    setMonitorStages(prev => prev.map(s => s.id === id
+      ? { ...s, state: 'running', callCount: s.callCount + 1, lastFiredSec: recordingTimeSec(), lastSkippedReason: null }
+      : s));
+    setAutopilotStage(id);
+    setAutopilotStatus('running');
+  }, [recordingTimeSec]);
+
+  /** Mark a stage as finished (state=done|error|converged|skipped). */
+  const markStageEnd = useCallback((id: AutopilotStageId, outcome: 'done' | 'error' | 'converged' | 'skipped', reason?: string) => {
+    const startedAt = stageStartedAtRef.current[id];
+    const dur = startedAt ? Date.now() - startedAt : null;
+    delete stageStartedAtRef.current[id];
+    setMonitorStages(prev => prev.map(s => s.id === id
+      ? { ...s, state: outcome, lastDurationMs: dur, lastSkippedReason: reason ?? null }
+      : s));
+    // Plan is the terminal stage of the chain — its outcome rolls up
+    // to the orchestrator status. Errors at any stage roll up
+    // immediately so the dock can surface them. Terminal statuses
+    // are persisted per-conversation so re-entry doesn't auto-rerun.
+    const cid = selectedConversationIdRef.current;
+    if (outcome === 'error') {
+      setAutopilotStatus('error');
+      if (cid) writeAutopilotStatusForConv(cid, 'error');
+    } else if (id === 'plan') {
+      const next = outcome === 'converged' ? 'converged' : 'done';
+      setAutopilotStatus(next);
+      if (cid) writeAutopilotStatusForConv(cid, next);
+      voiceTriggeredRef.current = false; // chain settled; require new voice trigger
+    } else if (outcome === 'converged' && id === 'research') {
+      setAutopilotStatus('converged');
+      if (cid) writeAutopilotStatusForConv(cid, 'converged');
+    }
+  }, [writeAutopilotStatusForConv]);
+  // Bind the refs forward-declared above so the rerun-from-stage
+  // handler (which has to be defined earlier in render order to keep
+  // the dock's prop identity stable) can call into these helpers.
+  markStageStartRef.current = markStageStart;
+  markStageEndRef.current = markStageEnd;
+
+  /**
+   * Cheap structural hash for governor dedup. Inputs are rounded /
+   * sorted so cosmetic noise (transient float jitter, marker order)
+   * doesn't bust the cache.
+   */
+  const computeStructuralHash = useCallback((parts: unknown): string => {
+    try {
+      const json = JSON.stringify(parts);
+      // FNV-1a 32-bit
+      let h = 0x811c9dc5 >>> 0;
+      for (let i = 0; i < json.length; i++) {
+        h ^= json.charCodeAt(i);
+        h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+      }
+      return h.toString(16);
+    } catch { return String(Date.now()); }
+  }, []);
+
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -753,6 +1883,13 @@ export default function PhysioGPT() {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const clinicalTextInputRef = useRef<ClinicalTextInputHandle>(null);
+  /** Imperative ref into the Case-Aware Research panel — lets the
+   *  autopilot programmatically (re-)trigger a search. */
+  const caseResearchPanelRef = useRef<CaseResearchPanelHandle>(null);
+  /** Scroll target for the Patient Context panel — used by the
+   *  "No patient context" badge on downstream AI panels so the
+   *  clinician can jump straight to filling in answers. */
+  const patientContextSectionRef = useRef<HTMLDivElement | null>(null);
   const pendingFollowUpQuestionsRef = useRef<FollowUpQuestion[]>([]);
   const voiceAutoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -784,6 +1921,580 @@ export default function PhysioGPT() {
   });
 
   const messages = conversationData?.messages || [];
+
+  // ─── Case-Snapshot Persistence ─────────────────────────────────────────────
+  // Mirror plan cart contents into local state so the snapshot memo recomputes
+  // when the cart changes; provide an imperative replaceAll handle for restore.
+  const [planCartItemsState, setPlanCartItemsState] = useState<PlanCartItem[]>([]);
+  const planCartReplaceAllRef = useRef<((items: PlanCartItem[]) => void) | null>(null);
+  const handlePlanCartItemsChange = useCallback((items: PlanCartItem[]) => {
+    setPlanCartItemsState(items);
+  }, []);
+  const handlePlanCartRegisterReplaceAll = useCallback(
+    (fn: ((items: PlanCartItem[]) => void) | null) => {
+      planCartReplaceAllRef.current = fn;
+    },
+    [],
+  );
+
+  // Tracks which conversation id has had its caseSnapshot applied so we don't
+  // re-hydrate (or skip auto-save) erroneously across selection changes.
+  const hydratedConversationIdRef = useRef<number | null>(null);
+  const isHydratingRef = useRef<boolean>(false);
+  const lastSavedSnapshotRef = useRef<string>("");
+  const snapshotSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [snapshotSaveCounter, setSnapshotSaveCounter] = useState(0);
+  // Per-case instance counter — bumped in handleNewConversation and
+  // passed as `key` to ClinicalTextInput and ClinicalReasoningPanel so
+  // React fully remounts them, wiping every piece of child-owned
+  // useState/useRef text (input box, parsed result, follow-up Q&A,
+  // diagnosis report, manual evidence query fields, expanded sections,
+  // internally-cached SOAP notes, drag position, etc.).
+  const [caseInstanceId, setCaseInstanceId] = useState(0);
+  // Snapshot eligibility — only conversations created after this feature
+  // shipped (or that already have a snapshot persisted) are auto-saved.
+  // Legacy chat-only conversations stay chat-only even after interaction;
+  // they are NEVER backfilled by use, per the task requirement.
+  const snapshotEligibleRef = useRef<Set<number>>(new Set());
+  // Deterministic cutoff: any conversation created at or after this instant
+  // is automatically eligible regardless of whether the first snapshot write
+  // has succeeded yet. Conversations created strictly before are legacy.
+  const SNAPSHOT_FEATURE_CUTOFF_MS = Date.UTC(2026, 3, 29, 0, 0, 0); // 2026-04-29
+
+  // Build the live snapshot. Captures workspace inputs AND the
+  // treatment/timeline/right-panel state explicitly called out in the task —
+  // anything outside this snapshot is either recomputed deterministically from
+  // these inputs or considered transient UI noise.
+  const currentCaseSnapshot = useMemo<PhysioGptCaseSnapshot>(() => ({
+    version: 2,
+    modelConfig,
+    painMarkers,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    romMeasurements,
+    muscleOverrides,
+    slingActivationOverrides,
+    pinnedSpotlightSlingId,
+    slingPartTreatments,
+    slingPartMuscleAdjustments,
+    movementSpotlightEnabled,
+    bodyWeightKg,
+    externalLoadKg,
+    externalLoadHand,
+    clinicalHighlights,
+    subjectiveHistoryInput,
+    patientContextState,
+    patientFactorOverrides,
+    movementFindings,
+    selectedRegion: selectedRegion ?? null,
+    planCartItems: planCartItemsState,
+    // Treatment / timeline / right-panel state
+    rightPanelTab,
+    mechanismActiveTab,
+    expandedTreatmentSection,
+    treatmentDecisionData,
+    treatmentPlanData,
+    showSimTimeline,
+    timelinePlaybackState,
+    showForceTimePanel,
+    showTreatmentPriority,
+    showUnifiedChainPanel,
+    unifiedBiomechanicsMovementTask: unifiedBiomechanicsMovementTask ?? null,
+    unifiedBiomechanicsProgress,
+    unifiedBiomechanicsFaultOverrides,
+    // v2 — AI-generated outputs and skeleton interaction flags so reopening
+    // a case restores the full clinical workspace, not just the inputs.
+    extractionResult,
+    structuredReasoningData,
+    clinicalReasoningData,
+    evidenceEngineResult,
+    customExerciseResult,
+    customManualTherapyResult,
+    activeGoalProfile,
+    activeGoalGap,
+    whatIfScenarios,
+    whatIfComparisonBScenarios,
+    mechanismBoneIds,
+    connectionHighlights,
+    testChainActive,
+    selectedRomJoint,
+    romValues,
+    // Clinical text state — persisted so reopening a case restores the
+    // prediction card, and so server-side title derivation can fall back
+    // to the parsed original_description.
+    lastClinicalParseResult,
+    hasClinicalTextData,
+    // Autopilot governor state — persisted in the snapshot so reopen
+    // guards work without relying on localStorage.
+    autopilotStatus: autopilotStatus === 'done' || autopilotStatus === 'converged' || autopilotStatus === 'error'
+      ? autopilotStatus
+      : undefined,
+    lastReasoningTrigger: lastReasoningTriggerRef.current || undefined,
+  }), [
+    modelConfig,
+    painMarkers,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    romMeasurements,
+    muscleOverrides,
+    slingActivationOverrides,
+    pinnedSpotlightSlingId,
+    slingPartTreatments,
+    slingPartMuscleAdjustments,
+    movementSpotlightEnabled,
+    bodyWeightKg,
+    externalLoadKg,
+    externalLoadHand,
+    clinicalHighlights,
+    subjectiveHistoryInput,
+    patientContextState,
+    patientFactorOverrides,
+    movementFindings,
+    selectedRegion,
+    planCartItemsState,
+    rightPanelTab,
+    mechanismActiveTab,
+    expandedTreatmentSection,
+    treatmentDecisionData,
+    treatmentPlanData,
+    showSimTimeline,
+    timelinePlaybackState,
+    showForceTimePanel,
+    showTreatmentPriority,
+    showUnifiedChainPanel,
+    unifiedBiomechanicsMovementTask,
+    unifiedBiomechanicsProgress,
+    unifiedBiomechanicsFaultOverrides,
+    extractionResult,
+    structuredReasoningData,
+    clinicalReasoningData,
+    evidenceEngineResult,
+    customExerciseResult,
+    customManualTherapyResult,
+    activeGoalProfile,
+    activeGoalGap,
+    whatIfScenarios,
+    whatIfComparisonBScenarios,
+    mechanismBoneIds,
+    connectionHighlights,
+    testChainActive,
+    selectedRomJoint,
+    romValues,
+    lastClinicalParseResult,
+    hasClinicalTextData,
+    autopilotStatus,
+  ]);
+
+  // Hydrate the workspace from caseSnapshot when the loaded conversation
+  // changes. We ALWAYS reset every snapshot-participating field to its default
+  // first so that opening a legacy (no-snapshot) conversation, or a snapshot
+  // that omits some fields, never inherits stale values from a previously
+  // selected case.
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    if (!conversationData?.conversation) return;
+    if (hydratedConversationIdRef.current === selectedConversationId) return;
+
+    const snap = conversationData.conversation.caseSnapshot ?? null;
+    isHydratingRef.current = true;
+    // Eligibility:
+    //   1) If a snapshot is already persisted → eligible (continue round-trip).
+    //   2) Else if the conversation was created on/after the feature cutoff
+    //      → eligible (covers the edge case where the very first snapshot
+    //      write failed; subsequent edits should still persist).
+    //   3) Otherwise legacy chat-only — never auto-save / never backfill.
+    const createdAt = conversationData.conversation.createdAt
+      ? new Date(conversationData.conversation.createdAt).getTime()
+      : 0;
+    const postRollout = createdAt >= SNAPSHOT_FEATURE_CUTOFF_MS;
+    if (snap || postRollout) {
+      snapshotEligibleRef.current.add(selectedConversationId);
+    } else {
+      snapshotEligibleRef.current.delete(selectedConversationId);
+    }
+
+    // Step 1 — reset every snapshot-participating field to its default.
+    setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+    setPainMarkers([]);
+    setCompromisedTissues([]);
+    setScarMarkers([]);
+    setAdhesionBands([]);
+    setRomMeasurements([]);
+    setMuscleOverrides({});
+    setSlingActivationOverrides({});
+    setPinnedSpotlightSlingId(null);
+    setSlingPartTreatments({});
+    setSlingPartMuscleAdjustments({});
+    setMovementSpotlightEnabled(true);
+    setBodyWeightKg(70);
+    setClinicalHighlights([]);
+    setSubjectiveHistoryInput('');
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+    setPatientFactorOverrides(null);
+    setMovementFindings([]);
+    setSelectedRegion(null);
+    planCartReplaceAllRef.current?.([]);
+    setRightPanelTab('chat');
+    setMechanismActiveTab('mechanism');
+    setExpandedTreatmentSection(null);
+    setTreatmentDecisionData(null);
+    setTreatmentPlanData(null);
+    setShowSimTimeline(false);
+    setTimelinePlaybackState(null);
+    setShowForceTimePanel(false);
+    setShowTreatmentPriority(false);
+    setShowUnifiedChainPanel(false);
+    setUnifiedBiomechanicsMovementTask(undefined);
+    setUnifiedBiomechanicsProgress(0.5);
+    setUnifiedBiomechanicsFaultOverrides([]);
+    // v2 — AI-output and skeleton-flag defaults.
+    setExtractionResult(null);
+    setStructuredReasoningData(null);
+    setClinicalReasoningData(null);
+    setEvidenceEngineResult(null);
+    setCustomExerciseResult(null);
+    setCustomManualTherapyResult(null);
+    setActiveGoalProfile(null);
+    setActiveGoalGap(null);
+    setWhatIfScenarios([]);
+    setWhatIfComparisonBScenarios([]);
+    setMechanismBoneIds([]);
+    setConnectionHighlights([]);
+    setTestChainActive(null);
+    setSelectedRomJoint(null);
+    setRomValues({});
+
+    // Step 2 — overlay snapshot values where present.
+    if (snap && typeof snap === 'object') {
+      if (snap.modelConfig && typeof snap.modelConfig === 'object') {
+        setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...(snap.modelConfig as Partial<ModelConfig>) });
+      }
+      if (Array.isArray(snap.painMarkers)) setPainMarkers(snap.painMarkers as PainMarker[]);
+      if (Array.isArray(snap.compromisedTissues)) setCompromisedTissues(snap.compromisedTissues as CompromisedTissue[]);
+      if (Array.isArray(snap.scarMarkers)) setScarMarkers(snap.scarMarkers as ScarMarker[]);
+      if (Array.isArray(snap.adhesionBands)) setAdhesionBands(snap.adhesionBands as AdhesionBand[]);
+      if (Array.isArray(snap.romMeasurements)) setRomMeasurements(snap.romMeasurements as RomMeasurement[]);
+      if (snap.muscleOverrides && typeof snap.muscleOverrides === 'object') {
+        setMuscleOverrides(snap.muscleOverrides as Record<string, MuscleOverride>);
+      }
+      if (snap.slingActivationOverrides && typeof snap.slingActivationOverrides === 'object') {
+        setSlingActivationOverrides(snap.slingActivationOverrides as Partial<Record<SlingId, number>>);
+      }
+      if (typeof snap.pinnedSpotlightSlingId === 'string' || snap.pinnedSpotlightSlingId === null) {
+        setPinnedSpotlightSlingId(snap.pinnedSpotlightSlingId as SlingId | null);
+      }
+      if (snap.slingPartTreatments && typeof snap.slingPartTreatments === 'object') {
+        setSlingPartTreatments(snap.slingPartTreatments as Record<string, SlingPartTreatmentRecord>);
+      }
+      if (snap.slingPartMuscleAdjustments && typeof snap.slingPartMuscleAdjustments === 'object') {
+        setSlingPartMuscleAdjustments(snap.slingPartMuscleAdjustments as Record<string, { tension?: number; pathology?: PathologyType }>);
+      }
+      if (typeof snap.movementSpotlightEnabled === 'boolean') {
+        setMovementSpotlightEnabled(snap.movementSpotlightEnabled);
+      } else if (typeof snap.movementSpotlightDismissed === 'boolean') {
+        // Back-compat: older snapshots stored the inverse boolean.
+        setMovementSpotlightEnabled(!snap.movementSpotlightDismissed);
+      }
+      if (typeof snap.bodyWeightKg === 'number') setBodyWeightKg(snap.bodyWeightKg);
+      if (typeof snap.externalLoadKg === 'number') setExternalLoadKg(Math.max(0, snap.externalLoadKg));
+      if (snap.externalLoadHand === 'left' || snap.externalLoadHand === 'right' || snap.externalLoadHand === 'both') {
+        setExternalLoadHand(snap.externalLoadHand);
+      }
+      if (Array.isArray(snap.clinicalHighlights)) setClinicalHighlights(snap.clinicalHighlights as RegionHighlight[]);
+      if (typeof snap.subjectiveHistoryInput === 'string') setSubjectiveHistoryInput(snap.subjectiveHistoryInput);
+      if (snap.patientContextState && typeof snap.patientContextState === 'object') {
+        setPatientContextState(snap.patientContextState as PatientContextState);
+      }
+      if (snap.patientFactorOverrides && typeof snap.patientFactorOverrides === 'object') {
+        setPatientFactorOverrides(snap.patientFactorOverrides as Partial<PatientFactors>);
+      }
+      if (Array.isArray(snap.movementFindings)) setMovementFindings(snap.movementFindings as MovementFinding[]);
+      if (typeof snap.selectedRegion === 'string' && snap.selectedRegion in BODY_REGIONS) {
+        setSelectedRegion(snap.selectedRegion as keyof typeof BODY_REGIONS);
+      }
+      if (Array.isArray(snap.planCartItems)) {
+        planCartReplaceAllRef.current?.(snap.planCartItems as PlanCartItem[]);
+      }
+      if (snap.rightPanelTab === 'chat' || snap.rightPanelTab === 'treatment' || snap.rightPanelTab === 'biomechanics' || snap.rightPanelTab === 'slings') {
+        setRightPanelTab(snap.rightPanelTab);
+      }
+      const validMechanismTabs = ['mechanism', 'treatment', 'whatif', 'exercise', 'manualRx', 'electroRx', 'adjunctRx', 'lifestyleRx', 'patientEd', 'myPlan'] as const;
+      if (typeof snap.mechanismActiveTab === 'string' && (validMechanismTabs as readonly string[]).includes(snap.mechanismActiveTab)) {
+        setMechanismActiveTab(snap.mechanismActiveTab as typeof validMechanismTabs[number]);
+      }
+      if (typeof snap.expandedTreatmentSection === 'string' || snap.expandedTreatmentSection === null) {
+        setExpandedTreatmentSection(snap.expandedTreatmentSection as string | null);
+      }
+      if (snap.treatmentDecisionData && typeof snap.treatmentDecisionData === 'object') {
+        setTreatmentDecisionData(snap.treatmentDecisionData as TreatmentDecisionResult);
+      }
+      if (snap.treatmentPlanData && typeof snap.treatmentPlanData === 'object') {
+        setTreatmentPlanData(snap.treatmentPlanData as TreatmentPlanResult);
+      }
+      if (typeof snap.showSimTimeline === 'boolean') setShowSimTimeline(snap.showSimTimeline);
+      if (snap.timelinePlaybackState && typeof snap.timelinePlaybackState === 'object') {
+        setTimelinePlaybackState(snap.timelinePlaybackState as PlaybackSyncState);
+      }
+      if (typeof snap.showForceTimePanel === 'boolean') setShowForceTimePanel(snap.showForceTimePanel);
+      if (typeof snap.showTreatmentPriority === 'boolean') setShowTreatmentPriority(snap.showTreatmentPriority);
+      if (typeof snap.showUnifiedChainPanel === 'boolean') setShowUnifiedChainPanel(snap.showUnifiedChainPanel);
+      if (typeof snap.unifiedBiomechanicsMovementTask === 'string') {
+        setUnifiedBiomechanicsMovementTask(snap.unifiedBiomechanicsMovementTask);
+      }
+      if (typeof snap.unifiedBiomechanicsProgress === 'number') {
+        setUnifiedBiomechanicsProgress(snap.unifiedBiomechanicsProgress);
+      }
+      if (Array.isArray(snap.unifiedBiomechanicsFaultOverrides)) {
+        setUnifiedBiomechanicsFaultOverrides(snap.unifiedBiomechanicsFaultOverrides as Partial<FaultRuleConfig>[]);
+      }
+      // v2 — AI outputs and skeleton interaction flags. The schema's open
+      // shape means older v1 snapshots simply lack these keys, in which
+      // case the defaults from Step 1 stand.
+      if (snap.extractionResult && typeof snap.extractionResult === 'object') {
+        setExtractionResult(snap.extractionResult as ClinicalExtractionResult);
+      }
+      if (snap.lastClinicalParseResult && typeof snap.lastClinicalParseResult === 'object') {
+        setLastClinicalParseResult(snap.lastClinicalParseResult as ClinicalParseResult);
+      }
+      if (typeof snap.hasClinicalTextData === 'boolean') {
+        setHasClinicalTextData(snap.hasClinicalTextData);
+      }
+      if (snap.structuredReasoningData && typeof snap.structuredReasoningData === 'object') {
+        setStructuredReasoningData(snap.structuredReasoningData as StructuredReasoningResult);
+      }
+      if (snap.clinicalReasoningData && typeof snap.clinicalReasoningData === 'object') {
+        setClinicalReasoningData(snap.clinicalReasoningData as ClinicalReasoningData);
+      }
+      if (snap.evidenceEngineResult && typeof snap.evidenceEngineResult === 'object') {
+        setEvidenceEngineResult(snap.evidenceEngineResult as typeof evidenceEngineResult);
+      }
+      if (snap.customExerciseResult && typeof snap.customExerciseResult === 'object') {
+        setCustomExerciseResult(snap.customExerciseResult as typeof customExerciseResult);
+      }
+      if (snap.customManualTherapyResult && typeof snap.customManualTherapyResult === 'object') {
+        setCustomManualTherapyResult(snap.customManualTherapyResult as typeof customManualTherapyResult);
+      }
+      if (snap.activeGoalProfile && typeof snap.activeGoalProfile === 'object') {
+        setActiveGoalProfile(snap.activeGoalProfile as typeof activeGoalProfile);
+      }
+      if (snap.activeGoalGap && typeof snap.activeGoalGap === 'object') {
+        setActiveGoalGap(snap.activeGoalGap as typeof activeGoalGap);
+      }
+      if (Array.isArray(snap.whatIfScenarios)) {
+        setWhatIfScenarios(snap.whatIfScenarios as WhatIfScenario[]);
+      }
+      if (Array.isArray(snap.whatIfComparisonBScenarios)) {
+        setWhatIfComparisonBScenarios(snap.whatIfComparisonBScenarios as WhatIfScenario[]);
+      }
+      if (Array.isArray(snap.mechanismBoneIds)) {
+        setMechanismBoneIds(snap.mechanismBoneIds as string[]);
+      }
+      if (Array.isArray(snap.connectionHighlights)) {
+        setConnectionHighlights(snap.connectionHighlights as AnatomicalRegion[]);
+      }
+      if (snap.testChainActive && typeof snap.testChainActive === 'object') {
+        setTestChainActive(snap.testChainActive as { connection: KineticChainConnection; originalRegion: string });
+      }
+      if (snap.selectedRomJoint && typeof snap.selectedRomJoint === 'object') {
+        setSelectedRomJoint(snap.selectedRomJoint as RomJointDefinition);
+      }
+      if (snap.romValues && typeof snap.romValues === 'object' && !Array.isArray(snap.romValues)) {
+        setRomValues(snap.romValues as Record<string, number>);
+      }
+    }
+
+    hydratedConversationIdRef.current = selectedConversationId;
+    // Conversation switch — reset orchestrator transient state so a
+    // freshly opened case starts clean: clear per-stage input hashes,
+    // clear stability ribbon (so any prior convergence doesn't bleed
+    // into the new case), and disarm the voice-trigger flag.
+    stageInputHashRef.current = {};
+    setMonitorStability({ topLabel: null, stableForRuns: 0, converged: false, destabilized: false });
+    voiceTriggeredRef.current = false;
+    setMonitorStages(initialMonitorStages);
+    // Hydrate persisted autopilot status + last-reasoning trigger from
+    // the case snapshot (primary). Falls back to the legacy localStorage
+    // map for cases written before the snapshot field existed. Restoring
+    // lastReasoningTrigger lets the existing triggerKey dedup recognise
+    // a reopened case as already-handled WITHOUT a hard early-return —
+    // any material change to inputs (which shifts the triggerKey)
+    // re-engages reasoning automatically.
+    let restoredStatus: 'idle' | 'running' | 'done' | 'converged' | 'error' = 'idle';
+    const snapStatus = snap && typeof snap === 'object' ? (snap as PhysioGptCaseSnapshot).autopilotStatus : undefined;
+    const snapTriggerKey = snap && typeof snap === 'object' ? (snap as PhysioGptCaseSnapshot).lastReasoningTrigger : undefined;
+    if (snapStatus === 'done' || snapStatus === 'converged' || snapStatus === 'error') {
+      restoredStatus = snapStatus;
+    } else {
+      try {
+        const raw = window.localStorage.getItem(AUTOPILOT_STATUS_STORAGE_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        const persisted = map[String(selectedConversationId)];
+        if (persisted === 'done' || persisted === 'converged' || persisted === 'error') {
+          restoredStatus = persisted;
+        }
+      } catch { /* ignore */ }
+    }
+    setAutopilotStatus(restoredStatus);
+    lastReasoningTriggerRef.current = typeof snapTriggerKey === 'string' ? snapTriggerKey : '';
+    if (restoredStatus === 'converged') {
+      // Keep the stability ribbon consistent with the persisted state so
+      // the dock UI shows the case as converged on reopen.
+      setMonitorStability({ topLabel: null, stableForRuns: 2, converged: true, destabilized: false });
+    }
+    // Use the next-saved-snapshot serialization as the baseline so the
+    // immediately-following auto-save effect skips the redundant write.
+    try {
+      lastSavedSnapshotRef.current = JSON.stringify(snap ?? {});
+    } catch {
+      lastSavedSnapshotRef.current = "";
+    }
+    // Release the hydration guard after React has settled the batched setters.
+    const releaseTimer = setTimeout(() => { isHydratingRef.current = false; }, 200);
+    return () => clearTimeout(releaseTimer);
+  }, [selectedConversationId, conversationData]);
+
+  // Abort any in-flight reasoning / evidence / auto-cascade timers when the
+  // active conversation changes, so a result that lands after a case-switch
+  // can never paint into the new case.
+  useEffect(() => {
+    return () => {
+      if (reasoningAbortRef.current) {
+        reasoningAbortRef.current.abort();
+        reasoningAbortRef.current = null;
+      }
+      if (evidenceAbortRef.current) {
+        evidenceAbortRef.current.abort();
+        evidenceAbortRef.current = null;
+      }
+      if (autoEvidenceTimerRef.current) {
+        clearTimeout(autoEvidenceTimerRef.current);
+        autoEvidenceTimerRef.current = null;
+      }
+      // Bump request ids so any pending .then() guards short-circuit.
+      reasoningRequestIdRef.current += 1;
+      evidenceQueryIdRef.current += 1;
+    };
+  }, [selectedConversationId]);
+
+  // Manual save — no auto-save. Persists the current case snapshot via
+  // PATCH to the open conversation, or POST to create a new one.
+  const [isSavingCase, setIsSavingCase] = useState(false);
+  const currentCaseSnapshotRef = useRef(currentCaseSnapshot);
+  useEffect(() => { currentCaseSnapshotRef.current = currentCaseSnapshot; }, [currentCaseSnapshot]);
+
+  // Detects whether the workspace holds any clinically meaningful content.
+  // Used to gate the New Case confirmation and Cmd/Ctrl+S shortcut so the
+  // user is not nagged when the workspace is effectively empty.
+  const hasMeaningfulSnapshotContent = useCallback((snap: PhysioGptCaseSnapshot): boolean => {
+    const arrayHasItems = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+    const objectHasKeys = (v: unknown): boolean =>
+      v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length > 0;
+    if (typeof snap.subjectiveHistoryInput === "string" && snap.subjectiveHistoryInput.trim().length > 0) return true;
+    if (
+      arrayHasItems(snap.painMarkers) ||
+      arrayHasItems(snap.compromisedTissues) ||
+      arrayHasItems(snap.scarMarkers) ||
+      arrayHasItems(snap.adhesionBands) ||
+      arrayHasItems(snap.romMeasurements) ||
+      arrayHasItems(snap.clinicalHighlights) ||
+      arrayHasItems(snap.movementFindings) ||
+      arrayHasItems(snap.planCartItems)
+    ) return true;
+    if (objectHasKeys(snap.muscleOverrides) || objectHasKeys(snap.slingActivationOverrides)) return true;
+    if (snap.extractionResult || snap.structuredReasoningData || snap.clinicalReasoningData ||
+        snap.evidenceEngineResult || snap.customExerciseResult || snap.customManualTherapyResult ||
+        snap.treatmentDecisionData || snap.treatmentPlanData) return true;
+    if (snap.selectedRegion) return true;
+    try {
+      if (snap.modelConfig && JSON.stringify(snap.modelConfig) !== JSON.stringify(DEFAULT_MODEL_CONFIG)) return true;
+    } catch {}
+    return false;
+  }, []);
+
+  const currentSnapshotSerialized = useMemo<string>(() => {
+    try { return JSON.stringify(currentCaseSnapshot); } catch { return ""; }
+  }, [currentCaseSnapshot]);
+
+  const isCaseDirty = useMemo<boolean>(() => {
+    if (!currentSnapshotSerialized) return false;
+    if (selectedConversationId == null) {
+      return hasMeaningfulSnapshotContent(currentCaseSnapshot);
+    }
+    return currentSnapshotSerialized !== lastSavedSnapshotRef.current;
+  }, [currentSnapshotSerialized, snapshotSaveCounter, selectedConversationId, currentCaseSnapshot, hasMeaningfulSnapshotContent]);
+
+  const saveCurrentCase = useCallback(async () => {
+    if (isSavingCase) return;
+    const snap = currentCaseSnapshotRef.current;
+    let serialized: string;
+    try { serialized = JSON.stringify(snap); } catch { serialized = ""; }
+    if (serialized && serialized === lastSavedSnapshotRef.current) {
+      toast({ title: "Already saved", description: "No changes since last save." });
+      return;
+    }
+    setIsSavingCase(true);
+    try {
+      if (selectedConversationId) {
+        await apiRequest(
+          `/api/physiogpt/conversations/${selectedConversationId}`,
+          "PATCH",
+          { caseSnapshot: snap },
+        );
+        lastSavedSnapshotRef.current = serialized;
+        snapshotEligibleRef.current.add(selectedConversationId);
+        setSnapshotSaveCounter(c => c + 1);
+        queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/physiogpt/conversations/${selectedConversationId}`] });
+        toast({ title: "Case saved" });
+      } else {
+        // Server owns title derivation per task spec; just send the snapshot.
+        const created = await apiRequest(
+          `/api/physiogpt/conversations`,
+          "POST",
+          { caseSnapshot: snap },
+        );
+        if (created && typeof created.id === "number") {
+          hydratedConversationIdRef.current = created.id;
+          snapshotEligibleRef.current.add(created.id);
+          lastSavedSnapshotRef.current = serialized;
+          setSelectedConversationId(created.id);
+          setSnapshotSaveCounter(c => c + 1);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/physiogpt/conversations"] });
+        toast({ title: "Case saved" });
+      }
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: err instanceof Error ? err.message : "Unable to save case",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingCase(false);
+    }
+  }, [isSavingCase, selectedConversationId, queryClient, toast]);
+
+  // Cmd/Ctrl+S keyboard shortcut to trigger manual save. Skips when the
+  // sidebar is open, when focus is in a text field, and when there is
+  // nothing dirty to save.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.key === "s" || e.key === "S")) return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (sidebarOpen) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if (!isCaseDirty) return;
+      e.preventDefault();
+      void saveCurrentCase();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [saveCurrentCase, isCaseDirty, sidebarOpen]);
+  // ───────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -888,6 +2599,12 @@ export default function PhysioGPT() {
                   setStreamingContent(accumulatedContent);
                 } else if (data.type === 'conversationId' && !selectedConversationId) {
                   setSelectedConversationId(data.data);
+                  if (data.data != null) {
+                    hydratedConversationIdRef.current = data.data;
+                    snapshotEligibleRef.current.add(data.data);
+                    lastSavedSnapshotRef.current = "";
+                    setSnapshotSaveCounter(c => c + 1);
+                  }
                 }
               } catch {}
             }
@@ -919,6 +2636,14 @@ export default function PhysioGPT() {
       liveTranscriptRef.current = "";
       lastAnalyzedLengthRef.current = 0;
       isAnalyzingRef.current = false;
+      // Voice Activity dock: anchor recording-time stamps for this
+      // session. Do NOT clear prior entries — the spec requires the
+      // log to persist across stop/start until an explicit session
+      // reset wipes it. Keeping the existing entries also keeps any
+      // outstanding Undo buttons functional.
+      recordingStartedAtRef.current = Date.now();
+      setVoiceDockVisible(true);
+      pendingVoiceTriggerRef.current = null;
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -972,8 +2697,24 @@ export default function PhysioGPT() {
                   }
                 }
               } else if (newContentLength > 10 && !isAnalyzingRef.current) {
-                lastAnalyzedLengthRef.current = transcript.length;
-                clinicalTextInputRef.current.triggerIncrementalParse();
+                const chunk = transcript.slice(lastAnalyzedLengthRef.current).trim();
+                pendingVoiceTriggerRef.current = {
+                  trigger: 'silence_pause',
+                  chunkText: chunk,
+                  timestamp: Date.now(),
+                  recordingTimeSec: recordingStartedAtRef.current
+                    ? (Date.now() - recordingStartedAtRef.current) / 1000
+                    : 0,
+                };
+                const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(transcript);
+                if (dispatched) {
+                  lastAnalyzedLengthRef.current = transcript.length;
+                } else {
+                  // Parse was skipped (already in flight, too short).
+                  // Drop the staged trigger so it can't be misattributed
+                  // to a later, unrelated parse.
+                  pendingVoiceTriggerRef.current = null;
+                }
               }
             }, VOICE_SILENCE_DEBOUNCE_MS);
           }
@@ -1011,8 +2752,21 @@ export default function PhysioGPT() {
                 }
               }
             } else {
-              lastAnalyzedLengthRef.current = currentTranscript.length;
-              clinicalTextInputRef.current.triggerIncrementalParse();
+              const chunk = currentTranscript.slice(lastAnalyzedLengthRef.current).trim();
+              pendingVoiceTriggerRef.current = {
+                trigger: 'interval_pulse',
+                chunkText: chunk,
+                timestamp: Date.now(),
+                recordingTimeSec: recordingStartedAtRef.current
+                  ? (Date.now() - recordingStartedAtRef.current) / 1000
+                  : 0,
+              };
+              const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(currentTranscript);
+              if (dispatched) {
+                lastAnalyzedLengthRef.current = currentTranscript.length;
+              } else {
+                pendingVoiceTriggerRef.current = null;
+              }
             }
           }
         }
@@ -1027,11 +2781,16 @@ export default function PhysioGPT() {
     pendingFollowUpQuestionsRef.current = questions;
   }, []);
 
+  // Tier-3 GPT follow-up dedup — keyed by (spoken-text + question-set)
+  // to avoid concurrent or repeat requests during streaming.
+  const followUpGptInFlightRef = useRef<Set<string>>(new Set());
+  const followUpGptCacheRef = useRef<Set<string>>(new Set());
   const tryMatchFollowUpAnswer = useCallback((spokenText: string, questions: FollowUpQuestion[]): boolean => {
     if (!clinicalTextInputRef.current || questions.length === 0) return false;
     const spoken = spokenText.toLowerCase().trim();
     if (spoken.length < 3) return false;
 
+    // Tier 1 — exact option string match (multiple-choice questions).
     for (const fq of questions) {
       if (fq.options && fq.options.length > 0) {
         const matchedOption = fq.options.find(opt =>
@@ -1045,6 +2804,7 @@ export default function PhysioGPT() {
       }
     }
 
+    // Tier 2 — keyword overlap heuristic (open-text questions).
     for (const fq of questions) {
       if (fq.options && fq.options.length > 0) continue;
       const questionKeywords = fq.question.toLowerCase()
@@ -1059,10 +2819,70 @@ export default function PhysioGPT() {
       }
     }
 
-    if (questions.length === 1 && spoken.length >= 8) {
-      clinicalTextInputRef.current.submitFollowUpAnswer(questions[0].id, spokenText.trim());
-      toast({ title: "Follow-up Answered", description: `Answered: "${questions[0].question.substring(0, 50)}..."` });
-      return true;
+    // NOTE: removed the legacy single-question auto-submit shortcut
+    // (questions.length === 1 && spoken.length >= 8). It was
+    // fabrication-prone — auto-attaching arbitrary utterances to the
+    // sole pending question regardless of semantic relevance. The
+    // tier-3 GPT matcher below now owns this case and only fires
+    // submitFollowUpAnswer when its confidence ≥ 0.7.
+
+    // Tier 3 — GPT-backed semantic match. Fire-and-forget so the
+    // sync caller (transcript loop) keeps its existing pointer; if
+    // the server reports one or more confident matches we apply each
+    // asynchronously. Cached per (spoken text + question-set) to
+    // avoid duplicate model calls for the same chunk. Server returns
+    // `{ matches: [{ questionId, answer, confidence, reason }] }`.
+    if (spoken.length >= 8) {
+      const cacheKey = `${spoken}::${questions.map(q => q.id).sort().join(',')}`;
+      if (!followUpGptInFlightRef.current.has(cacheKey) && !followUpGptCacheRef.current.has(cacheKey)) {
+        followUpGptInFlightRef.current.add(cacheKey);
+        const activeQuestionId = questions[0]?.id;
+        (async () => {
+          try {
+            const res = await fetch('/api/clinical-text/answer-followup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                utterance: spokenText,
+                activeQuestionId,
+                questions: questions.map(q => ({
+                  id: q.id, question: q.question, options: q.options,
+                })),
+              }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const matches: Array<{ questionId: string; answer: string; confidence?: number }> =
+              Array.isArray(data?.matches) ? data.matches : [];
+            for (const m of matches) {
+              if (!m?.questionId || !m?.answer) continue;
+              if (typeof m.confidence === 'number' && m.confidence < 0.7) continue;
+              const fq = questions.find(q => q.id === m.questionId);
+              if (!fq) continue;
+              // Re-check the question is still pending — the user may
+              // have already answered it manually while we were waiting.
+              const stillPending = pendingFollowUpQuestionsRef.current.some(q => q.id === m.questionId);
+              if (!stillPending) continue;
+              clinicalTextInputRef.current?.submitFollowUpAnswer(m.questionId, m.answer);
+              toast({
+                title: 'Follow-up Answered',
+                description: `Answered: "${fq.question.substring(0, 50)}..."`,
+              });
+            }
+          } catch { /* fail-soft */ }
+          finally {
+            followUpGptInFlightRef.current.delete(cacheKey);
+            // Cache the spoken-text+question-set so the same chunk
+            // doesn't re-trigger the model on repeated transcript
+            // pulses. Bounded LRU-ish via simple size cap.
+            followUpGptCacheRef.current.add(cacheKey);
+            if (followUpGptCacheRef.current.size > 64) {
+              const first = followUpGptCacheRef.current.values().next().value;
+              if (first) followUpGptCacheRef.current.delete(first);
+            }
+          }
+        })();
+      }
     }
 
     return false;
@@ -1113,8 +2933,27 @@ export default function PhysioGPT() {
 
       voiceAutoSubmitTimerRef.current = setTimeout(() => {
         if (clinicalTextInputRef.current) {
-          clinicalTextInputRef.current.triggerParse();
-          toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+          // Voice transcript no longer mirrors into the Clinical
+          // Prediction textarea, so feed the final transcript through
+          // the incremental-parse path with a textOverride. Tag it as
+          // a silence_pause so it shows up in the Voice Activity dock
+          // alongside any in-flight chunks.
+          const tailChunk = finalTranscript.slice(lastAnalyzedLengthRef.current).trim() || finalTranscript;
+          pendingVoiceTriggerRef.current = {
+            trigger: 'silence_pause',
+            chunkText: tailChunk,
+            timestamp: Date.now(),
+            recordingTimeSec: recordingStartedAtRef.current
+              ? (Date.now() - recordingStartedAtRef.current) / 1000
+              : 0,
+          };
+          const dispatched = clinicalTextInputRef.current.triggerIncrementalParse(finalTranscript);
+          if (dispatched) {
+            lastAnalyzedLengthRef.current = finalTranscript.length;
+            toast({ title: "Analyzing Voice Input", description: "Updating skeleton from your clinical description..." });
+          } else {
+            pendingVoiceTriggerRef.current = null;
+          }
         }
         voiceAutoSubmitTimerRef.current = null;
       }, VOICE_STOP_DEBOUNCE_MS);
@@ -1182,6 +3021,16 @@ export default function PhysioGPT() {
                   case 'conversationId':
                     newConversationId = data.data;
                     setSelectedConversationId(newConversationId);
+                    // The conversation that was just created is initialised
+                    // FROM the current workspace state, so treat it as already
+                    // hydrated and trigger an immediate snapshot save instead
+                    // of waiting for the next user-driven state change.
+                    if (newConversationId != null) {
+                      hydratedConversationIdRef.current = newConversationId;
+                      snapshotEligibleRef.current.add(newConversationId);
+                      lastSavedSnapshotRef.current = "";
+                      setSnapshotSaveCounter(c => c + 1);
+                    }
                     break;
                   case 'chunk':
                     accumulatedContent += data.data;
@@ -1343,13 +3192,184 @@ export default function PhysioGPT() {
     markerIds: string[];
     muscleIds: string[];
     deviationKeys: string[];
+    /** Legacy/fallback: clear-all uses these for highlights inserted
+     *  without an instanceId. */
     highlightLabels: string[];
+    /** Per-highlight instance ids stamped at insert time. Clear-all
+     *  removes these specific instances; per-entry undo also removes
+     *  them so subsequent clear-all stays correct. Required to avoid
+     *  label-collision regressions when fallback labels like
+     *  `ctp_${region}_${type}` repeat across parses. */
+    highlightInstanceIds: string[];
     predictionText: string;
   } | null>(null);
 
+  // Per-entry voice activity log + per-entry undo bookkeeping. Lives
+  // alongside the cumulative clinicalTextAppliedRef so "Clear All" still
+  // wipes everything voice has touched in one shot, while individual
+  // dock entries can be rolled back surgically.
+  interface VoiceActivityEntryRecord extends VoiceActivityEntry {
+    /** Marker ids this entry added (used to undo just this entry). */
+    appliedMarkerIds: string[];
+    /** Muscle overrides this entry set: id → exact value applied. Only
+     *  reverted by undo if the current override still equals what we set
+     *  (otherwise a later entry has overwritten it). */
+    appliedMuscleOverrides: Record<string, MuscleOverride>;
+    /** Postural deviations this entry wrote: dotPath → { prev, set }.
+     *  Undo restores `prev` only if the current value still equals
+     *  `set`. */
+    appliedDeviations: Record<string, { prev: number; set: number }>;
+    /** Region highlight labels this entry added (kept for diagnostics
+     *  / parity with the cumulative ref). */
+    appliedHighlightLabels: string[];
+    /** Per-highlight instance ids stamped at insert time. Used by
+     *  undo to remove only the highlights this entry contributed,
+     *  even when later entries reuse the same fallback label. */
+    appliedHighlightInstanceIds: string[];
+    /** Compromised tissues snapshot taken BEFORE this entry overwrote
+     *  them. Undo restores this snapshot only if this entry was the
+     *  most recent one to overwrite the list. */
+    prevCompromisedTissues: CompromisedTissue[] | null;
+    /** True if this entry overwrote the compromised tissues list. */
+    overwroteCompromisedTissues: boolean;
+  }
+  const [voiceActivityEntries, setVoiceActivityEntries] = useState<VoiceActivityEntryRecord[]>([]);
+  const voiceActivityEntriesRef = useRef<VoiceActivityEntryRecord[]>([]);
+  voiceActivityEntriesRef.current = voiceActivityEntries;
+  const [voiceDockVisible, setVoiceDockVisible] = useState(false);
+  /** Bumped on session reset; used as a React key so the dock fully
+   *  remounts and clears its internal collapse/unread preferences. */
+  const [voiceDockSessionKey, setVoiceDockSessionKey] = useState(0);
+  // (recordingStartedAtRef hoisted above the autopilot governor.)
+  /** Trigger metadata set by the silence-debounce / interval-pulse paths
+   *  immediately before they call triggerIncrementalParse. The next call
+   *  to handleClinicalTextParse consumes it (and clears it). */
+  const pendingVoiceTriggerRef = useRef<{
+    trigger: VoiceTriggerReason;
+    chunkText: string;
+    timestamp: number;
+    recordingTimeSec: number;
+  } | null>(null);
+  // Mirrored refs so handleClinicalTextParse can snapshot prior state
+  // (deviations, compromised tissues) without changing its useCallback
+  // identity each render.
+  const modelConfigRef = useRef(modelConfig);
+  modelConfigRef.current = modelConfig;
+  const muscleOverridesRef = useRef(muscleOverrides);
+  muscleOverridesRef.current = muscleOverrides;
+  const compromisedTissuesRef = useRef(compromisedTissues);
+  compromisedTissuesRef.current = compromisedTissues;
+  const skeletonModeRef = useRef<'posture' | 'movement' | 'treatment'>(skeletonMode);
+  skeletonModeRef.current = skeletonMode;
+
   const handleClinicalTextParse = useCallback((result: ClinicalParseResult) => {
+    // Voice-only gate — only voice-triggered parses arm the autopilot
+    // chain. Manual paste-and-parse from the Clinical Text panel
+    // remains unaffected (chain stays gated by voiceTriggeredRef).
+    const isVoiceParse = !!pendingVoiceTriggerRef.current;
+    if (isVoiceParse) {
+      voiceTriggeredRef.current = true;
+    }
+    // Surface parse stage on the AI Activity Monitor.
+    markStageStart('parse');
+    setLastClinicalParseResult(result);
+    markStageEnd('parse', 'done');
+
+    // Task #390: if this parse is a refinement (user answered a
+    // follow-up question on the same prediction), surgically remove
+    // the previous parse's contributions before applying the new
+    // ones. Without this the appended pain markers, region halos and
+    // muscle pathology overrides accumulate across each refinement,
+    // producing stacks of large translucent spheres ("clouds") on the
+    // skeleton. We only revert what THIS clinical-text flow applied;
+    // user-placed markers, voice-dock entries with their own undo, and
+    // unrelated state are left alone.
+    if (result.__isRefinement) {
+      const prevApplied = clinicalTextAppliedRef.current;
+      if (prevApplied) {
+        if (prevApplied.markerIds.length > 0) {
+          const ids = new Set(prevApplied.markerIds);
+          setPainMarkers(prev => prev.filter(m => !ids.has(m.id)));
+        }
+        if (prevApplied.muscleIds.length > 0) {
+          const ids = new Set(prevApplied.muscleIds);
+          setMuscleOverrides(prev => {
+            const updated = { ...prev };
+            for (const id of ids) delete updated[id];
+            return updated;
+          });
+        }
+        if (prevApplied.deviationKeys.length > 0) {
+          setModelConfig(prev => {
+            const updated = JSON.parse(JSON.stringify(prev));
+            const defaults = JSON.parse(JSON.stringify(DEFAULT_MODEL_CONFIG));
+            for (const dotPath of prevApplied.deviationKeys) {
+              const parts = dotPath.split('.');
+              if (parts.length === 2) {
+                const [joint, param] = parts;
+                if (updated[joint] && defaults[joint]) {
+                  updated[joint][param] = defaults[joint][param] ?? 0;
+                }
+              }
+            }
+            return updated;
+          });
+        }
+        if (prevApplied.highlightInstanceIds.length > 0 || prevApplied.highlightLabels.length > 0) {
+          const idsToRemove = new Set(prevApplied.highlightInstanceIds);
+          const labelsToRemove = new Set(prevApplied.highlightLabels);
+          setClinicalHighlights(prev => prev.filter(h => {
+            if (h.instanceId) return !idsToRemove.has(h.instanceId);
+            return !labelsToRemove.has(h.label || '');
+          }));
+        }
+        // Drop the now-reverted artifact ids from the ref so the
+        // rebuild block at L3466+ doesn't merge stale ids back in,
+        // but PRESERVE `predictionText` so the block at L3439+ can
+        // still find and replace the prior prediction line in the
+        // subjective history (otherwise stale prediction blurbs would
+        // accumulate across each follow-up refinement).
+        clinicalTextAppliedRef.current = {
+          markerIds: [],
+          muscleIds: [],
+          deviationKeys: [],
+          highlightLabels: [],
+          highlightInstanceIds: [],
+          predictionText: prevApplied.predictionText,
+        };
+      }
+      // Task #395: also reset the compromised-tissues list so the
+      // tissue-intelligence aggregator starts clean. Without this the
+      // refinement parse's Q&A-aware tissue set is OR'd against the
+      // initial parse's tissues by the aggregator, producing a burst
+      // of additional translucent glow spheres / halos on the
+      // skeleton that block the view. The rebuild block below
+      // re-applies whatever tissues the refinement parse returned.
+      // Note: this runs BEFORE perEntry.prevCompromisedTissues is
+      // captured at L3495, but voice-activity undo snapshots are only
+      // captured for voice-triggered parses (refinement parses come
+      // from the Clinical Text panel UI and have no
+      // pendingVoiceTriggerRef), so the snapshot path is unaffected.
+      compromisedTissuesRef.current = [];
+      setCompromisedTissues([]);
+    }
     const applied: { markerIds: string[]; muscleIds: string[]; deviationKeys: string[]; highlightLabels: string[] } = {
       markerIds: [], muscleIds: [], deviationKeys: [], highlightLabels: [],
+    };
+    // Per-entry tracking for the Voice Activity dock — only consumed if
+    // the parse came from a voice trigger (pendingVoiceTriggerRef set).
+    const perEntry: {
+      muscleOverridesSet: Record<string, MuscleOverride>;
+      deviationsSet: Record<string, { prev: number; set: number }>;
+      highlightInstanceIds: string[];
+      prevCompromisedTissues: CompromisedTissue[] | null;
+      overwroteCompromisedTissues: boolean;
+    } = {
+      muscleOverridesSet: {},
+      deviationsSet: {},
+      highlightInstanceIds: [],
+      prevCompromisedTissues: null,
+      overwroteCompromisedTissues: false,
     };
 
     if (result.pain_markers.length > 0) {
@@ -1399,7 +3419,7 @@ export default function PhysioGPT() {
         const updated = { ...prev };
         for (const ms of result.muscle_states) {
           applied.muscleIds.push(ms.muscle_id);
-          updated[ms.muscle_id] = {
+          const next: MuscleOverride = {
             tensionOffset: ms.tension_offset || 0,
             activationOffset: ms.activation_offset || 0,
             lengthOverride: 'normal' as LengthOverride,
@@ -1407,6 +3427,8 @@ export default function PhysioGPT() {
             pathology: (ms.pathology || 'none') as PathologyType,
             isManual: true,
           };
+          updated[ms.muscle_id] = next;
+          perEntry.muscleOverridesSet[ms.muscle_id] = next;
         }
         return updated;
       });
@@ -1416,11 +3438,17 @@ export default function PhysioGPT() {
       applied.deviationKeys = Object.keys(result.postural_deviations);
       setModelConfig(prev => {
         const updated = JSON.parse(JSON.stringify(prev));
+        const prevAny = prev as unknown as Record<string, Record<string, number> | unknown>;
         for (const [dotPath, value] of Object.entries(result.postural_deviations)) {
           const parts = dotPath.split('.');
           if (parts.length === 2) {
             const [joint, param] = parts;
             if (updated[joint] && typeof updated[joint] === 'object') {
+              const prevJoint = prevAny[joint];
+              const prevVal = prevJoint && typeof prevJoint === 'object'
+                ? (prevJoint as Record<string, number>)[param] ?? 0
+                : 0;
+              perEntry.deviationsSet[dotPath] = { prev: prevVal, set: value };
               updated[joint][param] = value;
             }
           }
@@ -1435,19 +3463,31 @@ export default function PhysioGPT() {
         weakness: 'weakness', instability: 'dysfunction', stiffness: 'stiffness',
         dysfunction: 'dysfunction', referral: 'referral',
       };
-      const highlights: RegionHighlight[] = result.region_highlights.map(rh => {
+      const highlights: RegionHighlight[] = result.region_highlights.map((rh, idx) => {
         const label = rh.label || `ctp_${rh.region}_${rh.type}`;
+        // Stamp a unique instanceId so per-entry undo can remove
+        // exactly the highlights this parse contributed without
+        // clobbering newer highlights that happen to share a fallback
+        // label like `ctp_${region}_${type}`.
+        const instanceId = `vh_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 7)}`;
         applied.highlightLabels.push(label);
+        perEntry.highlightInstanceIds.push(instanceId);
         return {
           region: rh.region as AnatomicalRegion,
           type: typeMap[rh.type] || 'pain',
           severity: rh.severity,
           label,
+          instanceId,
         };
       });
       setClinicalHighlights(prev => [...prev, ...highlights]);
     }
 
+    // Compromised tissues: any mutation of the list (including
+    // clearing it to empty when the parse returned none) counts as an
+    // overwrite for undo purposes — otherwise voice-driven clears
+    // would silently strip a previous parse's tissues with no way to
+    // restore them.
     if (result.compromised_tissues && result.compromised_tissues.length > 0) {
       const validatedTissues = result.compromised_tissues
         .filter((ct: CompromisedTissue) => {
@@ -1458,6 +3498,8 @@ export default function PhysioGPT() {
           ...ct,
           severity: Math.max(0, Math.min(1, ct.severity)),
         }));
+      perEntry.prevCompromisedTissues = compromisedTissuesRef.current;
+      perEntry.overwroteCompromisedTissues = true;
       setCompromisedTissues(validatedTissues);
       if (validatedTissues.length > 0 && !tissueViewManualRef.current) {
         const typeCounts: Record<string, number> = {};
@@ -1479,6 +3521,13 @@ export default function PhysioGPT() {
         setSelectedTissueEntry(null);
       }
     } else {
+      // Empty-result branch: still counts as an overwrite when there
+      // were tissues before, so the entry can be undone.
+      const prevTissues = compromisedTissuesRef.current;
+      if (prevTissues.length > 0) {
+        perEntry.prevCompromisedTissues = prevTissues;
+        perEntry.overwroteCompromisedTissues = true;
+      }
       setCompromisedTissues([]);
     }
 
@@ -1498,8 +3547,21 @@ export default function PhysioGPT() {
         : predictionText;
       subjectiveHistoryRef.current = updated;
       setSubjectiveHistoryInput(updated);
-      lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
+      // Voice parses cascade into reasoning only when autopilot is
+      // enabled, not paused, and the originating conversation is
+      // snapshot-eligible. Manual UI parses are not gated here.
+      const cidNow = selectedConversationIdRef.current;
+      const voiceCascadeAllowed = !isVoiceParse || (
+        autopilotEnabledRef.current &&
+        cidNow != null &&
+        snapshotEligibleRef.current.has(cidNow)
+      );
+      if (!voiceCascadeAllowed) return;
+      setTimeout(() => {
+        if (autopilotPausedRef.current) return;
+        if (isVoiceParse && !autopilotEnabledRef.current) return;
+        triggerClinicalReasoningAnalysisRef.current(false);
+      }, 300);
     }
 
     const prev = clinicalTextAppliedRef.current;
@@ -1508,11 +3570,54 @@ export default function PhysioGPT() {
       muscleIds: [...(prev?.muscleIds || []), ...applied.muscleIds],
       deviationKeys: [...(prev?.deviationKeys || []), ...applied.deviationKeys],
       highlightLabels: [...(prev?.highlightLabels || []), ...applied.highlightLabels],
+      highlightInstanceIds: [...(prev?.highlightInstanceIds || []), ...perEntry.highlightInstanceIds],
       predictionText,
     };
     const hasFindings = applied.markerIds.length > 0 || applied.muscleIds.length > 0 || applied.highlightLabels.length > 0;
     if (hasFindings) {
       setHasClinicalTextData(true);
+    }
+
+    // If this parse came from a voice trigger (silence pause / interval
+    // pulse), record an entry into the Voice Activity dock so the
+    // clinician can see exactly what fired and undo it surgically.
+    const triggerCtx = pendingVoiceTriggerRef.current;
+    pendingVoiceTriggerRef.current = null;
+    if (triggerCtx) {
+      const counts = {
+        painMarkers: applied.markerIds.length,
+        muscleOverrides: applied.muscleIds.length,
+        posturalDeviations: applied.deviationKeys.length,
+        regionHighlights: applied.highlightLabels.length,
+        compromisedTissuesUpdated: perEntry.overwroteCompromisedTissues,
+      };
+      const noChanges =
+        counts.painMarkers === 0 &&
+        counts.muscleOverrides === 0 &&
+        counts.posturalDeviations === 0 &&
+        counts.regionHighlights === 0 &&
+        !counts.compromisedTissuesUpdated;
+      const entry: VoiceActivityEntryRecord = {
+        id: `va_${triggerCtx.timestamp}_${Math.random().toString(36).slice(2, 7)}`,
+        trigger: triggerCtx.trigger,
+        recordingTimeSec: triggerCtx.recordingTimeSec,
+        timestamp: triggerCtx.timestamp,
+        chunkText: triggerCtx.chunkText,
+        clinicalSummary: result.clinical_summary || '',
+        counts,
+        noChanges,
+        undone: false,
+        appliedMarkerIds: [...applied.markerIds],
+        appliedMuscleOverrides: perEntry.muscleOverridesSet,
+        appliedDeviations: perEntry.deviationsSet,
+        appliedHighlightLabels: [...applied.highlightLabels],
+        appliedHighlightInstanceIds: [...perEntry.highlightInstanceIds],
+        prevCompromisedTissues: perEntry.prevCompromisedTissues,
+        overwroteCompromisedTissues: perEntry.overwroteCompromisedTissues,
+      };
+      // Prepend so the most recent entry is at the top.
+      setVoiceActivityEntries(prevEntries => [entry, ...prevEntries]);
+      setVoiceDockVisible(true);
     }
   }, []);
 
@@ -1548,17 +3653,29 @@ export default function PhysioGPT() {
         return updated;
       });
     }
-    if (applied.highlightLabels.length > 0) {
+    if (applied.highlightInstanceIds.length > 0 || applied.highlightLabels.length > 0) {
+      const idsToRemove = new Set(applied.highlightInstanceIds);
       const labelsToRemove = new Set(applied.highlightLabels);
-      setClinicalHighlights(prev => prev.filter(h => !labelsToRemove.has(h.label || '')));
+      // Prefer instance-id matching (correct under fallback-label
+      // collisions); fall back to label match only for highlights
+      // that have no instanceId (legacy / non-voice insertions).
+      setClinicalHighlights(prev => prev.filter(h => {
+        if (h.instanceId) return !idsToRemove.has(h.instanceId);
+        return !labelsToRemove.has(h.label || '');
+      }));
     }
 
     if (applied.predictionText && subjectiveHistoryRef.current.includes(applied.predictionText)) {
       const cleaned = subjectiveHistoryRef.current.replace(applied.predictionText, '').replace(/\n{3,}/g, '\n\n').trim();
       subjectiveHistoryRef.current = cleaned;
       setSubjectiveHistoryInput(cleaned);
-      lastReasoningTriggerRef.current = '';
-      setTimeout(() => triggerClinicalReasoningAnalysisRef.current(true), 300);
+      // See note above on parse-driven reasoning: do NOT reset
+      // lastReasoningTriggerRef here; pass forceRefresh=false so the
+      // dedup hash + convergence guards apply.
+      setTimeout(() => {
+        if (autopilotPausedRef.current) return;
+        triggerClinicalReasoningAnalysisRef.current(false);
+      }, 300);
     }
 
     setCompromisedTissues([]);
@@ -1566,13 +3683,143 @@ export default function PhysioGPT() {
 
     clinicalTextAppliedRef.current = null;
     setHasClinicalTextData(false);
+    // Drop the lifted parse + patient-context state — clearing the
+    // skeleton means we no longer have a prediction the prompts apply
+    // to.
+    setLastClinicalParseResult(null);
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+  }, []);
+
+  /**
+   * Per-entry undo for the Voice Activity dock.
+   *
+   * Reverts only the contributions of a single dock entry:
+   *   - Removes the pain markers it added.
+   *   - Deletes muscle overrides it set (only when the current value
+   *     still matches what this entry set — otherwise a later entry has
+   *     overwritten it and we leave it alone).
+   *   - Restores postural-deviation values to the pre-entry value
+   *     (again only when the current value still matches what this
+   *     entry set).
+   *   - Removes the region highlights this entry added by label.
+   *   - Restores the compromised-tissues snapshot if this entry was the
+   *     most recent one to overwrite that list (otherwise leave alone).
+   *
+   * Also updates the cumulative `clinicalTextAppliedRef` so that a
+   * later "Clear All" doesn't try to re-undo the same things and so it
+   * still cleans up everything that's still attributable to voice.
+   */
+  const handleVoiceActivityUndo = useCallback((entryId: string) => {
+    const entries = voiceActivityEntriesRef.current;
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry || entry.undone) return;
+
+    if (entry.appliedMarkerIds.length > 0) {
+      const ids = new Set(entry.appliedMarkerIds);
+      setPainMarkers(prev => prev.filter(m => !ids.has(m.id)));
+    }
+
+    const muscleEntries = Object.entries(entry.appliedMuscleOverrides);
+    if (muscleEntries.length > 0) {
+      setMuscleOverrides(prev => {
+        const updated = { ...prev };
+        for (const [id, setVal] of muscleEntries) {
+          const curr = updated[id];
+          if (!curr) continue;
+          // Only revert if still equal to what this entry set.
+          if (
+            curr.tensionOffset === setVal.tensionOffset &&
+            curr.activationOffset === setVal.activationOffset &&
+            curr.lengthOverride === setVal.lengthOverride &&
+            curr.inhibition === setVal.inhibition &&
+            curr.pathology === setVal.pathology
+          ) {
+            delete updated[id];
+          }
+        }
+        return updated;
+      });
+    }
+
+    const deviationEntries = Object.entries(entry.appliedDeviations);
+    if (deviationEntries.length > 0) {
+      setModelConfig(prev => {
+        const updated = JSON.parse(JSON.stringify(prev));
+        for (const [dotPath, { prev: prevVal, set: setVal }] of deviationEntries) {
+          const parts = dotPath.split('.');
+          if (parts.length !== 2) continue;
+          const [joint, param] = parts;
+          if (!updated[joint] || typeof updated[joint] !== 'object') continue;
+          const currVal = (updated[joint] as Record<string, number>)[param];
+          if (currVal === setVal) {
+            (updated[joint] as Record<string, number>)[param] = prevVal;
+          }
+        }
+        return updated;
+      });
+    }
+
+    if (entry.appliedHighlightInstanceIds.length > 0) {
+      const ids = new Set(entry.appliedHighlightInstanceIds);
+      // Remove only the exact highlight instances this entry inserted.
+      // Filtering by label would clobber newer highlights that share
+      // a fallback label like `ctp_${region}_${type}`.
+      setClinicalHighlights(prev => prev.filter(h => !h.instanceId || !ids.has(h.instanceId)));
+    }
+
+    if (entry.overwroteCompromisedTissues) {
+      // Only restore if no later entry has since overwritten the
+      // compromised-tissues list. Entries are stored newest-first so
+      // a later overwrite would appear *before* this entry in the
+      // array.
+      const later = entries.findIndex(e => e.id === entryId);
+      const hasLaterOverwrite = entries.slice(0, later).some(e => e.overwroteCompromisedTissues && !e.undone);
+      if (!hasLaterOverwrite) {
+        setCompromisedTissues(entry.prevCompromisedTissues || []);
+      }
+    }
+
+    // Update cumulative ref so a later "Clear All" doesn't try to
+    // undo the same things, and so it still cleans up the rest of
+    // what's still attributable to voice.
+    const prevApplied = clinicalTextAppliedRef.current;
+    if (prevApplied) {
+      const removedMarkers = new Set(entry.appliedMarkerIds);
+      const removedMuscles = new Set(Object.keys(entry.appliedMuscleOverrides));
+      const removedDeviations = new Set(Object.keys(entry.appliedDeviations));
+      const removedInstanceIds = new Set(entry.appliedHighlightInstanceIds);
+      // For label-only entries we have to remove labels one-per-undo so
+      // we don't strip labels that belong to other still-active entries
+      // (fallback labels like `ctp_${region}_${type}` repeat across
+      // parses). Drop one occurrence per appliedHighlightLabels entry.
+      let remainingLabels = [...prevApplied.highlightLabels];
+      for (const lbl of entry.appliedHighlightLabels) {
+        const idx = remainingLabels.indexOf(lbl);
+        if (idx >= 0) remainingLabels.splice(idx, 1);
+      }
+      clinicalTextAppliedRef.current = {
+        markerIds: prevApplied.markerIds.filter(id => !removedMarkers.has(id)),
+        muscleIds: prevApplied.muscleIds.filter(id => !removedMuscles.has(id)),
+        deviationKeys: prevApplied.deviationKeys.filter(k => !removedDeviations.has(k)),
+        highlightLabels: remainingLabels,
+        highlightInstanceIds: prevApplied.highlightInstanceIds.filter(id => !removedInstanceIds.has(id)),
+        predictionText: prevApplied.predictionText,
+      };
+    }
+
+    setVoiceActivityEntries(prev => prev.map(e => e.id === entryId ? { ...e, undone: true } : e));
   }, []);
 
   const handlePainMarkerMove = useCallback((id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => {
-    setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, position, nearestBone, anatomicalLabel } : m));
+    setPainMarkers(prev => prev.map(m => m.id === id
+      ? { ...m, position, nearestBone, anatomicalLabel, source: m.source === 'prediction' ? 'clinician' : m.source }
+      : m));
   }, []);
 
   const handlePainMarkerRemove = useCallback((id: string) => {
+    if (id.startsWith('pred-seed-')) {
+      dismissedSeedIdsRef.current.add(id);
+    }
     setPainMarkers(prev => prev.filter(m => m.id !== id));
     if (editingMarkerId === id) {
       setEditingMarkerId(null);
@@ -1582,7 +3829,28 @@ export default function PhysioGPT() {
   }, [editingMarkerId]);
 
   const handlePainMarkerUpdate = useCallback((id: string, updates: Partial<PainMarker>) => {
-    setPainMarkers(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+    setPainMarkers(prev => prev.map(m => m.id === id
+      ? { ...m, ...updates, source: m.source === 'prediction' && updates.source === undefined ? 'clinician' : (updates.source ?? m.source) }
+      : m));
+  }, []);
+
+  // Human-readable source attribution for prediction-seeded markers.
+  const formatMarkerSourceAttribution = useCallback((m: PainMarker | null | undefined): string | null => {
+    if (!m) return null;
+    if (m.sourceKind === 'tissue' && m.sourceTissueLabel) {
+      const sevBlurb = typeof m.sourceTissueSeverity === 'number'
+        ? ` · severity ${m.sourceTissueSeverity.toFixed(1)}/10`
+        : '';
+      const tissueType = m.sourceTissueType ? `${m.sourceTissueType} ` : '';
+      const cond = m.sourceHypothesisCondition ? ` (${m.sourceHypothesisCondition})` : '';
+      return `From compromised ${tissueType}${m.sourceTissueLabel}${sevBlurb}${cond}`;
+    }
+    if (m.sourceKind === 'provocation' && m.sourceProvocationLabel) {
+      const cond = m.sourceHypothesisCondition ? ` for ${m.sourceHypothesisCondition}` : '';
+      const movement = m.sourceProvocationMovement ? ` (${m.sourceProvocationMovement})` : '';
+      return `From provocation site${cond}: ${m.sourceProvocationLabel}${movement}`;
+    }
+    return null;
   }, []);
 
   const handleClinicalBubbleDeepDive = useCallback((markerId: string, data: ClinicalBubbleData, answers: Record<string, string>) => {
@@ -2114,7 +4382,48 @@ ${ddxList}`;
     setVisualizationBoneHighlights(boneHighlights);
   }, [BIOMECHANICAL_REGION_TO_MUSCLES, REGION_TO_BONE_NAMES]);
 
-  const handleEvidenceQuery = useCallback(() => {
+  // Optimal Loading Engine — clinician-facing handlers (Task #231).
+  // Persist override → bump reload key → /api/treatment-plan/generate refetches
+  // and the engine handshake re-runs with the new override applied.
+  const handlePlanLoadingRecalculate = useCallback(() => {
+    setTreatmentPlanReloadKey(k => k + 1);
+  }, []);
+
+  const handlePlanLoadingOverride = useCallback(async (
+    override: import('@/components/skeleton/PlanTab').LoadingOverridePayload,
+  ) => {
+    const condition = extractionResult?.mainComplaint;
+    if (!condition) return;
+    try {
+      await apiRequest(`/api/loading-context/${encodeURIComponent(condition)}/overrides`, 'PUT', {
+        override,
+        sessionPrescriptionNum: sessionPrescriptionNum ?? undefined,
+      });
+      setTreatmentPlanReloadKey(k => k + 1);
+    } catch (e) {
+      console.error('Failed to save loading override:', e);
+    }
+  }, [extractionResult?.mainComplaint, sessionPrescriptionNum]);
+
+  const handlePlanLoadingClearOverride = useCallback(async (
+    exerciseId: string,
+    weekIndex: number,
+  ) => {
+    const condition = extractionResult?.mainComplaint;
+    if (!condition) return;
+    try {
+      const qs = sessionPrescriptionNum != null ? `?sessionPrescriptionNum=${sessionPrescriptionNum}` : '';
+      await apiRequest(
+        `/api/loading-context/${encodeURIComponent(condition)}/overrides/${encodeURIComponent(exerciseId)}/${weekIndex}${qs}`,
+        'DELETE',
+      );
+      setTreatmentPlanReloadKey(k => k + 1);
+    } catch (e) {
+      console.error('Failed to clear loading override:', e);
+    }
+  }, [extractionResult?.mainComplaint, sessionPrescriptionNum]);
+
+  const handleEvidenceQuery = useCallback((opts?: { autopilot?: boolean }) => {
     if (evidenceAbortRef.current) {
       evidenceAbortRef.current.abort();
     }
@@ -2131,12 +4440,29 @@ ${ddxList}`;
     });
 
     if (!diagnosis && regions.length === 0) return;
+    const evidenceHash = `${diagnosis}|${regions.slice().sort().join(',')}`;
+    const fromAutopilot = !!opts?.autopilot;
+    // Stage marker ownership rule: when called from the autopilot
+    // chain, the chain runner owns markStageStart/End for this stage
+    // (and its own dedup against downstreamInputHash). When called
+    // manually from the UI, this handler owns the markers + the
+    // evidenceHash dedup so manual clicks still surface on the
+    // monitor and respect convergence.
+    if (!fromAutopilot) {
+      if (stageInputHashRef.current['evidence'] === evidenceHash) {
+        markStageEnd('evidence', 'skipped', 'inputs unchanged');
+        return;
+      }
+      stageInputHashRef.current['evidence'] = evidenceHash;
+      markStageStart('evidence');
+    }
 
     const abortController = new AbortController();
     evidenceAbortRef.current = abortController;
     evidenceQueryIdRef.current += 1;
     const currentQueryId = evidenceQueryIdRef.current;
 
+    evidenceErrorRef.current = false;
     setEvidenceLoading(true);
     const sa = slingAnalysisRef.current;
     const slingCtx = sa ? {
@@ -2166,12 +4492,15 @@ ${ddxList}`;
     .then(data => {
       if (evidenceQueryIdRef.current === currentQueryId) {
         setEvidenceEngineResult(data);
+        if (!fromAutopilot) markStageEnd('evidence', 'done');
       }
     })
     .catch((err) => {
       if (err?.name === 'AbortError') return;
       if (evidenceQueryIdRef.current === currentQueryId) {
+        evidenceErrorRef.current = true;
         toast({ title: 'Evidence query failed', description: 'Could not fetch evidence catalog results.', variant: 'destructive' });
+        if (!fromAutopilot) markStageEnd('evidence', 'error', err instanceof Error ? err.message : 'request failed');
       }
     })
     .finally(() => {
@@ -2182,16 +4511,30 @@ ${ddxList}`;
         }
       }
     });
-  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, toast]);
+  }, [painMarkers, clinicalBubbleResults, clinicalReasoningData, structuredReasoningData, tissueViewMode, toast, markStageStart, markStageEnd]);
 
   handleEvidenceQueryRef.current = handleEvidenceQuery;
 
   const handleManualEvidenceQuery = useCallback((params: { diagnosis?: string; bodyRegions?: string[]; stage?: string; irritability?: string; mechanism?: string }) => {
     if (evidenceLoading) return;
+    // Task #394: cancel any prior evidence request and stamp a fresh
+    // query id so a late response from a previous case (or even a
+    // previous click) cannot repaint stale evidence into the panel
+    // after New Case. Mirrors the abort/queryId pattern in
+    // handleEvidenceQuery and is also aborted in handleNewConversation.
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    evidenceAbortRef.current = abortController;
+    evidenceQueryIdRef.current += 1;
+    const currentQueryId = evidenceQueryIdRef.current;
     setEvidenceLoading(true);
     fetch('/api/evidence-engine/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      signal: abortController.signal,
       body: JSON.stringify({
         diagnosis: params.diagnosis,
         bodyRegions: params.bodyRegions,
@@ -2201,9 +4544,25 @@ ${ddxList}`;
       }),
     })
     .then(r => { if (!r.ok) throw new Error('Evidence query failed'); return r.json(); })
-    .then(data => setEvidenceEngineResult(data))
-    .catch(() => { toast({ title: 'Evidence query failed', description: 'Could not fetch evidence results.', variant: 'destructive' }); })
-    .finally(() => setEvidenceLoading(false));
+    .then(data => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceEngineResult(data);
+      }
+    })
+    .catch((err) => {
+      if (err?.name === 'AbortError') return;
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        toast({ title: 'Evidence query failed', description: 'Could not fetch evidence results.', variant: 'destructive' });
+      }
+    })
+    .finally(() => {
+      if (evidenceQueryIdRef.current === currentQueryId) {
+        setEvidenceLoading(false);
+        if (evidenceAbortRef.current === abortController) {
+          evidenceAbortRef.current = null;
+        }
+      }
+    });
   }, [evidenceLoading, toast]);
 
   const handleHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
@@ -2215,6 +4574,28 @@ ${ddxList}`;
       rulingOutFactors: hypothesis.rulingOutFactors,
     });
     setHypothesisChatOpen(true);
+  }, []);
+
+  const handleTestHypothesisClick = useCallback((hypothesis: ClinicalHypothesis) => {
+    setTestBenchHypothesis({
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supportingEvidence,
+      rulingOutFactors: hypothesis.rulingOutFactors,
+    });
+    setTestBenchOpen(true);
+  }, []);
+
+  const handleTestStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
+    setTestBenchHypothesis({
+      id: hypothesis.id,
+      condition: hypothesis.condition,
+      confidence: hypothesis.confidence,
+      supportingEvidence: hypothesis.supporting.map(s => s.feature),
+      rulingOutFactors: hypothesis.contradicting.map(c => c.feature),
+    });
+    setTestBenchOpen(true);
   }, []);
 
   const handleStructuredHypothesisClick = useCallback((hypothesis: StructuredHypothesis) => {
@@ -2380,6 +4761,48 @@ ${ddxList}`;
       extractionContext: extractionResult ?? undefined,
       biomechanicsContext: planBioCtx,
       slingContext: planSlingCtx,
+      // Loading-engine handshake (Task #231): when the condition is a
+      // tendinopathy, the plan endpoint will replace exercise dosages with
+      // engine-prescribed loads.
+      conditionName: extractionResult?.mainComplaint ?? undefined,
+      sessionPrescriptionNum: sessionPrescriptionNum ?? undefined,
+      loadingPatientFactors: extractionResult ? (() => {
+        const er = extractionResult;
+        const corpus = [er.priorTreatment ?? '', ...(er.relevantHistory ?? [])].join(' \n ').toLowerCase();
+        const has = (re: RegExp) => re.test(corpus);
+        const sexRaw = (er.patientSex ?? '').toLowerCase();
+        const sex: 'male' | 'female' | 'other' | undefined =
+          sexRaw.startsWith('m') ? 'male' :
+          sexRaw.startsWith('f') ? 'female' :
+          sexRaw ? 'other' : undefined;
+        return {
+          age: er.patientAge ? Number(er.patientAge) : undefined,
+          irritability: (er.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined,
+          recoveryPhase: er.duration === 'acute' ? 'reactive' as const :
+            er.duration === 'subacute' ? 'disrepair' as const :
+            (er.duration === 'chronic' || er.duration === 'recurrent') ? 'remodelling' as const : undefined,
+          history: {
+            medicationFlags: {
+              statins: has(/\bstatin|atorvastatin|simvastatin|rosuvastatin|pravastatin/),
+              fluoroquinolones: has(/\bfluoroquinolone|ciprofloxacin|levofloxacin|moxifloxacin|ofloxacin/),
+              corticosteroids: has(/\bcorticosteroid|prednisolone|prednisone|dexamethasone|methylprednisolone|cortisone|hydrocortisone/),
+              aromataseInhibitors: has(/\baromatase inhibitor|anastrozole|letrozole|exemestane/),
+            },
+            metabolicConditions: {
+              diabetes: has(/\bdiabetes|t1dm|t2dm|hba1c|insulin\b/),
+              thyroid: has(/\bhypothyroid|hyperthyroid|thyroid\b/),
+              hypercholesterolaemia: has(/\bcholesterol|hyperlipid|dyslipid/),
+              obesity: has(/\bobese|obesity|bmi\s*[34][0-9]/),
+            },
+            hormonalStatus: sex ? { sex, onHrt: has(/\bhrt\b|hormone replacement|oestrogen|estrogen replac/) } : undefined,
+            priorInjurySameSite: has(/\bprior\b|previous|recurr|reinjur|history of/),
+            trainingHistory: {
+              deconditioned: has(/\bdecondition|sedentary|inactive|bed rest/),
+              recentLoadSpikePct: has(/\bspike|sudden increase|ramped up|load spike/) ? 30 : undefined,
+            },
+          },
+        };
+      })() : undefined,
     };
     fetch('/api/treatment-plan/generate', {
       method: 'POST',
@@ -2393,7 +4816,7 @@ ${ddxList}`;
       .catch(err => { if (err.name !== 'AbortError') console.error('Treatment plan error:', err); })
       .finally(() => { if (!abortController.signal.aborted) setTreatmentPlanLoading(false); });
     return () => abortController.abort();
-  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt]);
+  }, [treatmentDecisionData, JSON.stringify(painMarkers.map(pm => ({ r: pm.anatomicalLabel || pm.nearestBone, t: pm.type }))), modelConfig?.spine?.thoracicKyphosis, modelConfig?.spine?.forwardHead, modelConfig?.pelvis?.tilt, treatmentPlanReloadKey]);
 
   const handlePosturalMetricsUpdate = useCallback((metrics: PosturalMetrics) => {
     if (!cameraPoseActive) return;
@@ -2445,30 +4868,40 @@ ${ddxList}`;
       setPoseTrackingQuality({ overall: avgConfidence, estimatedJoints: estimated as string[] });
     }
 
+    // Per-joint write gating: hold prior angle when joint confidence or region visibility is low.
+    const conf = pose.jointConfidence;
+    const JOINT_CONF_GATE = 0.45;
+    const allow = (joint: keyof NonNullable<typeof conf>) =>
+      !conf || (conf[joint] ?? 0.7) >= JOINT_CONF_GATE;
+    const upperOK = pose.bodyVisibility?.upperBody !== false;
+    const lowerOK = pose.bodyVisibility?.lowerBody !== false;
+    const allowUpperJoint = (joint: keyof NonNullable<typeof conf>) => upperOK && allow(joint);
+    const allowLowerJoint = (joint: keyof NonNullable<typeof conf>) => lowerOK && allow(joint);
+
     setModelConfig(prev => ({
       ...prev,
-      leftShoulder: { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) },
-      rightShoulder: { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) },
-      leftElbow: { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion), pronation: rad2deg(smoothed.leftElbow.pronation) },
-      rightElbow: { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion), pronation: rad2deg(smoothed.rightElbow.pronation) },
-      leftHip: { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) },
-      rightHip: { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) },
-      leftKnee: { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) },
-      rightKnee: { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) },
-      leftAnkle: { ...prev.leftAnkle, dorsiflexion: rad2deg(smoothed.leftAnkle.dorsiflexion), inversion: rad2deg(smoothed.leftAnkle.inversion) },
-      rightAnkle: { ...prev.rightAnkle, dorsiflexion: rad2deg(smoothed.rightAnkle.dorsiflexion), inversion: rad2deg(smoothed.rightAnkle.inversion) },
-      leftWrist: { ...prev.leftWrist, flexion: rad2deg(smoothed.leftWrist.flexion), deviation: rad2deg(smoothed.leftWrist.deviation) },
-      rightWrist: { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) },
+      leftShoulder: allowUpperJoint('leftShoulder') ? { ...prev.leftShoulder, flexion: rad2deg(smoothed.leftShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(smoothed.leftShoulder.abduction), internalRotation: rad2deg(smoothed.leftShoulder.internalRotation) } : prev.leftShoulder,
+      rightShoulder: allowUpperJoint('rightShoulder') ? { ...prev.rightShoulder, flexion: rad2deg(smoothed.rightShoulder.flexion), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(smoothed.rightShoulder.abduction), internalRotation: rad2deg(smoothed.rightShoulder.internalRotation) } : prev.rightShoulder,
+      leftElbow: allowUpperJoint('leftElbow') ? { ...prev.leftElbow, flexion: rad2deg(smoothed.leftElbow.flexion), pronation: rad2deg(smoothed.leftElbow.pronation) } : prev.leftElbow,
+      rightElbow: allowUpperJoint('rightElbow') ? { ...prev.rightElbow, flexion: rad2deg(smoothed.rightElbow.flexion), pronation: rad2deg(smoothed.rightElbow.pronation) } : prev.rightElbow,
+      leftHip: allowLowerJoint('leftHip') ? { ...prev.leftHip, flexion: rad2deg(smoothed.leftHip.flexion), abduction: rad2deg(smoothed.leftHip.abduction) } : prev.leftHip,
+      rightHip: allowLowerJoint('rightHip') ? { ...prev.rightHip, flexion: rad2deg(smoothed.rightHip.flexion), abduction: rad2deg(smoothed.rightHip.abduction) } : prev.rightHip,
+      leftKnee: allowLowerJoint('leftKnee') ? { ...prev.leftKnee, flexion: rad2deg(smoothed.leftKnee.flexion) } : prev.leftKnee,
+      rightKnee: allowLowerJoint('rightKnee') ? { ...prev.rightKnee, flexion: rad2deg(smoothed.rightKnee.flexion) } : prev.rightKnee,
+      leftAnkle: allowLowerJoint('leftAnkle') ? { ...prev.leftAnkle, dorsiflexion: rad2deg(smoothed.leftAnkle.dorsiflexion), inversion: rad2deg(smoothed.leftAnkle.inversion) } : prev.leftAnkle,
+      rightAnkle: allowLowerJoint('rightAnkle') ? { ...prev.rightAnkle, dorsiflexion: rad2deg(smoothed.rightAnkle.dorsiflexion), inversion: rad2deg(smoothed.rightAnkle.inversion) } : prev.rightAnkle,
+      leftWrist: allowUpperJoint('leftWrist') ? { ...prev.leftWrist, flexion: rad2deg(smoothed.leftWrist.flexion), deviation: rad2deg(smoothed.leftWrist.deviation) } : prev.leftWrist,
+      rightWrist: allowUpperJoint('rightWrist') ? { ...prev.rightWrist, flexion: rad2deg(smoothed.rightWrist.flexion), deviation: rad2deg(smoothed.rightWrist.deviation) } : prev.rightWrist,
       pelvis: {
         ...prev.pelvis,
-        tilt: rad2deg(smoothed.pelvis.tilt),
-        obliquity: rad2deg(smoothed.pelvis.obliquity),
-        rotation: rad2deg(smoothed.pelvis.rotation),
-        zShift: pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
-        yShift: pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
-        xShift: pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
+        tilt: (upperOK && lowerOK) ? rad2deg(smoothed.pelvis.tilt) : (prev.pelvis?.tilt ?? 0),
+        obliquity: lowerOK ? rad2deg(smoothed.pelvis.obliquity) : (prev.pelvis?.obliquity ?? 0),
+        rotation: lowerOK ? rad2deg(smoothed.pelvis.rotation) : (prev.pelvis?.rotation ?? 0),
+        zShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.lateralShift * 100) : (prev.pelvis?.zShift ?? 0),
+        yShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.forwardShift * 100) : (prev.pelvis?.yShift ?? 0),
+        xShift: lowerOK && pose.globalTranslation ? Math.round(pose.globalTranslation.verticalShift * 100) : (prev.pelvis?.xShift ?? 0),
       },
-      spine: {
+      spine: allow('spine') && upperOK ? {
         ...prev.spine,
         flexion: rad2deg(smoothed.spine.flexion),
         lateralFlexion: rad2deg(smoothed.spine.lateralFlexion),
@@ -2483,17 +4916,23 @@ ${ddxList}`;
         lumbarScoliosis: rad2deg(smoothed.spine.lumbarLateralFlexion),
         thoracicScoliosis: rad2deg(smoothed.spine.thoracicLateralFlexion),
         cervicalScoliosis: rad2deg(smoothed.spine.cervicalLateralFlexion),
-      },
-      limbScales: pose.bodyProportions ? {
+      } : prev.spine,
+      limbScales: pose.bodyProportions && upperOK && lowerOK ? {
         upperArm: Math.round((pose.bodyProportions.upperArmRatio - 0.55) * 100),
         forearm: Math.round((pose.bodyProportions.forearmRatio - 0.45) * 100),
         thigh: Math.round((pose.bodyProportions.thighRatio - 0.75) * 100),
         shin: Math.round((pose.bodyProportions.shinRatio - 0.7) * 100),
         overall: prev.limbScales.overall,
       } : prev.limbScales,
-      neck: { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) },
-      leftScapula: { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) },
-      rightScapula: { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction), upwardRotation: rad2deg(smoothed.scapula.rightUpwardRotation) },
+      neck: allow('neck') && upperOK
+        ? { ...prev.neck, flexion: rad2deg(smoothed.neck.flexion), rotation: rad2deg(smoothed.neck.rotation), lateralFlexion: rad2deg(smoothed.neck.lateralFlexion) }
+        : prev.neck,
+      leftScapula: allowUpperJoint('leftShoulder')
+        ? { ...prev.leftScapula, elevation: rad2deg(smoothed.scapula.leftElevation), protraction: rad2deg(smoothed.scapula.leftProtraction), upwardRotation: rad2deg(smoothed.scapula.leftUpwardRotation) }
+        : prev.leftScapula,
+      rightScapula: allowUpperJoint('rightShoulder')
+        ? { ...prev.rightScapula, elevation: rad2deg(smoothed.scapula.rightElevation), protraction: rad2deg(smoothed.scapula.rightProtraction), upwardRotation: rad2deg(smoothed.scapula.rightUpwardRotation) }
+        : prev.rightScapula,
     }));
   }, [cameraPoseActive]);
 
@@ -2501,61 +4940,78 @@ ${ddxList}`;
     if (!cameraPoseActive) return;
     const rad2deg = (r: number) => Math.round((r * 180) / Math.PI);
 
+    // Same per-joint write gating as the full-body path.
+    const conf = partialPose.jointConfidence;
+    const JOINT_CONF_GATE = 0.45;
+    const allow = (joint: keyof NonNullable<typeof conf>) =>
+      !conf || (conf[joint] ?? 0.7) >= JOINT_CONF_GATE;
+    const upperOK = partialPose.bodyVisibility?.upperBody !== false;
+    const lowerOK = partialPose.bodyVisibility?.lowerBody !== false;
+    const allowUpperJoint = (joint: keyof NonNullable<typeof conf>) => upperOK && allow(joint);
+    const allowLowerJoint = (joint: keyof NonNullable<typeof conf>) => lowerOK && allow(joint);
+
     setModelConfig(prev => {
       const next = { ...prev };
-      if (partialPose.leftShoulder) {
+      if (partialPose.leftShoulder && allowUpperJoint('leftShoulder')) {
         next.leftShoulder = { ...prev.leftShoulder, flexion: rad2deg(partialPose.leftShoulder.x), abduction: DEFAULT_MODEL_CONFIG.leftShoulder.abduction + rad2deg(partialPose.leftShoulder.z), internalRotation: rad2deg(partialPose.leftShoulder.y) };
       }
-      if (partialPose.rightShoulder) {
+      if (partialPose.rightShoulder && allowUpperJoint('rightShoulder')) {
         next.rightShoulder = { ...prev.rightShoulder, flexion: rad2deg(partialPose.rightShoulder.x), abduction: DEFAULT_MODEL_CONFIG.rightShoulder.abduction + rad2deg(partialPose.rightShoulder.z), internalRotation: rad2deg(partialPose.rightShoulder.y) };
       }
-      if (partialPose.leftElbow) {
+      if (partialPose.leftElbow && allowUpperJoint('leftElbow')) {
         next.leftElbow = { ...prev.leftElbow, flexion: rad2deg(partialPose.leftElbow.x), pronation: rad2deg(partialPose.leftElbow.y) };
       }
-      if (partialPose.rightElbow) {
+      if (partialPose.rightElbow && allowUpperJoint('rightElbow')) {
         next.rightElbow = { ...prev.rightElbow, flexion: rad2deg(partialPose.rightElbow.x), pronation: rad2deg(partialPose.rightElbow.y) };
       }
-      if (partialPose.leftHip) {
+      if (partialPose.leftHip && allowLowerJoint('leftHip')) {
         next.leftHip = { ...prev.leftHip, flexion: rad2deg(partialPose.leftHip.x), abduction: rad2deg(partialPose.leftHip.z) };
       }
-      if (partialPose.rightHip) {
+      if (partialPose.rightHip && allowLowerJoint('rightHip')) {
         next.rightHip = { ...prev.rightHip, flexion: rad2deg(partialPose.rightHip.x), abduction: rad2deg(partialPose.rightHip.z) };
       }
-      if (partialPose.leftKnee) {
+      if (partialPose.leftKnee && allowLowerJoint('leftKnee')) {
         next.leftKnee = { ...prev.leftKnee, flexion: rad2deg(partialPose.leftKnee.x) };
       }
-      if (partialPose.rightKnee) {
+      if (partialPose.rightKnee && allowLowerJoint('rightKnee')) {
         next.rightKnee = { ...prev.rightKnee, flexion: rad2deg(partialPose.rightKnee.x) };
       }
-      if (partialPose.leftAnkle) {
+      if (partialPose.leftAnkle && allowLowerJoint('leftAnkle')) {
         next.leftAnkle = { ...prev.leftAnkle, dorsiflexion: rad2deg(partialPose.leftAnkle.x), inversion: rad2deg(partialPose.leftAnkle.z) };
       }
-      if (partialPose.rightAnkle) {
+      if (partialPose.rightAnkle && allowLowerJoint('rightAnkle')) {
         next.rightAnkle = { ...prev.rightAnkle, dorsiflexion: rad2deg(partialPose.rightAnkle.x), inversion: rad2deg(partialPose.rightAnkle.z) };
       }
-      if (partialPose.leftWrist) {
+      if (partialPose.leftWrist && allowUpperJoint('leftWrist')) {
         next.leftWrist = { ...prev.leftWrist, flexion: rad2deg(partialPose.leftWrist.x), deviation: rad2deg(partialPose.leftWrist.z) };
       }
-      if (partialPose.rightWrist) {
+      if (partialPose.rightWrist && allowUpperJoint('rightWrist')) {
         next.rightWrist = { ...prev.rightWrist, flexion: rad2deg(partialPose.rightWrist.x), deviation: rad2deg(partialPose.rightWrist.z) };
       }
-      if (partialPose.spine) {
+      if (partialPose.spine && upperOK) {
         next.spine = { ...prev.spine, flexion: rad2deg(partialPose.spine.x), lateralFlexion: rad2deg(partialPose.spine.z), thoracicKyphosis: rad2deg(partialPose.spine.x * 0.6), scoliosis: rad2deg(partialPose.spine.z * 1.2) };
       }
-      if (partialPose.neck) {
+      if (partialPose.neck && upperOK) {
         next.neck = { ...prev.neck, flexion: rad2deg(partialPose.neck.x), rotation: rad2deg(partialPose.neck.y), lateralFlexion: rad2deg(partialPose.neck.z) };
       }
       if (partialPose.pelvisTilt !== undefined || partialPose.pelvisObliquity !== undefined || partialPose.pelvisRotation !== undefined) {
+        const pelvisTiltOK = upperOK && lowerOK;
+        const pelvisObliquityOK = lowerOK;
+        const pelvisRotationOK = lowerOK;
         next.pelvis = {
           ...prev.pelvis,
-          tilt: partialPose.pelvisTilt !== undefined ? rad2deg(partialPose.pelvisTilt) : (prev.pelvis?.tilt ?? 0),
-          obliquity: partialPose.pelvisObliquity !== undefined ? rad2deg(partialPose.pelvisObliquity) : (prev.pelvis?.obliquity ?? 0),
-          rotation: partialPose.pelvisRotation !== undefined ? rad2deg(partialPose.pelvisRotation) : (prev.pelvis?.rotation ?? 0),
+          tilt: (partialPose.pelvisTilt !== undefined && pelvisTiltOK) ? rad2deg(partialPose.pelvisTilt) : (prev.pelvis?.tilt ?? 0),
+          obliquity: (partialPose.pelvisObliquity !== undefined && pelvisObliquityOK) ? rad2deg(partialPose.pelvisObliquity) : (prev.pelvis?.obliquity ?? 0),
+          rotation: (partialPose.pelvisRotation !== undefined && pelvisRotationOK) ? rad2deg(partialPose.pelvisRotation) : (prev.pelvis?.rotation ?? 0),
         };
       }
       if (partialPose.scapulaData) {
-        next.leftScapula = { ...prev.leftScapula, elevation: rad2deg(partialPose.scapulaData.leftElevation), protraction: rad2deg(partialPose.scapulaData.leftProtraction) };
-        next.rightScapula = { ...prev.rightScapula, elevation: rad2deg(partialPose.scapulaData.rightElevation), protraction: rad2deg(partialPose.scapulaData.rightProtraction) };
+        if (allowUpperJoint('leftShoulder')) {
+          next.leftScapula = { ...prev.leftScapula, elevation: rad2deg(partialPose.scapulaData.leftElevation), protraction: rad2deg(partialPose.scapulaData.leftProtraction) };
+        }
+        if (allowUpperJoint('rightShoulder')) {
+          next.rightScapula = { ...prev.rightScapula, elevation: rad2deg(partialPose.scapulaData.rightElevation), protraction: rad2deg(partialPose.scapulaData.rightProtraction) };
+        }
       }
       return next;
     });
@@ -2566,7 +5022,6 @@ ${ddxList}`;
     setCameraMode(newMode);
     if (newMode) {
       setPainMarkerMode(false);
-      setRomMode(false);
       setPoseMode(false);
       setSelectedRomJoint(null);
       setCameraPoseActive(true);
@@ -2865,7 +5320,7 @@ ${ddxList}`;
       sections.push(`**Symptom Markers (${painMarkers.length}):**\n${markerLines.join('\n')}`);
     }
 
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const highForces = forces.joints.filter(j => j.status === 'high' || j.status === 'very_high');
     const forceLines = forces.joints.map(j =>
       `- ${j.label}: C=${(j.compression * 100).toFixed(0)}% T=${(j.tension * 100).toFixed(0)}% S=${(j.shear * 100).toFixed(0)}% BW (${forceToNewtons(j.totalForce, bodyWeightKg)}N) — ${j.status}`
@@ -2899,10 +5354,105 @@ ${ddxList}`;
   }, [message, selectedConversationId, selectedRegion]);
 
   const handleNewConversation = () => {
+    // Cancel any pending snapshot save targeted at the now-stale conversation.
+    if (snapshotSaveTimerRef.current) {
+      clearTimeout(snapshotSaveTimerRef.current);
+      snapshotSaveTimerRef.current = null;
+    }
+    // Mark as hydrating so the auto-save effect bails while we batch the
+    // resets below — otherwise the resets themselves would trigger a save
+    // back to the just-cleared conversation.
+    isHydratingRef.current = true;
+    hydratedConversationIdRef.current = null;
+    lastSavedSnapshotRef.current = "";
+
     setSelectedConversationId(null);
     setSuggestions([]);
     setMessage("");
     setChatPanelOpen(true);
+    setSlingActivationOverrides({});
+    setPinnedSpotlightSlingId(null);
+    setSlingPartTreatments({});
+    setSlingPartMuscleAdjustments({});
+    setMovementSpotlightEnabled(true);
+    setLastInteractedBone(null);
+    // Clinical text / voice state — must be wiped so the new case looks
+    // like a fresh login (no stale prediction card or voice activity dock).
+    setLastClinicalParseResult(null);
+    setHasClinicalTextData(false);
+    setVoiceActivityEntries([]);
+    clinicalTextAppliedRef.current = null;
+    // Reset every panel that participates in the case snapshot so the new
+    // case starts from defaults instead of inheriting the previous one.
+    setModelConfig({ ...DEFAULT_MODEL_CONFIG });
+    setPainMarkers([]);
+    setCompromisedTissues([]);
+    setScarMarkers([]);
+    setAdhesionBands([]);
+    setRomMeasurements([]);
+    setMuscleOverrides({});
+    setBodyWeightKg(70);
+    setClinicalHighlights([]);
+    setSubjectiveHistoryInput('');
+    setPatientContextState(EMPTY_PATIENT_CONTEXT_STATE);
+    setPatientFactorOverrides(null);
+    setMovementFindings([]);
+    setSelectedRegion(null);
+    planCartReplaceAllRef.current?.([]);
+    setRightPanelTab('chat');
+    setMechanismActiveTab('mechanism');
+    setExpandedTreatmentSection(null);
+    setTreatmentDecisionData(null);
+    setTreatmentPlanData(null);
+    setShowSimTimeline(false);
+    setTimelinePlaybackState(null);
+    setShowForceTimePanel(false);
+    setShowTreatmentPriority(false);
+    setShowUnifiedChainPanel(false);
+    setUnifiedBiomechanicsMovementTask(undefined);
+    setUnifiedBiomechanicsProgress(0.5);
+    setUnifiedBiomechanicsFaultOverrides([]);
+    // v2 — AI outputs and skeleton interaction flags.
+    setExtractionResult(null);
+    setStructuredReasoningData(null);
+    setClinicalReasoningData(null);
+    setEvidenceEngineResult(null);
+    setCustomExerciseResult(null);
+    setCustomManualTherapyResult(null);
+    setActiveGoalProfile(null);
+    setActiveGoalGap(null);
+    setWhatIfScenarios([]);
+    setWhatIfComparisonBScenarios([]);
+    setMechanismBoneIds([]);
+    setConnectionHighlights([]);
+    setTestChainActive(null);
+    setSelectedRomJoint(null);
+    setRomValues({});
+
+    // Abort any in-flight evidence-engine query (manual or autopilot)
+    // and bump the queryId so a late response cannot repaint stale
+    // evidence into the just-cleared case.
+    if (evidenceAbortRef.current) {
+      evidenceAbortRef.current.abort();
+      evidenceAbortRef.current = null;
+    }
+    evidenceQueryIdRef.current += 1;
+    setEvidenceLoading(false);
+
+    // Bump the per-case instance counter so ClinicalTextInput and
+    // ClinicalReasoningPanel fully remount, wiping all child-owned
+    // useState/useRef values (input text, parsed result card,
+    // follow-up Q&A, diagnosis report, manual evidence query fields,
+    // expanded sections, internally-cached SOAP notes, drag pos,
+    // pending fetches, etc.) so the new case looks like a fresh login.
+    // The remount also flips ClinicalTextInput's mountedRef → false,
+    // which gates its post-await state setters / parent callbacks so
+    // late /api/clinical-text/parse and /api/clinical-diagnosis/report
+    // responses are dropped instead of repainting stale findings.
+    setCaseInstanceId((n) => n + 1);
+
+    // Release the hydration guard once the resets have committed.
+    setTimeout(() => { isHydratingRef.current = false; }, 100);
   };
 
   const handleRegionSelect = (region: keyof typeof BODY_REGIONS) => {
@@ -2944,7 +5494,15 @@ ${ddxList}`;
       (next as any)[group] = { ...(next as any)[group], [prop]: value };
       return next;
     });
+    // Track the last bone the clinician interacted with so the movement-mode
+    // sling spotlight selector can give that bone's pathway a focus bonus.
+    const [group] = path.split('.');
+    const bone = MOVEMENT_GROUP_TO_BONE[group];
+    if (bone) setLastInteractedBone(bone);
   };
+
+  const lastPosedHypothesisRef = useRef<{ id: string; condition: string } | null>(null);
+  const [stalePoseHint, setStalePoseHint] = useState<{ replacedFromId: string; newId: string; condition: string } | null>(null);
 
   const applyPoseCommand = useCallback((poseData: Record<string, any>) => {
     if (!poseData || typeof poseData !== 'object') return;
@@ -2983,8 +5541,616 @@ ${ddxList}`;
 
     if (appliedCount > 0) {
       toast({ title: "Pose Updated", description: isIncremental ? "Skeleton adjusted incrementally" : "Skeleton pose applied from AI" });
+      const ctxId = (poseData as any).__hypothesisId;
+      const ctxCondition = (poseData as any).__hypothesisCondition;
+      if (typeof ctxId === 'string' && typeof ctxCondition === 'string') {
+        lastPosedHypothesisRef.current = { id: ctxId, condition: ctxCondition };
+      }
     }
   }, [toast]);
+
+  const handleBenchApplyOverlay = useCallback((overlay: BenchSkeletonOverlay | null) => {
+    if (!overlay) {
+      const snap = benchSnapshotRef.current;
+      if (snap) {
+        setModelConfig(snap.modelConfig);
+        setPainMarkers(snap.painMarkers);
+        setBiomechanicalMuscleHighlights(snap.biomechanicalMuscleHighlights);
+        setMuscleHighlightColors(snap.muscleHighlightColors);
+        setVisualizationBoneHighlights(snap.visualizationBoneHighlights);
+        benchSnapshotRef.current = null;
+      }
+      return;
+    }
+    if (!benchSnapshotRef.current) {
+      benchSnapshotRef.current = {
+        modelConfig: JSON.parse(JSON.stringify(modelConfig)),
+        painMarkers: [...painMarkers],
+        biomechanicalMuscleHighlights: [...biomechanicalMuscleHighlights],
+        muscleHighlightColors: { ...muscleHighlightColors },
+        visualizationBoneHighlights: [...visualizationBoneHighlights],
+      };
+    }
+    const fp = overlay.fingerprint;
+    const boneHl = (fp.expectedHighlights.bones || []).map(b => ({ boneName: b, color: 0x22d3ee, intensity: 0.9 }));
+    const regionBones = (fp.expectedHighlights.regions || []).map(r => ({ boneName: r, color: 0x60a5fa, intensity: 0.6 }));
+    setVisualizationBoneHighlights([...boneHl, ...regionBones]);
+    const muscles = fp.expectedHighlights.muscleGroups || [];
+    setBiomechanicalMuscleHighlights(muscles);
+    const colorMap: Record<string, string> = {};
+    muscles.forEach(m => { colorMap[m] = "#22d3ee"; });
+    setMuscleHighlightColors(colorMap);
+    if (!fp.expectedPainMarkers || fp.expectedPainMarkers.length === 0) {
+      setPainMarkers([]);
+    } else {
+      const predictedMarkers: PainMarker[] = fp.expectedPainMarkers.map((pm, idx) => {
+        const labelLc = (pm.anatomicalLabel || '').toLowerCase();
+        const vp = ANATOMICAL_VIRTUAL_POINTS.find(
+          p => p.label.toLowerCase().includes(labelLc) ||
+               (labelLc && labelLc.includes(p.label.toLowerCase().split(' (')[0]))
+        );
+        return {
+          id: `bench-predicted-${fp.hypothesisId}-${idx}`,
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone: vp ? vp.boneName : 'Root_M',
+          anatomicalLabel: vp ? vp.label : pm.anatomicalLabel,
+          type: (pm.type as PainMarkerType) || 'sharp',
+          severity: pm.severity || 5,
+          symptomType: 'pain' as SymptomType,
+          description: pm.label || `Predicted: ${pm.anatomicalLabel}`,
+        };
+      });
+      setPainMarkers(predictedMarkers);
+    }
+    if (fp.expectedPosture && Object.keys(fp.expectedPosture).length > 0) {
+      applyPoseCommand(fp.expectedPosture);
+    }
+  }, [modelConfig, painMarkers, biomechanicalMuscleHighlights, muscleHighlightColors, visualizationBoneHighlights, applyPoseCommand]);
+
+  const handleBenchCommit = useCallback((update: BenchUpdate) => {
+    const positives = update.appliedTests.filter(t => t.outcome === 'positive');
+    const negatives = update.appliedTests.filter(t => t.outcome === 'negative');
+    const positiveLines = positives.map(t => `Bench: ${t.name} positive (LR+ ${t.lrApplied.toFixed(1)})`);
+    const negativeLines = negatives.map(t => `Bench: ${t.name} negative (LR− ${t.lrApplied.toFixed(2)})`);
+    setClinicalReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === update.hypothesisId);
+      if (idx < 0) return prev;
+      const updated = [...prev.hypotheses];
+      updated[idx] = {
+        ...updated[idx],
+        confidence: Math.round(update.newConfidence),
+        supportingEvidence: [...updated[idx].supportingEvidence, ...positiveLines, `Bench summary: ${update.rationale}`],
+        rulingOutFactors: [...updated[idx].rulingOutFactors, ...negativeLines],
+      };
+      return { ...prev, hypotheses: updated };
+    });
+    setStructuredReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === update.hypothesisId);
+      if (idx < 0) return prev;
+      const updated = [...prev.hypotheses];
+      updated[idx] = {
+        ...updated[idx],
+        confidence: Math.round(update.newConfidence),
+        supporting: [
+          ...updated[idx].supporting,
+          ...positives.map(t => ({ feature: `Bench: ${t.name} positive (LR+ ${t.lrApplied.toFixed(1)})`, weight: 3 })),
+        ],
+        contradicting: [
+          ...updated[idx].contradicting,
+          ...negatives.map(t => ({ feature: `Bench: ${t.name} negative (LR− ${t.lrApplied.toFixed(2)})`, weight: 3 })),
+        ],
+      };
+      return { ...prev, hypotheses: updated };
+    });
+    toast({ title: 'Hypothesis updated', description: `Confidence → ${Math.round(update.newConfidence)}% (${positives.length}+ / ${negatives.length}−)` });
+  }, [toast]);
+
+  const handleRefinedHypothesisCommit = useCallback((
+    refined: RefinedHypothesisSuggestion,
+    action: "replace" | "add",
+    originalId: string,
+  ) => {
+    const newId = `refined-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const supportingFromFindings = refined.keyFindings.map(f => `Refined: ${f}`);
+    const supportingFromRationale = `Refined rationale: ${refined.rationale}`;
+
+    setClinicalReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === originalId);
+      const newCR: ClinicalHypothesis = {
+        id: action === "add" ? newId : (idx >= 0 ? prev.hypotheses[idx].id : newId),
+        condition: refined.condition,
+        confidence: Math.round(refined.confidenceSuggestion),
+        supportingEvidence: [...supportingFromFindings, supportingFromRationale],
+        rulingOutFactors: idx >= 0 ? [...prev.hypotheses[idx].rulingOutFactors] : [],
+        status: "active",
+      };
+      const updated = [...prev.hypotheses];
+      if (action === "replace" && idx >= 0) {
+        updated[idx] = newCR;
+      } else {
+        updated.push(newCR);
+      }
+      return { ...prev, hypotheses: updated };
+    });
+
+    setStructuredReasoningData(prev => {
+      if (!prev) return prev;
+      const idx = prev.hypotheses.findIndex(h => h.id === originalId);
+      const supporting = refined.keyFindings.map(f => ({ feature: `Refined: ${f}`, weight: 3 }));
+      const newSR: StructuredHypothesis = {
+        id: action === "add" ? newId : (idx >= 0 ? prev.hypotheses[idx].id : newId),
+        condition: refined.condition,
+        confidence: Math.round(refined.confidenceSuggestion),
+        supporting: [...supporting, { feature: `Refined rationale: ${refined.rationale}`, weight: 4 }],
+        contradicting: idx >= 0 ? [...prev.hypotheses[idx].contradicting] : [],
+        fingerprintMatchScore: idx >= 0 ? prev.hypotheses[idx].fingerprintMatchScore : 0,
+        structuralHypothesis: idx >= 0 ? prev.hypotheses[idx].structuralHypothesis : refined.condition,
+        dominantClinicalDriver: idx >= 0 ? prev.hypotheses[idx].dominantClinicalDriver : (prev.dominantSymptomDriver?.driver || ''),
+      };
+      const updated = [...prev.hypotheses];
+      if (action === "replace" && idx >= 0) {
+        updated[idx] = newSR;
+      } else {
+        updated.push(newSR);
+      }
+      const sorted = [...updated].sort((a, b) => b.confidence - a.confidence);
+      return { ...prev, hypotheses: sorted };
+    });
+
+    const promotedId = action === "add" ? newId : originalId;
+    const promotedCondition = refined.condition;
+
+    setSelectedHypothesisForChat(prev => prev && prev.id === originalId ? {
+      ...prev,
+      id: action === "add" ? originalId : prev.id,
+      condition: action === "replace" ? refined.condition : prev.condition,
+      confidence: action === "replace" ? Math.round(refined.confidenceSuggestion) : prev.confidence,
+      supportingEvidence: action === "replace"
+        ? [...supportingFromFindings, supportingFromRationale]
+        : prev.supportingEvidence,
+    } : prev);
+
+    if (action === "replace" && lastPosedHypothesisRef.current?.id === originalId) {
+      setStalePoseHint({ replacedFromId: originalId, newId: promotedId, condition: promotedCondition });
+    }
+
+    setLastRefinedCommit({
+      id: promotedId,
+      condition: promotedCondition,
+      supportingEvidence: [...supportingFromFindings, supportingFromRationale],
+      rulingOutFactors: [],
+    });
+  }, []);
+
+  // Provocation composition fires for any written hypothesis. Refine-commit
+  // wins; otherwise pick the top hypothesis preferring confirmed over predicted.
+  const provocationHypothesis = useMemo<{ id: string; condition: string; supportingEvidence?: string[]; rulingOutFactors?: string[] } | null>(() => {
+    if (lastRefinedCommit) return lastRefinedCommit;
+    const hyps = clinicalReasoningData?.hypotheses ?? [];
+    if (hyps.length === 0) return null;
+    const ranked = [...hyps].sort((a, b) => {
+      const sa = a.status === "confirmed" ? 0 : 1;
+      const sb = b.status === "confirmed" ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return b.confidence - a.confidence;
+    });
+    const h = ranked[0];
+    return { id: h.id, condition: h.condition, supportingEvidence: h.supportingEvidence, rulingOutFactors: h.rulingOutFactors };
+  }, [lastRefinedCommit, clinicalReasoningData?.hypotheses]);
+  const provocationQueryEnabled = !!provocationHypothesis && !!provocationHypothesis.id && !!provocationHypothesis.condition;
+  const {
+    data: provocationData,
+    isFetching: provocationLoading,
+    error: provocationError,
+  } = useQuery<ProvocationComposeResponse>({
+    queryKey: [
+      "/api/diagnosis-provocations/compose",
+      provocationHypothesis?.id,
+      provocationHypothesis?.condition,
+    ],
+    enabled: provocationQueryEnabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    retry: false,
+    queryFn: async () => {
+      if (!provocationHypothesis) return { movements: [] };
+      const res = await fetch("/api/diagnosis-provocations/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          hypothesisId: provocationHypothesis.id,
+          condition: provocationHypothesis.condition,
+          supportingEvidence: provocationHypothesis.supportingEvidence,
+          rulingOutFactors: provocationHypothesis.rulingOutFactors,
+          region: provocationFocusedRegion,
+          painMarkers: provocationMarkerContext,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to compose provocations");
+      }
+      return res.json();
+    },
+  });
+  const provocationMovements: DiagnosisProvocationMovement[] = useMemo(() => {
+    return Array.isArray(provocationData?.movements) ? provocationData.movements : [];
+  }, [provocationData]);
+  const handleRegenerateProvocations = useCallback(() => {
+    if (!provocationHypothesis) return;
+    queryClient.invalidateQueries({
+      queryKey: [
+        "/api/diagnosis-provocations/compose",
+        provocationHypothesis.id,
+        provocationHypothesis.condition,
+      ],
+    });
+  }, [provocationHypothesis, queryClient]);
+
+  const provocationMarkerContext: ProvocationContextPainMarker[] = useMemo(() => {
+    return painMarkers
+      .filter(m => !m.id.startsWith("prov-flash-"))
+      .slice(0, 24)
+      .map(m => ({
+        anatomicalLabel: m.anatomicalLabel,
+        symptomType: m.symptomType,
+        severity: m.severity,
+        description: m.description,
+      }));
+  }, [painMarkers]);
+
+  const provocationFocusedRegion = useMemo(() => {
+    return selectedRegion ? BODY_REGIONS[selectedRegion]?.name : undefined;
+  }, [selectedRegion]);
+
+  /**
+   * Transient expected-site pain markers.
+   * When a provocation movement is actively playing, inject one marker per
+   * expectedProvocationSite into the viewer's painMarkers using the bone
+   * positions from REGION_BONE_MAPPING. All transient markers are id-prefixed
+   * `prov-flash-` so they can be removed cleanly without touching clinician
+   * markers when playback stops or the active movement changes.
+   */
+  useEffect(() => {
+    const isPlaying = animationState.isPlaying;
+    const currentId = animationState.currentMovement;
+    const active = currentId && isPlaying
+      ? provocationMovements.find(m => m.id === currentId)
+      : undefined;
+    const sites = active?.expectedProvocationSites ?? [];
+
+    if (!active || sites.length === 0) {
+      setPainMarkers(prev =>
+        prev.some(m => m.id.startsWith("prov-flash-"))
+          ? prev.filter(m => !m.id.startsWith("prov-flash-"))
+          : prev,
+      );
+      return;
+    }
+
+    const transient: PainMarker[] = sites.flatMap((site, idx) => {
+      const region = site.region as AnatomicalRegion;
+      const bones = REGION_BONE_MAPPING[region];
+      const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
+      if (!nearestBone) return [];
+      return [{
+        id: `prov-flash-${active.id}-${idx}`,
+        type: "point" as PainMarkerType,
+        symptomType: "pain" as SymptomType,
+        position: { x: 0, y: 0, z: 0 },
+        nearestBone,
+        anatomicalLabel: site.label,
+        description: `Expected provocation site for ${active.name}`,
+        severity: typeof site.severity === "number" ? site.severity : 6,
+        source: 'transient' as const,
+      }];
+    });
+
+    setPainMarkers(prev => {
+      const kept = prev.filter(m => !m.id.startsWith("prov-flash-"));
+      return [...kept, ...transient];
+    });
+  }, [animationState.isPlaying, animationState.currentMovement, provocationMovements]);
+
+  useEffect(() => {
+    return () => {
+      setPainMarkers(prev =>
+        prev.some(m => m.id.startsWith("prov-flash-"))
+          ? prev.filter(m => !m.id.startsWith("prov-flash-"))
+          : prev,
+      );
+    };
+  }, []);
+
+  // Seed IDs the clinician explicitly removed; held in a ref so mutation
+  // doesn't retrigger the seed effect.
+  const dismissedSeedIdsRef = useRef<Set<string>>(new Set());
+  // True whenever the active prediction yields at least one seed, regardless
+  // of whether the clinician has since edited those markers into clinician-owned ones.
+  const predictionHasSeededRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    type Seed = {
+      id: string;
+      bone: string;
+      label: string;
+      severity: number;
+      description: string;
+      attribution: Pick<PainMarker,
+        | 'sourceKind'
+        | 'sourceHypothesisId'
+        | 'sourceHypothesisCondition'
+        | 'sourceProvocationMovement'
+        | 'sourceProvocationLabel'
+        | 'sourceTissueType'
+        | 'sourceTissueId'
+        | 'sourceTissueLabel'
+        | 'sourceTissueSeverity'
+      >;
+    };
+    const seeds: Seed[] = [];
+    const seenKeys = new Set<string>();
+    const hypId = provocationHypothesis?.id;
+    const hypCondition = provocationHypothesis?.condition;
+
+    const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    for (const mv of provocationMovements) {
+      for (const site of mv.expectedProvocationSites ?? []) {
+        const region = site.region as AnatomicalRegion;
+        const bones = REGION_BONE_MAPPING[region];
+        const nearestBone = bones && bones.length > 0 ? bones[0] : undefined;
+        if (!nearestBone) continue;
+        const key = `region-${region}-${slugify(site.label)}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        seeds.push({
+          id: `pred-seed-${key}`,
+          bone: nearestBone,
+          label: site.label,
+          severity: typeof site.severity === "number" ? site.severity : 5,
+          description: `Auto-placed from clinical prediction: ${site.label}`,
+          attribution: {
+            sourceKind: 'provocation',
+            sourceHypothesisId: hypId,
+            sourceHypothesisCondition: hypCondition,
+            sourceProvocationMovement: mv.name,
+            sourceProvocationLabel: site.label,
+          },
+        });
+      }
+    }
+
+    for (const ct of compromisedTissues) {
+      const tissueId = ct.tissue_id;
+      if (!tissueId) continue;
+      const dataset =
+        ct.tissue_type === 'tendon' ? TENDON_DATA :
+        ct.tissue_type === 'joint' ? JOINT_SURFACE_DATA :
+        ct.tissue_type === 'nerve' ? NERVE_PATHWAY_DATA :
+        ct.tissue_type === 'fascia' ? FASCIAL_LAYER_DATA :
+        [];
+      const entry = dataset.find(e => e.id === tissueId);
+      const nearestBone = entry?.bones?.[0];
+      if (!nearestBone) continue;
+      const key = `tissue-${ct.tissue_type}-${tissueId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      // Normalize 0–1 severity sources to the 0–10 marker scale.
+      const rawSev = typeof ct.severity === "number" ? ct.severity : 0.5;
+      const normalisedSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
+      const sevClamped = Math.max(0, Math.min(10, normalisedSev));
+      seeds.push({
+        id: `pred-seed-${key}`,
+        bone: nearestBone,
+        label: entry?.label ?? tissueId,
+        severity: sevClamped,
+        description: `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`,
+        attribution: {
+          sourceKind: 'tissue',
+          sourceHypothesisId: hypId,
+          sourceHypothesisCondition: hypCondition,
+          sourceTissueType: ct.tissue_type,
+          sourceTissueId: tissueId,
+          sourceTissueLabel: entry?.label ?? tissueId,
+          sourceTissueSeverity: sevClamped,
+        },
+      });
+    }
+
+    setPainMarkers(prev => {
+      const dismissed = dismissedSeedIdsRef.current;
+      const liveIds = new Set(seeds.map(s => s.id));
+      for (const id of Array.from(dismissed)) {
+        if (!liveIds.has(id)) dismissed.delete(id);
+      }
+      const filteredSeeds = seeds.filter(s => !dismissed.has(s.id));
+      // Record whether the active prediction has produced any seed at all so
+      // Movement Mode auto-pin keeps working even after the clinician has
+      // edited every seeded marker (which flips them to source: 'clinician').
+      predictionHasSeededRef.current = filteredSeeds.length > 0;
+      const seedById = new Map(filteredSeeds.map(s => [s.id, s]));
+      let mutated = false;
+      const updated: PainMarker[] = [];
+      for (const m of prev) {
+        if (m.id.startsWith('pred-seed-') && m.source === 'prediction') {
+          const s = seedById.get(m.id);
+          if (!s) { mutated = true; continue; }
+          if (
+            m.nearestBone !== s.bone ||
+            m.anatomicalLabel !== s.label ||
+            m.severity !== s.severity ||
+            m.description !== s.description ||
+            m.sourceHypothesisCondition !== s.attribution.sourceHypothesisCondition
+          ) {
+            updated.push({
+              ...m,
+              nearestBone: s.bone,
+              anatomicalLabel: s.label,
+              severity: s.severity,
+              description: s.description,
+              ...s.attribution,
+            });
+            mutated = true;
+          } else {
+            updated.push(m);
+          }
+        } else if (m.id.startsWith('pred-seed-') && seedById.has(m.id)) {
+          // Edited seed (source: 'clinician'): refresh stored attribution so
+          // the Re-seed affordance always reflects the current prediction.
+          const s = seedById.get(m.id)!;
+          const newAttrs = s.attribution;
+          const attrKeys: Array<keyof typeof newAttrs> = [
+            'sourceKind',
+            'sourceHypothesisId',
+            'sourceHypothesisCondition',
+            'sourceProvocationMovement',
+            'sourceProvocationLabel',
+            'sourceTissueType',
+            'sourceTissueId',
+            'sourceTissueLabel',
+            'sourceTissueSeverity',
+          ];
+          const attrChanged = attrKeys.some(k => m[k] !== newAttrs[k]);
+          if (attrChanged) {
+            updated.push({ ...m, ...newAttrs });
+            mutated = true;
+          } else {
+            updated.push(m);
+          }
+        } else {
+          updated.push(m);
+        }
+      }
+      const keptIds = new Set(updated.map(m => m.id));
+      for (const s of filteredSeeds) {
+        if (keptIds.has(s.id)) continue;
+        updated.push({
+          id: s.id,
+          type: 'point' as PainMarkerType,
+          symptomType: 'pain' as SymptomType,
+          position: { x: 0, y: 0, z: 0 },
+          nearestBone: s.bone,
+          anatomicalLabel: s.label,
+          description: s.description,
+          severity: s.severity,
+          source: 'prediction' as const,
+          ...s.attribution,
+        });
+        mutated = true;
+      }
+      return mutated ? updated : prev;
+    });
+  }, [provocationMovements, compromisedTissues, provocationHypothesis?.id, provocationHypothesis?.condition]);
+
+  // Restore an edited prediction-seeded marker back to its AI-suggested
+  // placement. We re-derive the live seed (bone/label/severity/description)
+  // from the active provocation movements / compromised tissues and flip the
+  // source back to 'prediction' so the dashed AI ring + auto-management
+  // returns. Falls back to the marker's stored attribution metadata when the
+  // prediction no longer surfaces this site.
+  const handleReSeedPredictionMarker = useCallback((id: string) => {
+    if (!id.startsWith('pred-seed-')) return;
+    setPainMarkers(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+      let bone: string | undefined;
+      let label: string | undefined;
+      let severity: number | undefined;
+      let description: string | undefined;
+      for (const mv of provocationMovements) {
+        for (const site of mv.expectedProvocationSites ?? []) {
+          const region = site.region as AnatomicalRegion;
+          const bones = REGION_BONE_MAPPING[region];
+          const nb = bones && bones.length > 0 ? bones[0] : undefined;
+          if (!nb) continue;
+          const key = `region-${region}-${slugify(site.label)}`;
+          if (`pred-seed-${key}` === id) {
+            bone = nb;
+            label = site.label;
+            severity = typeof site.severity === 'number' ? site.severity : 5;
+            description = `Auto-placed from clinical prediction: ${site.label}`;
+          }
+        }
+      }
+      if (!bone) {
+        for (const ct of compromisedTissues) {
+          const tissueId = ct.tissue_id;
+          if (!tissueId) continue;
+          const dataset =
+            ct.tissue_type === 'tendon' ? TENDON_DATA :
+            ct.tissue_type === 'joint' ? JOINT_SURFACE_DATA :
+            ct.tissue_type === 'nerve' ? NERVE_PATHWAY_DATA :
+            ct.tissue_type === 'fascia' ? FASCIAL_LAYER_DATA :
+            [];
+          const entry = dataset.find(e => e.id === tissueId);
+          const nb = entry?.bones?.[0];
+          if (!nb) continue;
+          const key = `tissue-${ct.tissue_type}-${tissueId}`;
+          if (`pred-seed-${key}` === id) {
+            const rawSev = typeof ct.severity === 'number' ? ct.severity : 0.5;
+            const normSev = rawSev > 0 && rawSev <= 1 ? rawSev * 10 : rawSev;
+            bone = nb;
+            label = entry?.label ?? tissueId;
+            severity = Math.max(0, Math.min(10, normSev));
+            description = `Auto-placed from clinical prediction: compromised ${ct.tissue_type} ${entry?.label ?? tissueId}`;
+          }
+        }
+      }
+      // Fallback to the marker's stored attribution if the prediction no
+      // longer offers this seed - still useful: clears clinician edits.
+      if (!bone) {
+        bone = m.nearestBone;
+        label = m.sourceTissueLabel ?? m.sourceProvocationLabel ?? m.anatomicalLabel;
+        severity = m.sourceTissueSeverity ?? m.severity;
+        description = m.sourceTissueLabel
+          ? `Auto-placed from clinical prediction: compromised ${m.sourceTissueType ?? 'tissue'} ${m.sourceTissueLabel}`
+          : m.sourceProvocationLabel
+            ? `Auto-placed from clinical prediction: ${m.sourceProvocationLabel}`
+            : m.description;
+      }
+      return {
+        ...m,
+        nearestBone: bone || m.nearestBone,
+        anatomicalLabel: label || m.anatomicalLabel,
+        severity,
+        description,
+        position: { x: 0, y: 0, z: 0 },
+        source: 'prediction' as const,
+      };
+    }));
+    dismissedSeedIdsRef.current.delete(id);
+    toast({ title: 'Re-seeded', description: 'Restored AI-suggested placement.' });
+  }, [provocationMovements, compromisedTissues, toast]);
+
+  const handleRePoseToRefined = useCallback(() => {
+    if (!stalePoseHint) return;
+    const targetId = stalePoseHint.newId;
+    const target = structuredReasoningData?.hypotheses.find(h => h.id === targetId)
+      || clinicalReasoningData?.hypotheses.find(h => h.id === targetId);
+    if (!target) {
+      setStalePoseHint(null);
+      return;
+    }
+    const hypForChat: HypothesisData = {
+      id: target.id,
+      condition: target.condition,
+      confidence: target.confidence,
+      supportingEvidence: 'supporting' in target
+        ? (target as StructuredHypothesis).supporting.map(s => s.feature)
+        : (target as ClinicalHypothesis).supportingEvidence,
+      rulingOutFactors: 'contradicting' in target
+        ? (target as StructuredHypothesis).contradicting.map(c => c.feature)
+        : (target as ClinicalHypothesis).rulingOutFactors,
+    };
+    setSelectedHypothesisForChat(hypForChat);
+    setHypothesisChatOpen(true);
+    setStalePoseHint(null);
+    toast({ title: "Re-pose ready", description: `Use "Pose to Hypothesis" for ${stalePoseHint.condition}` });
+  }, [stalePoseHint, structuredReasoningData, clinicalReasoningData, toast]);
 
   const applyClinicalPreset = useCallback((preset: ClinicalPosturePreset) => {
     const newConfig = applyPresetToConfig(modelConfig, preset, DEFAULT_MODEL_CONFIG);
@@ -3024,6 +6190,12 @@ ${ddxList}`;
   const triggerClinicalReasoningAnalysis = useCallback(async (forceRefresh = false) => {
     if (clinicalReasoningProcessing) return;
     if (clinicalReasoningPaused) return;
+    if (skeletonModeRef.current === 'movement') return;
+    // Task #376 — Treatment Mode also gates the static-posture
+    // clinical-reasoning fan-out: the clinician is moving the patient,
+    // not the patient moving themselves, so posture-driven AI is not
+    // appropriate.
+    if (skeletonModeRef.current === 'treatment') return;
 
     const markerData = painMarkersRef.current.map(pm => ({
       label: pm.anatomicalLabel || pm.nearestBone,
@@ -3034,7 +6206,7 @@ ${ddxList}`;
     }));
 
     const postureDeviations = computePostureDeviations(effectiveModelConfig);
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
 
     const forcesSummary = forces.joints
@@ -3157,17 +6329,79 @@ ${ddxList}`;
       painDriverSummary = allDrivers.slice(0, 5);
     }
 
-    const triggerKey = JSON.stringify({
-      markers: markerData,
-      history: subjectiveHistoryRef.current,
-      posture: postureDeviations.map(d => `${d.region}.${d.parameter}:${d.value}`).join(','),
+    // Material signature: structural clinical inputs that should reset
+    // convergence when they change (markers, ROM, posture,
+    // compensation, top extracted findings, key modelConfig posture).
+    // Excludes free-text transcript so post-convergence narration
+    // alone cannot re-fire reasoning.
+    const mc = modelConfigRef.current;
+    const materialSig = JSON.stringify({
+      markers: painMarkersRef.current
+        .map(m => `${m.id}:${m.severity ?? 0}:${m.painMechanism ?? ''}`)
+        .sort(),
+      rom: romMeasurementsRef.current
+        .map(m => `${m.jointId}.${m.movementId}:${Math.round(m.measuredValue)}`)
+        .sort(),
+      posture: postureDeviations
+        .map(d => `${d.region}.${d.parameter}:${Math.round(d.value * 10) / 10}`)
+        .sort(),
       compensation: compensationSummary ? JSON.stringify(compensationSummary.restrictions) : '',
+      topFindings: painDriverSummary.map(d => `${d.category}:${d.label}:${d.severity}`),
+      modelConfig: {
+        kyphosis: Math.round(mc?.spine?.thoracicKyphosis ?? 0),
+        forwardHead: Math.round(mc?.spine?.forwardHead ?? 0),
+        pelvisTilt: Math.round(mc?.pelvis?.tilt ?? 0),
+      },
     });
-    if (!forceRefresh && triggerKey === lastReasoningTriggerRef.current) return;
-    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
 
-    lastReasoningTriggerRef.current = triggerKey;
+    // Input hash: full input vector for the LLM call, including
+    // transcript delta. Two identical input hashes → no work to do.
+    const inputHash = JSON.stringify({
+      m: materialSig,
+      transcriptLen: subjectiveHistoryRef.current.length,
+      transcriptHead: subjectiveHistoryRef.current.slice(0, 200),
+      modelTemp: modelConfigRef.current?.spine?.thoracicKyphosis ?? 0,
+    });
+
+    // Material change → reset convergence regardless of dedup.
+    if (lastMaterialSignatureRef.current && materialSig !== lastMaterialSignatureRef.current) {
+      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+      const cidNow = selectedConversationIdRef.current;
+      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
+        setAutopilotStatus('idle');
+        writeAutopilotStatusForConv(cidNow, null);
+      }
+    }
+
+    // Dedup gate (input-hash): identical inputs → skip.
+    if (!forceRefresh && inputHash === lastReasoningTriggerRef.current) {
+      markStageEnd('reason', 'skipped', 'inputs unchanged');
+      return;
+    }
+
+    // Convergence gate: structural findings unchanged AND chain
+    // already converged → skip. Force-refresh bypasses.
+    if (
+      !forceRefresh &&
+      monitorConvergedRef.current &&
+      materialSig === lastMaterialSignatureRef.current
+    ) {
+      markStageEnd('reason', 'converged', 'no material change');
+      return;
+    }
+
+    if (markerData.length === 0 && !subjectiveHistoryRef.current.trim() && postureDeviations.length === 0 && !compensationSummary) return;
+    lastMaterialSignatureRef.current = materialSig;
+
+    lastReasoningTriggerRef.current = inputHash;
+    stageInputHashRef.current['reason'] = inputHash;
+    // Capture the conversation ID at request start so the response
+    // handler + auto-cascade can bail if the user switched cases.
+    const reasoningOriginCid = selectedConversationIdRef.current;
+    reasoningRequestIdRef.current += 1;
+    const reasoningRequestId = reasoningRequestIdRef.current;
     setClinicalReasoningProcessing(true);
+    markStageStart('reason');
 
     if (evidenceAbortRef.current) {
       evidenceAbortRef.current.abort();
@@ -3227,23 +6461,40 @@ ${ddxList}`;
       structuredInput.duration = durationMatches[2];
     }
 
+    // Cancel any in-flight reasoning request before starting a new one.
+    if (reasoningAbortRef.current) {
+      reasoningAbortRef.current.abort();
+      reasoningAbortRef.current = null;
+    }
+    const reasoningAbort = new AbortController();
+    reasoningAbortRef.current = reasoningAbort;
+
     setStructuredReasoningLoading(true);
     fetch('/api/clinical-reasoning/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: reasoningAbort.signal,
       body: JSON.stringify(structuredInput),
     })
       .then(r => r.ok ? r.json() : null)
-      .then(result => { if (result) setStructuredReasoningData(result); })
-      .catch(err => console.error('Structured reasoning error:', err))
-      .finally(() => setStructuredReasoningLoading(false));
+      .then(result => {
+        if (!result) return;
+        if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+        if (selectedConversationIdRef.current !== reasoningOriginCid) return;
+        setStructuredReasoningData(result);
+      })
+      .catch(err => { if (err?.name !== 'AbortError') console.error('Structured reasoning error:', err); })
+      .finally(() => {
+        if (reasoningRequestIdRef.current === reasoningRequestId) setStructuredReasoningLoading(false);
+      });
 
     try {
       const response = await fetch('/api/physiogpt/clinical-reasoning-analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        signal: reasoningAbort.signal,
         body: JSON.stringify({
           painMarkers: markerData,
           skeletonConfig: modelConfig,
@@ -3285,7 +6536,13 @@ ${ddxList}`;
       if (!response.ok) throw new Error('Analysis failed');
       const data = await response.json();
 
-      setClinicalReasoningData({
+      // Stale-write guard: a newer trigger superseded this request, or
+      // the user switched cases — discard the result so we don't paint
+      // stale reasoning into the active conversation.
+      if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+      if (selectedConversationIdRef.current !== reasoningOriginCid) return;
+
+      const reasoningSnapshot: ClinicalReasoningData = {
         hypotheses: data.hypotheses || [],
         findings: data.findings || [],
         flags: data.flags || [],
@@ -3296,21 +6553,43 @@ ${ddxList}`;
         treatmentPlan: data.treatmentPlan || null,
         posturalAnalysis: data.posturalAnalysis || null,
         evidenceReferences: data.evidenceReferences || [],
-      });
+      };
+      setClinicalReasoningData(reasoningSnapshot);
+      markStageEnd('reason', 'done');
 
       if (!clinicalReasoningOpen) {
         setClinicalReasoningOpen(true);
       }
 
-      autoEvidenceTimerRef.current = setTimeout(() => {
-        handleEvidenceQueryRef.current();
-      }, 500);
+      // Hand the reasoning result to the awaited chain runner. The
+      // runner owns evidence → goal-profile → research → plan as a
+      // single async sequence — we no longer schedule evidence here
+      // via setTimeout, so stage ordering is deterministic.
+      if (
+        autopilotEnabledRef.current &&
+        !autopilotPausedRef.current &&
+        voiceTriggeredRef.current &&
+        reasoningOriginCid != null &&
+        snapshotEligibleRef.current.has(reasoningOriginCid)
+      ) {
+        chainAutopilotAfterReasoningRef.current(reasoningSnapshot);
+      }
     } catch (error) {
+      if ((error as { name?: string })?.name === 'AbortError') return;
+      // Suppress error chip for stale responses.
+      if (reasoningRequestIdRef.current !== reasoningRequestId) return;
+      if (selectedConversationIdRef.current !== reasoningOriginCid) return;
       console.error('Clinical reasoning analysis error:', error);
+      markStageEnd('reason', 'error', error instanceof Error ? error.message : 'request failed');
     } finally {
-      setClinicalReasoningProcessing(false);
+      if (reasoningRequestIdRef.current === reasoningRequestId) {
+        setClinicalReasoningProcessing(false);
+      }
+      if (reasoningAbortRef.current === reasoningAbort) {
+        reasoningAbortRef.current = null;
+      }
     }
-  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations]);
+  }, [clinicalReasoningProcessing, clinicalReasoningPaused, modelConfig, effectiveModelConfig, romMeasurements, clinicalReasoningOpen, computePostureDeviations, markStageStart, markStageEnd, writeAutopilotStatusForConv]);
 
   triggerClinicalReasoningAnalysisRef.current = triggerClinicalReasoningAnalysis;
 
@@ -3322,6 +6601,8 @@ ${ddxList}`;
     });
     if (painMarkers.length === 0 && !hasPostureChanges) return;
     if (isRecording) return;
+    if (skeletonMode === 'movement') return;
+    if (skeletonMode === 'treatment') return;
 
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
@@ -3335,12 +6616,18 @@ ${ddxList}`;
         clearTimeout(clinicalReasoningTimerRef.current);
       }
     };
-  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, isRecording]);
+  }, [painMarkers, modelConfig, triggerClinicalReasoningAnalysis, isRecording, skeletonMode]);
 
   useEffect(() => {
     if (pendingCameraAnalysisRef.current && focusedCameraResult) {
       pendingCameraAnalysisRef.current = null;
-      triggerClinicalReasoningAnalysis(true);
+      // Pass forceRefresh=false so the camera-driven trigger participates
+      // in the input-hash dedup. The camera result mutates pain markers /
+      // posture, so when it surfaces a genuinely new finding the
+      // triggerKey naturally shifts and reasoning re-fires; if the camera
+      // returns the same finding twice in a row, the existing dedup
+      // skips the redundant call instead of burning AI tokens.
+      triggerClinicalReasoningAnalysis(false);
     }
   }, [focusedCameraResult, triggerClinicalReasoningAnalysis]);
 
@@ -3350,20 +6637,76 @@ ${ddxList}`;
     triggerClinicalReasoningAnalysis(true);
   }, [subjectiveHistoryInput, triggerClinicalReasoningAnalysis]);
 
+  // Typed-text auto-trigger: when the clinician types directly into
+  // the subjective history textarea (not during voice recording),
+  // re-engage the chain after a 1500ms idle pause. Manual edits
+  // explicitly RESET convergence (clearing lastMaterialSignatureRef +
+  // lastReasoningTriggerRef + monitorStability.converged) so the
+  // governor's normal dedup/convergence path will let the call
+  // through — we do NOT pass forceRefresh=true. A hydration guard
+  // (lastTypedTextSeenRef) skips the first run after a saved case
+  // is restored so reopening a settled history does not auto-rerun.
+  const typedTextTriggerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypedTextSeenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastTypedTextSeenRef.current === null) {
+      // First observation of subjectiveHistoryInput in this mount
+      // (covers both a fresh case and a hydrated saved case). Adopt
+      // it as the baseline without firing the cascade.
+      lastTypedTextSeenRef.current = subjectiveHistoryInput;
+      return;
+    }
+    if (lastTypedTextSeenRef.current === subjectiveHistoryInput) return;
+    lastTypedTextSeenRef.current = subjectiveHistoryInput;
+
+    if (isRecording) return;
+    if (skeletonMode === 'movement') return;
+    if (skeletonMode === 'treatment') return;
+    if (subjectiveHistoryInput.trim().length < 10) return;
+
+    if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
+    typedTextTriggerRef.current = setTimeout(() => {
+      subjectiveHistoryRef.current = subjectiveHistoryInput;
+      lastMaterialSignatureRef.current = '';
+      lastReasoningTriggerRef.current = '';
+      setMonitorStability(s => ({ ...s, converged: false, destabilized: true }));
+      const cidNow = selectedConversationIdRef.current;
+      if (cidNow && autopilotStatusRef.current !== 'idle' && autopilotStatusRef.current !== 'running') {
+        setAutopilotStatus('idle');
+        writeAutopilotStatusForConv(cidNow, null);
+      }
+      triggerClinicalReasoningAnalysisRef.current(false);
+    }, 1500);
+    return () => {
+      if (typedTextTriggerRef.current) clearTimeout(typedTextTriggerRef.current);
+    };
+  }, [subjectiveHistoryInput, isRecording, skeletonMode]);
+
+  // When the user switches conversations, reset the typed-text
+  // baseline so the next saved-history hydration is again treated
+  // as a no-fire baseline.
+  useEffect(() => {
+    lastTypedTextSeenRef.current = null;
+  }, [selectedConversationId]);
+
   const handleCompensationChange = useCallback((result: CompensationResult | null, movementName: string | null, restrictions: Record<string, number>) => {
     compensationDataRef.current = { result, movementName, restrictions };
+    setCompensationDataState({ result, movementName, restrictions });
     if (!result || result.patterns.length === 0) return;
     if (clinicalReasoningTimerRef.current) {
       clearTimeout(clinicalReasoningTimerRef.current);
     }
     clinicalReasoningTimerRef.current = setTimeout(() => {
-      triggerClinicalReasoningAnalysis(true);
+      // Compensation change is an AUTOMATIC trigger — go through the
+      // governor's input-hash dedup. forceRefresh=true is reserved
+      // for explicit manual user actions (rerun-from-here, reset).
+      triggerClinicalReasoningAnalysis(false);
     }, 1500);
   }, [triggerClinicalReasoningAnalysis]);
 
   const forceAnalysis = useMemo(() => {
     if (!forceMode || (liteMode && computeStage < 2)) return null;
-    const result = calculatePosturalForces(effectiveModelConfig);
+    const result = calculatePosturalForces(withForceContext(effectiveModelConfig));
     if (enabledForceJoints.size === 0 && result.joints.length > 0) {
       const defaultEnabled = new Set(result.joints.map(j => j.id));
       setEnabledForceJoints(defaultEnabled);
@@ -3479,7 +6822,7 @@ ${ddxList}`;
       position: pm.position,
       label: pm.anatomicalLabel || pm.nearestBone,
       type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
-      severity: (pm as Record<string, unknown>).severity as number ?? 5,
+      severity: (pm as unknown as Record<string, unknown>).severity as number ?? 5,
       description: pm.description,
     }));
     const baseMuscles = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -3494,7 +6837,7 @@ ${ddxList}`;
       position: pm.position,
       label: pm.anatomicalLabel || pm.nearestBone,
       type: pm.type as 'point' | 'area' | 'referred' | 'line' | 'paint',
-      severity: (pm as Record<string, unknown>).severity as number ?? 5,
+      severity: (pm as unknown as Record<string, unknown>).severity as number ?? 5,
       description: pm.description,
     }));
     const baseMuscles = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -3561,11 +6904,11 @@ ${ddxList}`;
   const correlationResult = useMemo(() => {
     if (liteMode && !correlationMode) return null;
     if (!correlationMode && !showUnifiedChainPanel && !showInjuryMechanism) return null;
-    const forces = calculatePosturalForces(finalModelConfig);
+    const forces = calculatePosturalForces(withForceContext(finalModelConfig));
     const baseAnalysis = computeFullMuscleAnalysis(finalModelConfig);
     const muscles = applyOverridesToAnalysis(baseAnalysis, effectiveOverrides);
     return computeCrossSystemCorrelation({
-      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as Record<string, unknown>).severity as number ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
+      painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as unknown as Record<string, unknown>).severity as number ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
       forces: forces.joints,
       muscles: muscles.allMuscles,
       muscleGroups: muscles.groups,
@@ -3589,6 +6932,503 @@ ${ddxList}`;
   const handleClearWhatIfScenarios = useCallback(() => {
     setWhatIfScenarios([]);
   }, []);
+
+  const handleApplyFlareUp = useCallback((flareUpId: string) => {
+    setModelConfig(prev => {
+      const baseline = whatIfFlareUpBaseline ?? JSON.parse(JSON.stringify(prev));
+      if (!whatIfFlareUpBaseline) setWhatIfFlareUpBaseline(baseline);
+      const next = applyFlareUpPose(baseline, flareUpId);
+      return next;
+    });
+    setWhatIfFlareUpId(flareUpId);
+  }, [whatIfFlareUpBaseline]);
+
+  const handleClearFlareUp = useCallback(() => {
+    if (whatIfFlareUpBaseline) {
+      setModelConfig(JSON.parse(JSON.stringify(whatIfFlareUpBaseline)));
+    }
+    setWhatIfFlareUpBaseline(null);
+    setWhatIfFlareUpId(null);
+  }, [whatIfFlareUpBaseline]);
+
+  // `activeCaseId` is hoisted up near `lastClinicalParseResult` (~L879)
+  // so the SFV reset effect can reference it without TDZ.
+
+  const savedHypothesesQuery = useQuery<Array<{ id: number; label: string }>>({
+    queryKey: [`/api/treatment-hypotheses/${activeCaseId}`],
+    enabled: !!activeCaseId && skeletonMode === 'movement',
+  });
+  const saveHypothesisMutation = useMutation({
+    mutationFn: async (label: string) => {
+      if (!activeCaseId) throw new Error('No case context');
+      const cmp = whatIfSimulatedConfig;
+      return apiRequest(`/api/treatment-hypotheses/${activeCaseId}`, 'POST', {
+        label,
+        scenarios: whatIfScenarios,
+        flareUpScenarioId: whatIfFlareUpId,
+        painfulTissue: whatIfPainfulTissue,
+        painLoadDelta: (whatIfPainfulTissue && cmp)
+          ? tissuePainLoadIndex(cmp, whatIfPainfulTissue).delta
+          : null,
+        overallRiskBefore: cmp?.overallRiskBefore ?? null,
+        overallRiskAfter: cmp?.overallRiskAfter ?? null,
+        topImprovements: (cmp?.topImprovements ?? []).slice(0, 5),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/treatment-hypotheses/${activeCaseId}`] });
+      toast({ title: 'Treatment Hypothesis saved', description: 'Available from saved hypotheses list.' });
+    },
+    onError: (err: unknown) => {
+      toast({ title: 'Save failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
+    },
+  });
+
+  // ============================================================
+  // Task #376 — Treatment Mode wiring (engines + persistence + perform)
+  // ============================================================
+
+  // Keep technique.jointKey in lock-step with the HUD's selected joint.
+  useEffect(() => {
+    if (treatmentTechnique.jointKey === treatmentJointKey) return;
+    const entry = getJointEntry(treatmentJointKey);
+    if (!entry) return;
+    const dir = entry.directions[0];
+    setTreatmentTechnique(t => ({
+      ...t,
+      jointKey: treatmentJointKey,
+      directionId: dir.id,
+      liveAxis: dir.axis,
+    }));
+    setTreatmentContactRegion(dir.defaultContactRegion);
+  }, [treatmentJointKey, treatmentTechnique.jointKey]);
+
+  // Sync contact region label when the direction changes.
+  useEffect(() => {
+    const entry = getJointEntry(treatmentTechnique.jointKey);
+    const dir = entry?.directions.find(d => d.id === treatmentTechnique.directionId);
+    if (dir && !treatmentContactRegion) setTreatmentContactRegion(dir.defaultContactRegion);
+  }, [treatmentTechnique.jointKey, treatmentTechnique.directionId, treatmentContactRegion]);
+
+  // Load persisted treatment state when entering Treatment Mode for a case.
+  useEffect(() => {
+    if (skeletonMode !== 'treatment' || !activeCaseId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiRequest(`/api/treatment-state/${activeCaseId}`, 'GET') as { state?: PersistedTreatmentState };
+        if (cancelled) return;
+        const next = r?.state ?? defaultTreatmentState();
+        setPersistedTreatmentState(next);
+        // Snapshot baseline on first entry per workspace session so
+        // the "Reset patient state" control can revert.
+        setPersistedTreatmentBaseline(prev => prev ?? next);
+      } catch {
+        if (!cancelled) {
+          const fallback = defaultTreatmentState();
+          setPersistedTreatmentState(fallback);
+          setPersistedTreatmentBaseline(fallback);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [skeletonMode, activeCaseId]);
+
+  // Reset baseline whenever the active case changes — otherwise
+  // "Reset patient state" would revert to a stale baseline captured
+  // for a previous case.
+  useEffect(() => {
+    setPersistedTreatmentBaseline(null);
+    setTreatmentSessionHistory([]);
+  }, [activeCaseId]);
+
+  // Derive irritability profile from existing pain markers + acuity.
+  const treatmentIrritabilityProfile = useMemo(() => {
+    return deriveIrritabilityProfile({
+      painMarkers: painMarkers.map(pm => ({
+        region: regionForBone(pm.nearestBone),
+        severity: pm.severity ?? 5,
+        bone: pm.nearestBone,
+      })),
+      acuity: null,
+    });
+  }, [painMarkers]);
+
+  const treatmentJointEntry: JointAccessoryEntry | undefined = useMemo(
+    () => getJointEntry(treatmentJointKey),
+    [treatmentJointKey],
+  );
+
+  const treatmentDirection = useMemo(
+    () => treatmentJointEntry?.directions.find(d => d.id === treatmentTechnique.directionId)
+      ?? treatmentJointEntry?.directions[0],
+    [treatmentJointEntry, treatmentTechnique.directionId],
+  );
+
+  // Currently engaged region for irritability lookup (e.g. "shoulder").
+  const treatmentRegionLabel = useMemo(() => {
+    if (!treatmentJointEntry) return 'unknown';
+    if (treatmentJointEntry.jointId === 'GHJ') return 'shoulder';
+    if (treatmentJointEntry.jointId === 'hip') return 'hip';
+    if (treatmentJointEntry.jointId === 'tibiofemoral') return 'knee';
+    if (treatmentJointEntry.jointId === 'talocrural') return 'ankle';
+    return 'unknown';
+  }, [treatmentJointEntry]);
+
+  const treatmentIrritabilityScalar = useMemo(
+    () => getRegionIrritability(treatmentIrritabilityProfile, treatmentRegionLabel),
+    [treatmentIrritabilityProfile, treatmentRegionLabel],
+  );
+
+  // Live patient state for the engines.
+  // Pose is derived from the live modelConfig so position-correctness /
+  // close-packed checks fire against the actual avatar joint angles
+  // rather than an empty placeholder.
+  const treatmentPatientState: PatientTreatmentState = useMemo(() => {
+    const pose: Record<string, number> = {};
+    for (const [joint, params] of Object.entries(modelConfig as Record<string, unknown>)) {
+      if (params && typeof params === 'object') {
+        for (const [param, value] of Object.entries(params as Record<string, unknown>)) {
+          if (typeof value === 'number') {
+            pose[`${joint}.${param}`] = value;
+          }
+        }
+      }
+    }
+    return {
+      accessoryMobilityMm: persistedTreatmentState.accessoryMobilityMm,
+      capsularExtensibility: persistedTreatmentState.capsularExtensibility,
+      pose,
+      guardingScalar: 0,
+    };
+  }, [persistedTreatmentState, modelConfig]);
+
+  const treatmentClosePackedRatio = useMemo(() => {
+    if (!treatmentJointEntry) return 0.5;
+    if (treatmentPositionPreset === 'loose-packed') return 0;
+    if (treatmentPositionPreset === 'sitting') return 0.5;
+    // Approximate the rest as mid-range; full close-packed only via explicit pose.
+    return 0.4;
+  }, [treatmentJointEntry, treatmentPositionPreset]);
+
+  const treatmentMechanical: MechanicalResponse | null = useMemo(() => {
+    if (skeletonMode !== 'treatment' || !treatmentJointEntry || !treatmentDirection) return null;
+    return computeMechanicalResponse({
+      technique: treatmentTechnique,
+      patientState: treatmentPatientState,
+      jointEntry: treatmentJointEntry,
+      direction: treatmentDirection,
+    });
+  }, [skeletonMode, treatmentTechnique, treatmentPatientState, treatmentJointEntry, treatmentDirection]);
+
+  const treatmentNeuromuscular: NeuromuscularResponse | null = useMemo(() => {
+    if (!treatmentMechanical || !treatmentJointEntry) return null;
+    // Engine is pure: caller supplies clock + deterministic noise seed
+    // derived from technique parameters + session length.
+    const noiseSeed =
+      (treatmentSessionHistory.length * 1009) ^
+      (treatmentJointEntry.jointId.length * 31) ^
+      (Math.round(treatmentTechnique.grade * 1000) | 0);
+    const nowMs = treatmentSessionHistory.length > 0
+      ? treatmentSessionHistory[treatmentSessionHistory.length - 1].performedAt
+      : 0;
+    return computeNeuromuscularResponse({
+      mechanical: treatmentMechanical,
+      technique: treatmentTechnique,
+      jointEntry: treatmentJointEntry,
+      irritability: treatmentIrritabilityScalar,
+      sessionHistory: treatmentSessionHistory,
+      closePackedRatio: treatmentClosePackedRatio,
+      nowMs,
+      noiseSeed,
+    });
+  }, [treatmentMechanical, treatmentTechnique, treatmentJointEntry, treatmentIrritabilityScalar, treatmentSessionHistory, treatmentClosePackedRatio]);
+
+  const treatmentClinical: ClinicalOutcome | null = useMemo(() => {
+    if (!treatmentMechanical || !treatmentNeuromuscular || !treatmentJointEntry || !treatmentDirection) return null;
+    return computeClinicalOutcome({
+      mechanical: treatmentMechanical,
+      neuromuscular: treatmentNeuromuscular,
+      technique: treatmentTechnique,
+      patientState: treatmentPatientState,
+      jointEntry: treatmentJointEntry,
+      direction: treatmentDirection,
+      positionLabel: treatmentPositionPreset,
+    });
+  }, [treatmentMechanical, treatmentNeuromuscular, treatmentTechnique, treatmentPatientState, treatmentJointEntry, treatmentDirection, treatmentPositionPreset]);
+
+  const treatmentScorecard = useMemo(() => {
+    if (!treatmentMechanical) {
+      return {
+        positionCorrectness: { score: 0, rationale: '' },
+        gradeAppropriateness: { score: 0, rationale: '' },
+        lineOfDriveAccuracy: { score: 0, rationale: '' },
+        contraindicationCheck: { score: 100, rationale: 'No flagged contraindications' },
+        doseAdequacy: { score: 0, rationale: '' },
+        overall: 0,
+      };
+    }
+    return computeTechniqueQuality(treatmentTechnique, treatmentMechanical, treatmentIrritabilityScalar, []);
+  }, [treatmentMechanical, treatmentTechnique, treatmentIrritabilityScalar]);
+
+  const planCartTreatmentRef = useRef<((item: PlanCartItem) => void) | null>(null);
+
+  const handlePerformTreatment = useCallback(async () => {
+    if (!treatmentClinical || !treatmentMechanical || !treatmentJointEntry || !treatmentDirection || !activeCaseId) {
+      toast({ title: 'Cannot perform', description: 'Set a technique first.', variant: 'destructive' });
+      return;
+    }
+    setTreatmentPerforming(true);
+    try {
+      const logEntry = buildLogEntry(
+        treatmentClinical,
+        treatmentTechnique,
+        {
+          translationMm: treatmentMechanical.translationMm,
+          saturated: treatmentMechanical.saturated,
+          lineOfDriveErrorDeg: treatmentMechanical.lineOfDriveErrorDeg,
+        },
+        {
+          performedAt: new Date().toISOString(),
+          sequence: persistedTreatmentState.log.length + 1,
+        },
+      );
+      const nextState = applyTreatmentToPatientState(persistedTreatmentState, treatmentClinical, treatmentTechnique);
+      const stateWithLog: PersistedTreatmentState = { ...nextState, log: [...nextState.log, logEntry] };
+      setPersistedTreatmentState(stateWithLog);
+      setTreatmentSessionHistory(prev => [
+        ...prev,
+        { jointKey: treatmentJointEntry.jointId, acceptable: treatmentScorecard.overall >= 60, performedAt: Date.now() },
+      ]);
+      // Persist to server: PATCH the patient state (extensibility/mobility,
+      // pre-existing log untouched) then POST the new log entry through the
+      // dedicated append endpoint so the server is the source of truth for
+      // log ordering.
+      try {
+        await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', nextState);
+        await apiRequest(`/api/treatment-state/${activeCaseId}/log`, 'POST', logEntry);
+      } catch (err) {
+        console.warn('[Treatment] Failed to persist state:', err);
+      }
+      // Append to plan cart as a manual_therapy item with full
+      // structured preload so a later "Simulate" relaunch reopens the
+      // Treatment HUD with the exact dose.
+      planCartTreatmentRef.current?.({
+        id: logEntry.id,
+        modality: 'manual_therapy',
+        name: `${treatmentDirection.label} — ${treatmentJointEntry.label}`,
+        targetStructure: treatmentJointEntry.label,
+        parameters: treatmentClinical.techniqueString,
+        rationale: treatmentClinical.clinicalSummary,
+        patientPosition: treatmentPositionPreset,
+        treatmentParams: {
+          jointKey: treatmentJointKey,
+          directionId: treatmentTechnique.directionId,
+          grade: treatmentTechnique.grade,
+          gradeSystem: treatmentTechnique.gradeSystem,
+          amplitudeMm: treatmentTechnique.amplitudeMm,
+          frequencyHz: treatmentTechnique.frequencyHz,
+          durationSec: treatmentTechnique.durationSec,
+          holdSec: treatmentTechnique.holdSec,
+          liveAxis: { ...treatmentTechnique.liveAxis },
+          contactRegion: treatmentContactRegion,
+          positionPreset: treatmentPositionPreset,
+        },
+      });
+      // Append the intervention to the simulation timeline / recovery
+      // curve. The mechanical engine returns capsular extensibility &
+      // ROM deltas keyed by the targeted joint; we forward those as a
+      // SessionApplyPayload so the recovery curve picks up the gain
+      // immediately. Pain-marker severity drops are also reflected.
+      try {
+        const romDeltaDeg = Object.values(treatmentClinical.romDelta)[0] ?? 0;
+        const jointKeyForModel = treatmentJointEntry.jointId.toLowerCase();
+        const payload: import('@/lib/simulationTimelineEngine').SessionApplyPayload = {
+          modelConfig: romDeltaDeg !== 0
+            ? { [jointKeyForModel]: { rom_gain_deg: romDeltaDeg } }
+            : {},
+          overrides: {},
+          painMarkerUpdates: painMarkers
+            .filter(pm => regionForBone(pm.nearestBone) === treatmentRegionLabel)
+            .map(pm => ({
+              markerId: pm.id,
+              predictedSeverity: Math.max(0, Math.min(10, (pm.severity ?? 5) + treatmentClinical.painDelta)),
+            })),
+          posturalUpdates: [],
+          compensationUpdates: [],
+        };
+        handleApplySimTimelineWeekRef.current?.(payload);
+      } catch (err) {
+        console.warn('[Treatment] Failed to append to simulation timeline:', err);
+      }
+      toast({
+        title: 'Technique performed',
+        description: treatmentClinical.clinicalSummary,
+      });
+    } finally {
+      setTreatmentPerforming(false);
+    }
+  }, [treatmentClinical, treatmentMechanical, treatmentJointEntry, treatmentDirection, treatmentTechnique, treatmentPositionPreset, treatmentScorecard.overall, persistedTreatmentState, activeCaseId, toast, painMarkers, treatmentRegionLabel]);
+
+  const handleResetTreatmentState = useCallback(async () => {
+    if (!persistedTreatmentBaseline || !activeCaseId) return;
+    setPersistedTreatmentState(persistedTreatmentBaseline);
+    setTreatmentSessionHistory([]);
+    try {
+      await apiRequest(`/api/treatment-state/${activeCaseId}`, 'PATCH', persistedTreatmentBaseline);
+    } catch (err) {
+      console.warn('[Treatment] Failed to reset state:', err);
+    }
+    toast({ title: 'Patient treatment state reset to baseline' });
+  }, [persistedTreatmentBaseline, activeCaseId, toast]);
+
+  /** Cart "Perform" launcher. Opens Treatment Mode pre-loaded from the
+   *  cart item. Prefers the structured `treatmentParams` (set when the
+   *  item came from a previous Treatment HUD Perform) and only falls
+   *  back to text inference for items added by other engines. */
+  const requestTreatmentSimulation = useCallback((item: PlanCartItem) => {
+    setSkeletonMode('treatment');
+    const tp = item.treatmentParams;
+    if (tp) {
+      const entry = getJointEntry(tp.jointKey);
+      const dir = entry?.directions.find(d => d.id === tp.directionId) ?? entry?.directions[0];
+      if (entry && dir) {
+        setTreatmentJointKey(tp.jointKey);
+        setTreatmentTechnique({
+          jointKey: tp.jointKey,
+          directionId: dir.id,
+          grade: tp.grade,
+          gradeSystem: tp.gradeSystem,
+          amplitudeMm: tp.amplitudeMm,
+          frequencyHz: tp.frequencyHz,
+          durationSec: tp.durationSec,
+          holdSec: tp.holdSec,
+          liveAxis: { ...tp.liveAxis },
+        });
+        setTreatmentContactRegion(tp.contactRegion);
+        setTreatmentPositionPreset(tp.positionPreset as PatientPositionPreset);
+        return;
+      }
+    }
+    // Fallback: best-effort joint inference from item text.
+    const haystack = `${item.targetStructure ?? ''} ${item.name ?? ''}`.toLowerCase();
+    let inferredJoint = treatmentJointKey;
+    if (/glenohumeral|shoulder|ghj/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'GHJ_L' : 'GHJ_R';
+    else if (/hip/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'hip_L' : 'hip_R';
+    else if (/knee|tibiofemoral/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'tibiofemoral_L' : 'tibiofemoral_R';
+    else if (/ankle|talocrural/.test(haystack)) inferredJoint = /left/.test(haystack) ? 'talocrural_L' : 'talocrural_R';
+    setTreatmentJointKey(inferredJoint);
+    let inferredDir = 'posterior_glide';
+    if (/anterior/.test(haystack)) inferredDir = 'anterior_glide';
+    else if (/distract/.test(haystack)) inferredDir = 'inferior_distraction';
+    const entry = getJointEntry(inferredJoint);
+    const dir = entry?.directions.find(d => d.id === inferredDir) ?? entry?.directions[0];
+    if (entry && dir) {
+      setTreatmentTechnique(t => ({ ...t, jointKey: inferredJoint, directionId: dir.id, liveAxis: dir.axis }));
+      setTreatmentContactRegion(dir.defaultContactRegion);
+    }
+  }, [treatmentJointKey]);
+
+  // Joint-key → GLB bone-name map for the Treatment Mode 3D contact-dot /
+  // line-of-drive overlay. Mirrors the joint catalog in jointAccessoryMotions.ts.
+  const TREATMENT_JOINT_TO_BONE: Record<string, string> = {
+    GHJ_R: 'Shoulder_R', GHJ_L: 'Shoulder_L',
+    hip_R: 'Hip_R', hip_L: 'Hip_L',
+    tibiofemoral_R: 'Knee_R', tibiofemoral_L: 'Knee_L',
+    talocrural_R: 'Ankle_R', talocrural_L: 'Ankle_L',
+  };
+  const treatmentViewerMarker = useMemo(() => {
+    if (skeletonMode !== 'treatment') return undefined;
+    const bone = TREATMENT_JOINT_TO_BONE[treatmentJointKey];
+    if (!bone) return undefined;
+    // Convert engine outputs (mm) → metres for the viewer's world space.
+    const tMm = treatmentMechanical?.translationMm;
+    const translationM = tMm ? { x: tMm.x / 1000, y: tMm.y / 1000, z: tMm.z / 1000 } : undefined;
+    // Capsular saturation: peak strain across regions (0..1+ clamped).
+    let sat = 0;
+    if (treatmentMechanical?.capsularStrain) {
+      for (const region of Object.values(treatmentMechanical.capsularStrain)) {
+        if (region && typeof region.value === 'number') {
+          sat = Math.max(sat, Math.min(1, region.value));
+        }
+      }
+    }
+    return {
+      active: true,
+      boneName: bone,
+      axis: { ...treatmentTechnique.liveAxis },
+      grade: treatmentTechnique.grade,
+      gradeSystem: treatmentTechnique.gradeSystem,
+      translationM,
+      capsularSaturation: sat,
+      frequencyHz: treatmentTechnique.frequencyHz,
+      amplitudeM: treatmentTechnique.amplitudeMm / 1000,
+      label: treatmentDirection?.label,
+    };
+  }, [
+    skeletonMode, treatmentJointKey,
+    treatmentTechnique.liveAxis, treatmentTechnique.grade, treatmentTechnique.gradeSystem,
+    treatmentTechnique.frequencyHz, treatmentTechnique.amplitudeMm,
+    treatmentDirection, treatmentMechanical,
+  ]);
+
+  // Task #376 — Patient-position preset → modelConfig pose application.
+  // When the clinician chooses Supine/Prone/Side-lying/Sitting/Loose-packed,
+  // apply a coarse skeleton pose (hip flexion etc.) so the avatar visibly
+  // adopts the position, exactly the way other modes update modelConfig.
+  // Joint-key → { paramName → degrees } map (path keys mirror the
+  // dotted-path argument expected by `updateModelConfig`). The wider
+  // string-keyed shape is intentional so we can include shoulder params
+  // for the loose-packed preset without fighting ModelConfig's exact
+  // joint-name unions.
+  const TREATMENT_POSITION_POSE: Record<string, Record<string, Record<string, number>>> = {
+    supine: {
+      leftHip: { flexion: 0 }, rightHip: { flexion: 0 },
+      leftKnee: { flexion: 0 }, rightKnee: { flexion: 0 },
+    },
+    prone: {
+      leftHip: { flexion: 0 }, rightHip: { flexion: 0 },
+      leftKnee: { flexion: 0 }, rightKnee: { flexion: 0 },
+    },
+    sitting: {
+      leftHip: { flexion: 90 }, rightHip: { flexion: 90 },
+      leftKnee: { flexion: 90 }, rightKnee: { flexion: 90 },
+    },
+    'side-lying': {
+      leftHip: { flexion: 30 }, rightHip: { flexion: 30 },
+      leftKnee: { flexion: 60 }, rightKnee: { flexion: 60 },
+    },
+    'loose-packed': {
+      leftHip: { flexion: 30 }, rightHip: { flexion: 30 },
+      leftKnee: { flexion: 25 }, rightKnee: { flexion: 25 },
+      leftShoulder: { flexion: 55, abduction: 55 },
+      rightShoulder: { flexion: 55, abduction: 55 },
+    },
+  };
+  const lastAppliedPositionPresetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (skeletonMode !== 'treatment') {
+      lastAppliedPositionPresetRef.current = null;
+      return;
+    }
+    if (lastAppliedPositionPresetRef.current === treatmentPositionPreset) return;
+    const pose = TREATMENT_POSITION_POSE[treatmentPositionPreset];
+    if (!pose) return;
+    for (const [joint, params] of Object.entries(pose)) {
+      if (!params) continue;
+      for (const [param, value] of Object.entries(params)) {
+        if (typeof value === 'number') {
+          updateModelConfig(`${joint}.${param}`, value);
+        }
+      }
+    }
+    lastAppliedPositionPresetRef.current = treatmentPositionPreset;
+  }, [skeletonMode, treatmentPositionPreset, updateModelConfig]);
+
+  const treatmentSimulationContextValue = useMemo(
+    () => ({ requestTreatmentSimulation }),
+    [requestTreatmentSimulation],
+  );
 
   const handleApplyWhatIfToSkeleton = useCallback(() => {
     if (!whatIfSimulatedConfig) return;
@@ -3676,6 +7516,428 @@ ${ddxList}`;
     setMtGeneratingSession(null);
   }, [mtGeneratingSession]);
 
+  // ----- Master Plan auto-build handlers (Task #267) -----
+  // onGenerateStarted: clears ONLY the trigger flag (so the engine's effect
+  // doesn't fire generation twice). Critically, this does NOT clear the
+  // in-flight flag — completion is tracked separately and only flips when
+  // the engine's onGenerateComplete fires after the cart cascade.
+  const handleAutoBuildStartExercise = useCallback(() => setAutoBuildTriggerExercise(false), []);
+  const handleAutoBuildStartMT = useCallback(() => setAutoBuildTriggerMT(false), []);
+  const handleAutoBuildStartAdjunct = useCallback(() => setAutoBuildTriggerAdjunct(false), []);
+  const recordAutoBuildFailure = useCallback((engineLabel: string) => {
+    setAutoBuildFailures(prev => {
+      if (prev.has(engineLabel)) return prev;
+      const next = new Set(prev);
+      next.add(engineLabel);
+      return next;
+    });
+  }, []);
+  const handleAutoBuildCompleteExercise = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Exercise Rx');
+    setAutoBuildInFlightExercise(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteMT = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Manual Therapy');
+    setAutoBuildInFlightMT(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteEPA = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Electrophysical Agents');
+    setAutoBuildInFlightEPA(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildCompleteAdjunct = useCallback((success: boolean) => {
+    if (!success) recordAutoBuildFailure('Adjunct Rx');
+    setAutoBuildInFlightAdjunct(false);
+  }, [recordAutoBuildFailure]);
+  const handleAutoBuildClick = useCallback(() => {
+    // No-op while a build is anywhere in flight (generating OR organizing) or
+    // before clinical context is captured.
+    if (autoBuildState !== 'idle') return;
+    if (!hasClinicalTextData) return;
+    setAutoBuildFailures(new Set());
+    setAutoBuildState('generating');
+    // Trigger flags drive the one-shot pendingGenerate prop on each engine.
+    setAutoBuildTriggerExercise(true);
+    setAutoBuildTriggerMT(true);
+    setAutoBuildTriggerAdjunct(true);
+    // In-flight flags gate the settle effect. Stay true until the engine
+    // emits onGenerateComplete (after its staggered cart-add cascade).
+    setAutoBuildInFlightExercise(true);
+    setAutoBuildInFlightMT(true);
+    setAutoBuildInFlightEPA(true);
+    setAutoBuildInFlightAdjunct(true);
+    setAutoBuildElectroNonce(prev => prev + 1);
+  }, [autoBuildState, hasClinicalTextData]);
+  // Bind for the autopilot rerun-from-stage handler (defined earlier
+  // in render order to keep stable references for the dock).
+  handleAutoBuildClickRef.current = handleAutoBuildClick;
+
+  // Autopilot chain — runs convergence + stability and schedules the
+  // downstream stages (goal/research/plan). Voice-triggered only.
+  /** Stage-governed async autopilot chain runner.
+   *
+   *  Runs evidence → goal-profile → research → plan as an awaited
+   *  sequence. Each stage:
+   *    1. Re-checks the kill switches (autopilot enabled, not paused,
+   *       same conversation, eligible, run id unchanged).
+   *    2. Consults the convergence governor — but a stage present in
+   *       forceRerunStagesRef bypasses that gate (so explicit "Re-run
+   *       from here" requests always run, even when the top hypothesis
+   *       has stabilised).
+   *    3. Consults the input-hash dedup governor — bypassed when forced.
+   *    4. Awaits its own completion before the next stage starts.
+   *
+   *  Research dedup is keyed by the full structured caseContext signal
+   *  (reason hash + top hypothesis + patient context signature) rather
+   *  than just hypothesis label/confidence, so meaningful patient-side
+   *  changes invalidate the cached research run. */
+  const chainAutopilotAfterReasoning = useCallback((data: ClinicalReasoningData) => {
+    if (!autopilotEnabledRef.current) return;
+    if (autopilotPausedRef.current) return;
+    if (!voiceTriggeredRef.current) return;
+    const cid = selectedConversationIdRef.current;
+    if (!cid || !snapshotEligibleRef.current.has(cid)) return;
+
+    const top = (data.hypotheses || []).find(h => h.status !== 'ruled_out') ?? data.hypotheses?.[0];
+    const stab = monitorStabilityRef.current;
+    const topLabel = top?.condition?.trim() || null;
+    const topConfidence = typeof top?.confidence === 'number' ? top.confidence : 0;
+    const wasSame = !!topLabel && stab.topLabel === topLabel;
+    const newRuns = wasSame ? stab.stableForRuns + 1 : (topLabel ? 1 : 0);
+    const justConverged = newRuns >= CONVERGENCE_RUNS && topConfidence >= CONVERGENCE_MIN_CONFIDENCE;
+
+    setMonitorStability({
+      topLabel,
+      stableForRuns: newRuns,
+      converged: justConverged,
+      destabilized: stab.topLabel !== null && !wasSame,
+    });
+
+    // Snapshot the force-rerun set for *this* chain pass, then clear so
+    // a future natural pass goes back to convergence-suppressed mode.
+    const forced = new Set(forceRerunStagesRef.current);
+    forceRerunStagesRef.current.clear();
+
+    // Convergence short-circuit only applies if no downstream stage was
+    // explicitly forced — otherwise we honour the user's rerun intent.
+    if (
+      justConverged && wasSame &&
+      !forced.has('research') && !forced.has('plan') && !forced.has('evidence')
+    ) {
+      markStageEnd('research', 'converged', `top hypothesis stable (${topLabel})`);
+      markStageEnd('plan', 'converged', `top hypothesis stable (${topLabel})`);
+      return;
+    }
+
+    if (!topLabel) return;
+
+    // Research dedup key now includes the patient-context signature so
+    // changes to chronicity/factors/comorbidities invalidate the run.
+    const downstreamInputHash =
+      `${stageInputHashRef.current['reason'] || ''}|${topLabel}|${topConfidence.toFixed(2)}|${patientContextSigRef.current || ''}`;
+    const originatingCid = cid;
+    chainRunIdRef.current += 1;
+    const myRunId = chainRunIdRef.current;
+
+    /** Cancellation guard: an in-flight stage should bail only when
+     *  the chain itself is invalidated (new run, autopilot disabled,
+     *  conversation switched, snapshot eligibility revoked). Pause is
+     *  intentionally NOT included — pausing must let the current
+     *  stage finish, only blocking the next stage from starting. */
+    const stillEligible = (): boolean => {
+      if (chainRunIdRef.current !== myRunId) return false;
+      if (!autopilotEnabledRef.current) return false;
+      if (selectedConversationIdRef.current !== originatingCid) return false;
+      if (!snapshotEligibleRef.current.has(originatingCid)) return false;
+      return true;
+    };
+
+    /** Gate to start the NEXT stage. Includes pause so an active pause
+     *  stops further enqueueing without cancelling in-flight work. */
+    const canStartNextStage = (): boolean =>
+      stillEligible() && !autopilotPausedRef.current;
+
+    /** Polls evidenceLoadingRef until the query settles (60s cap).
+     *  Resolves 'error' when the request rejected (evidenceErrorRef
+     *  set by the catch block) or the budget elapsed; 'done' on
+     *  successful settle; 'cancelled' if the chain was invalidated. */
+    const awaitEvidence = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
+        const startedAt = Date.now();
+        const tick = () => {
+          if (!stillEligible()) return resolve('cancelled');
+          if (!evidenceLoadingRef.current) {
+            return resolve(evidenceErrorRef.current ? 'error' : 'done');
+          }
+          if (Date.now() - startedAt > 60_000) return resolve('error');
+          window.setTimeout(tick, 200);
+        };
+        window.setTimeout(tick, 250);
+      });
+
+    const awaitResearch = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
+        const pollStart = Date.now();
+        const tick = window.setInterval(() => {
+          if (!stillEligible()) {
+            window.clearInterval(tick);
+            resolve('cancelled');
+            return;
+          }
+          const r = caseResearchPanelRef.current;
+          if (!r || !r.isRunning()) {
+            window.clearInterval(tick);
+            resolve('done');
+            return;
+          }
+          if (Date.now() - pollStart > 60000) {
+            window.clearInterval(tick);
+            resolve('error');
+          }
+        }, 500);
+      });
+
+    /** Promise wrapper around the plan auto-build state machine. */
+    const awaitPlan = (): Promise<'done' | 'error' | 'cancelled'> =>
+      new Promise(resolve => {
+        const pollStart = Date.now();
+        const tick = window.setInterval(() => {
+          if (!stillEligible()) {
+            window.clearInterval(tick);
+            resolve('cancelled');
+            return;
+          }
+          // 'idle' here means the build has settled (engines complete +
+          // cart cascade finished). 90s budget covers the slow path.
+          if (autoBuildStateRef.current === 'idle') {
+            window.clearInterval(tick);
+            resolve('done');
+            return;
+          }
+          if (Date.now() - pollStart > 90000) {
+            window.clearInterval(tick);
+            resolve('error');
+          }
+        }, 500);
+      });
+
+    (async () => {
+      await new Promise(r => window.setTimeout(r, 200));
+      if (!canStartNextStage()) return;
+
+      // ── Stage: evidence ─────────────────────────────────
+      const evidenceForced = forced.has('evidence');
+      if (!evidenceForced && stageInputHashRef.current['evidence'] === downstreamInputHash) {
+        markStageEnd('evidence', 'skipped', 'inputs unchanged');
+      } else if (evidenceLoadingRef.current) {
+        // Already in flight from a manual trigger — just wait.
+        const outcome = await awaitEvidence();
+        if (outcome === 'cancelled') return;
+        markStageEnd('evidence', outcome);
+      } else {
+        stageInputHashRef.current['evidence'] = downstreamInputHash;
+        markStageStart('evidence');
+        try {
+          handleEvidenceQueryRef.current({ autopilot: true });
+          const outcome = await awaitEvidence();
+          if (outcome === 'cancelled') return;
+          markStageEnd('evidence', outcome);
+        } catch (e) {
+          markStageEnd('evidence', 'error', e instanceof Error ? e.message : 'evidence trigger failed');
+        }
+      }
+
+      if (!canStartNextStage()) return;
+
+      // ── Stage: research ─────────────────────────────────
+      const r = caseResearchPanelRef.current;
+      const researchForced = forced.has('research') || forced.has('evidence');
+      if (!r) {
+        markStageEnd('research', 'error', 'panel not mounted');
+      } else if (r.isRunning()) {
+        // Already in flight from another path — wait for it instead of
+        // double-firing.
+        const outcome = await awaitResearch();
+        if (outcome !== 'cancelled') markStageEnd('research', outcome);
+      } else if (!researchForced && stageInputHashRef.current['research'] === downstreamInputHash) {
+        markStageEnd('research', 'skipped', 'inputs unchanged');
+      } else {
+        stageInputHashRef.current['research'] = downstreamInputHash;
+        markStageStart('research');
+        try {
+          r.trigger(researchForced);
+          const outcome = await awaitResearch();
+          if (outcome === 'cancelled') return;
+          markStageEnd('research', outcome);
+        } catch (e) {
+          markStageEnd('research', 'error', e instanceof Error ? e.message : 'trigger failed');
+        }
+      }
+
+      if (!canStartNextStage()) return;
+
+      // ── Stage: goal-profile auto-compute (silent — no chip) ─
+      // Sets activeGoalProfile + activeGoalGap from the predicted
+      // condition and a session-zero baseline snapshot (predicted ==
+      // current for every measurable field).
+      try {
+        const conditionProfile = findConditionProfile(topLabel);
+        const profile = conditionProfile
+          ? generateGoalProfile(conditionProfile, null, undefined, null, topLabel)
+          : generateGenericGoalProfile(topLabel, null);
+        if (!stillEligible()) return;
+        setActiveGoalProfile(profile);
+
+        const roms = romMeasurementsRef.current;
+        const baselineRomPredictions: RomPrediction[] = roms.map(m => ({
+          jointId: m.jointId,
+          jointLabel: `${m.jointLabel} ${m.movementLabel}`,
+          plane: 'sagittal',
+          currentDegrees: m.measuredValue,
+          predictedDegrees: m.measuredValue,
+          targetDegrees: m.normalRange?.[1] ?? m.measuredValue,
+          deltaFromBaseline: 0,
+          limitingFactor: 'baseline',
+        }));
+        const pm = painMarkersRef.current;
+        const avgPain = pm.length > 0
+          ? (pm.reduce((s, m) => s + (m.severity ?? 0), 0) / pm.length) * 10
+          : 0;
+        const baselineSnapshot: SessionSnapshot = {
+          sessionNumber: 0,
+          dayOffset: 0,
+          treatments: [],
+          riskScore: 50,
+          riskLevel: 'baseline',
+          painPrediction: avgPain,
+          slingIntegrity: 50,
+          forceReduction: 0,
+          compensationResolution: 0,
+          doseResponseFraction: 0,
+          activeScenarios: [],
+          modelConfig: modelConfigRef.current ?? {},
+          overrides: {},
+          forceMultiplier: 1,
+          romPredictions: baselineRomPredictions,
+          painMarkerPredictions: [],
+          muscleStatePredictions: [],
+          slingPredictions: [],
+          posturalPredictions: [],
+          compensationPredictions: [],
+          functionalMilestones: [],
+          interSessionHealing: null,
+          recoveryPhaseLabel: 'Baseline',
+          isPlateauSession: false,
+          isBreakthroughSession: false,
+          isSetbackSession: false,
+        } as unknown as SessionSnapshot;
+        const gap = computeGoalGap(profile, baselineSnapshot, null);
+        if (stillEligible()) setActiveGoalGap(gap);
+      } catch (e) {
+        // Goal profile failure must not block the plan stage.
+        console.warn('[autopilot] goal profile compute failed:', e);
+      }
+
+      if (!canStartNextStage()) return;
+
+      // ── Stage: plan ────────────────────────────────────
+      const planForced = forced.has('plan');
+      if (!hasClinicalTextDataRef.current) {
+        markStageEnd('plan', 'skipped', 'no clinical text');
+        return;
+      }
+      if (autoBuildStateRef.current !== 'idle') {
+        markStageEnd('plan', 'skipped', 'auto-build busy');
+        return;
+      }
+      if (!planForced && stageInputHashRef.current['plan'] === downstreamInputHash) {
+        markStageEnd('plan', 'skipped', 'inputs unchanged');
+        return;
+      }
+      stageInputHashRef.current['plan'] = downstreamInputHash;
+      markStageStart('plan');
+      try {
+        handleAutoBuildClick();
+      } catch (e) {
+        markStageEnd('plan', 'error', e instanceof Error ? e.message : 'auto-build failed');
+        return;
+      }
+      const outcome = await awaitPlan();
+      if (outcome === 'cancelled') return;
+      markStageEnd('plan', outcome);
+    })();
+  }, [handleAutoBuildClick, markStageEnd, markStageStart]);
+
+  // Bind the actual implementation to the ref so the reasoning
+  // trigger (defined earlier in render order) can call it.
+  chainAutopilotAfterReasoningRef.current = chainAutopilotAfterReasoning;
+
+  // Settle (Phase 1): detect when all four phantom engines have settled
+  // (success or failure) and their staggered cart-add cascades have
+  // completed (onGenerateComplete is deferred until after the last add).
+  // Promote the state machine to 'organizing' and surface a failure toast if
+  // anything errored. Phase 2 (below) schedules the nav + orchestrate timers
+  // — splitting them prevents this effect's own state update from triggering
+  // its cleanup and cancelling the timers before they fire.
+  useEffect(() => {
+    if (autoBuildState !== 'generating') return;
+    if (autoBuildInFlightExercise || autoBuildInFlightMT || autoBuildInFlightEPA || autoBuildInFlightAdjunct) return;
+    setAutoBuildState('organizing');
+    if (autoBuildFailures.size > 0) {
+      toast({
+        title: "Some engines couldn't generate",
+        description: `Plan still built — ${Array.from(autoBuildFailures).join(', ')} did not respond. Re-run the affected tab manually if needed.`,
+        variant: 'destructive',
+      });
+    }
+  }, [autoBuildState, autoBuildInFlightExercise, autoBuildInFlightMT, autoBuildInFlightEPA, autoBuildInFlightAdjunct, autoBuildFailures, toast]);
+  // Settle (Phase 2): once we're in 'organizing', schedule a short tick so
+  // the last cart-add flash/line animation can paint, then expand the
+  // MasterPlanCard's inline section, scroll it into view, and bump the
+  // orchestrate auto-trigger nonce so the OrchestratePlanProvider fires the
+  // request. We deliberately do NOT navigate to the right-side My Plan tab
+  // any more — the result lands inside the Master Plan card itself
+  // (Task #270). Reset to 'idle' is driven primarily by the provider's
+  // onAutoTriggerConsumed; we keep a 4 s safety fallback for the edge case
+  // where the cart ended up with < 2 items so the button doesn't stay
+  // stranded disabled.
+  //
+  // This effect's only dep is `autoBuildState`, so cleanup only fires when
+  // the state actually leaves 'organizing' (not as an artifact of the
+  // setState call inside the same effect).
+  useEffect(() => {
+    if (autoBuildState !== 'organizing') return;
+    const settleTimer = window.setTimeout(() => {
+      setMasterPlanExpandSignal(s => s + 1);
+      setOrchestrateAutoNonce(prev => (prev ?? 0) + 1);
+      // Best-effort scroll the card into view so the inline plan is visible.
+      const el = masterPlanContainerRef.current;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 150);
+    const safetyIdleTimer = window.setTimeout(() => {
+      setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
+      setAutoBuildFailures(new Set());
+    }, 4000);
+    return () => {
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(safetyIdleTimer);
+    };
+  }, [autoBuildState]);
+
+  // Close the autopilot "Plan" chip when auto-build returns to idle.
+  useEffect(() => {
+    if (autoBuildState !== 'idle') return;
+    const cur = monitorStagesRef.current.find(s => s.id === 'plan');
+    if (!cur || cur.state !== 'running') return;
+    const failed = autoBuildFailures.size > 0;
+    if (failed) {
+      markStageEndRef.current('plan', 'error', Array.from(autoBuildFailures).join(', '));
+    } else {
+      markStageEndRef.current('plan', 'done');
+    }
+  }, [autoBuildState, autoBuildFailures]);
+
   const exerciseMtActivePhaseIndex = useMemo(() => {
     if (!treatmentPlanData || !treatmentPlanData.phases || treatmentPlanData.phases.length === 0) return 0;
     const planCreated = treatmentPlanData.timestamp ? new Date(treatmentPlanData.timestamp).getTime() : Date.now();
@@ -3758,6 +8020,149 @@ ${ddxList}`;
     }
   }, [modelConfig, effectiveModelConfig]);
 
+  const recoverySimBaselineRef = useRef<{
+    painMarkers: Array<{ id: string; severity: number }>;
+    compromisedTissues: Array<{ key: string; severity: number }>;
+    scarMarkers: Array<{ id: string; severity: number; painOnPalpation: number }>;
+    muscleOverrides: Array<{ key: string; tensionOffset: number; activationOffset: number; inhibition: number }>;
+    modelConfigDeviations: Array<{ joint: string; param: string; value: number }>;
+  } | null>(null);
+  const recoverySimBranchRef = useRef<string | null>(null);
+  const recoverySimCompromisedTissuesRef = useRef(compromisedTissues);
+  const recoverySimScarMarkersRef = useRef(scarMarkers);
+  const recoverySimMuscleOverridesRef = useRef(muscleOverrides);
+  const recoverySimModelConfigRef = useRef(modelConfig);
+  const handleApplySimTimelineWeekRef = useRef(handleApplySimTimelineWeek);
+  useEffect(() => { recoverySimCompromisedTissuesRef.current = compromisedTissues; }, [compromisedTissues]);
+  useEffect(() => { recoverySimScarMarkersRef.current = scarMarkers; }, [scarMarkers]);
+  useEffect(() => { recoverySimMuscleOverridesRef.current = muscleOverrides; }, [muscleOverrides]);
+  useEffect(() => { recoverySimModelConfigRef.current = modelConfig; }, [modelConfig]);
+  useEffect(() => { handleApplySimTimelineWeekRef.current = handleApplySimTimelineWeek; }, [handleApplySimTimelineWeek]);
+  useEffect(() => {
+    if (!showRecoverySim) {
+      recoverySimBaselineRef.current = null;
+      recoverySimBranchRef.current = null;
+    }
+  }, [showRecoverySim]);
+
+  const collectModelConfigDeviations = useCallback((mc: unknown): Array<{ joint: string; param: string; value: number }> => {
+    const out: Array<{ joint: string; param: string; value: number }> = [];
+    if (!mc || typeof mc !== 'object') return out;
+    for (const [joint, params] of Object.entries(mc as Record<string, unknown>)) {
+      if (params && typeof params === 'object') {
+        for (const [param, val] of Object.entries(params as Record<string, unknown>)) {
+          if (typeof val === 'number' && Math.abs(val) > 0.001) {
+            out.push({ joint, param, value: val });
+          }
+        }
+      }
+    }
+    return out;
+  }, []);
+
+  const handleApplyRecoverySimState = useCallback((info: { week: number; state: import('@/lib/recoverySimulationEngine').RecoveryState; baselineState: import('@/lib/recoverySimulationEngine').RecoveryState; branchName: string }) => {
+    const { state, baselineState, branchName } = info;
+    if (recoverySimBranchRef.current !== branchName) {
+      recoverySimBaselineRef.current = null;
+      recoverySimBranchRef.current = branchName;
+    }
+    if (!recoverySimBaselineRef.current) {
+      const pm = painMarkersRef.current;
+      const ct = recoverySimCompromisedTissuesRef.current;
+      const sm = recoverySimScarMarkersRef.current;
+      const mo = recoverySimMuscleOverridesRef.current;
+      const modelConfigDeviations = collectModelConfigDeviations(recoverySimModelConfigRef.current);
+      recoverySimBaselineRef.current = {
+        painMarkers: pm.map(m => ({ id: m.id, severity: typeof m.severity === 'number' ? m.severity : 5 })),
+        compromisedTissues: ct.map(t => ({ key: `${t.tissue_type}:${t.tissue_id}`, severity: t.severity })),
+        scarMarkers: sm.map(s => ({ id: s.id, severity: s.severity, painOnPalpation: s.painOnPalpation })),
+        muscleOverrides: Object.entries(mo)
+          // Only scale pathology-driven overrides; leave clinician-intent manual neutral overrides untouched
+          .filter(([, ov]) => ov && ov.pathology && ov.pathology !== 'none')
+          .map(([key, ov]) => ({
+            key,
+            tensionOffset: ov.tensionOffset ?? 0,
+            activationOffset: ov.activationOffset ?? 0,
+            inhibition: ov.inhibition ?? 0,
+          })),
+        modelConfigDeviations,
+      };
+    }
+    const baseline = recoverySimBaselineRef.current;
+
+    const painFactor = baselineState.pain > 0.001
+      ? Math.max(0, Math.min(2, state.pain / baselineState.pain))
+      : (state.pain > 0.001 ? 1 : 0);
+    const healingFactor = Math.max(0, Math.min(1.2, 1 - Math.max(0, state.healingProgress - baselineState.healingProgress) / 100));
+    const romGap = Math.max(1, 100 - baselineState.romPercent);
+    const romFactor = Math.max(0, Math.min(1.2, (100 - state.romPercent) / romGap));
+    const motorGap = Math.max(1, 100 - baselineState.motorControl);
+    const motorFactor = Math.max(0, Math.min(1.2, (100 - state.motorControl) / motorGap));
+
+    // Build SessionApplyPayload for fields the existing handler supports
+    const modelConfigPayload: Record<string, Record<string, number>> = {};
+    for (const d of baseline.modelConfigDeviations) {
+      if (!modelConfigPayload[d.joint]) modelConfigPayload[d.joint] = {};
+      modelConfigPayload[d.joint][d.param] = d.value * romFactor;
+    }
+
+    const overridesPayload: Record<string, Partial<import('@/lib/muscleBiomechanicsEngine').MuscleOverride>> = {};
+    for (const b of baseline.muscleOverrides) {
+      overridesPayload[b.key] = {
+        tensionOffset: Math.round(b.tensionOffset * motorFactor),
+        activationOffset: Math.round(b.activationOffset * motorFactor),
+        inhibition: Math.round(b.inhibition * motorFactor),
+      };
+    }
+
+    const baselinePainMap = new Map(baseline.painMarkers.map(b => [b.id, b.severity]));
+    const painMarkerUpdates = painMarkersRef.current
+      .filter(m => baselinePainMap.has(m.id))
+      .map(m => ({
+        markerId: m.id,
+        predictedSeverity: Math.max(0, Math.min(10, (baselinePainMap.get(m.id) ?? 5) * painFactor)),
+      }));
+
+    handleApplySimTimelineWeekRef.current({
+      modelConfig: modelConfigPayload,
+      overrides: overridesPayload,
+      painMarkerUpdates,
+      posturalUpdates: [],
+      compensationUpdates: [],
+    });
+
+    // Compromised tissues + scar markers: not part of SessionApplyPayload shape; apply via setters
+    if (baseline.compromisedTissues.length > 0) {
+      const map = new Map(baseline.compromisedTissues.map(b => [b.key, b.severity]));
+      setCompromisedTissues(prev => prev.map(t => {
+        const base = map.get(`${t.tissue_type}:${t.tissue_id}`);
+        if (base === undefined) return t;
+        return { ...t, severity: Math.max(0, Math.min(10, base * healingFactor)) };
+      }));
+    }
+
+    if (baseline.scarMarkers.length > 0) {
+      const map = new Map(baseline.scarMarkers.map(b => [b.id, b]));
+      setScarMarkers(prev => prev.map(s => {
+        const base = map.get(s.id);
+        if (!base) return s;
+        return {
+          ...s,
+          severity: Math.max(1, Math.min(5, Math.round(base.severity * healingFactor))) as 1 | 2 | 3 | 4 | 5,
+          painOnPalpation: Math.max(0, Math.min(10, Math.round(base.painOnPalpation * painFactor))),
+        };
+      }));
+    }
+  }, [collectModelConfigDeviations]);
+
+  const recoverySimHasClinicalInput = useMemo(() => (
+    painMarkers.length > 0 ||
+    compromisedTissues.length > 0 ||
+    scarMarkers.length > 0 ||
+    Object.keys(muscleOverrides).length > 0 ||
+    collectModelConfigDeviations(modelConfig).length > 0
+  ), [painMarkers, compromisedTissues, scarMarkers, muscleOverrides, modelConfig, collectModelConfigDeviations]);
+
   const chainIntegrityScores = useMemo(() => {
     if (!showUnifiedChainPanel || (liteMode && computeStage < 3)) return new Map<string, { score: number; issues: string[]; problematicLinks: string[]; exercises: string[] }>();
     const baseAnalysis = computeFullMuscleAnalysis(effectiveModelConfig);
@@ -3794,12 +8199,29 @@ ${ddxList}`;
     return scores;
   }, [effectiveModelConfig, showUnifiedChainPanel, compensatedOverrides, crossMuscleEffects, liteMode, computeStage]);
 
-  const hudForceAnalysis = useMemo(() => {
-    if (computeStage < 2) return { joints: [], totalLoad: 0 };
+  // Live-updating signal for scrub state (rebuilds hudForceAnalysis when the
+  // user pauses the timeline and drags). The actual playback time is read
+  // synchronously from `forceTimeBuffer` so the engine output stays consistent
+  // with what the buffer is reporting.
+  const scrubPlaybackMs = forceTimeMetrics ? forceTimeBuffer.getPlaybackTime() : null;
+  const isScrubbing = scrubPlaybackMs != null;
+
+  /**
+   * Base (un-augmented) force analysis — comes either from the live engine
+   * or, while the user is scrubbing the time buffer, from the buffered frame
+   * at the playback time. This is what gets pushed back into the buffer so
+   * we never feed augmented values back into the dynamics layer (no loop).
+   */
+  const baseHudForceAnalysis = useMemo<ForceAnalysisResult>(() => {
+    if (computeStage < 2) return EMPTY_FORCE_RESULT;
+    if (isScrubbing) {
+      const scrubbed = forceTimeBuffer.getScrubbedAnalysis();
+      if (scrubbed) return scrubbed;
+    }
     const hasActiveSimulation = whatIfSimulatedConfig && whatIfScenarios.length > 0;
     const base = (forceMode && forceAnalysis && !hasActiveSimulation)
       ? forceAnalysis
-      : calculatePosturalForces(finalModelConfig);
+      : calculatePosturalForces(withForceContext(finalModelConfig));
     if (hasActiveSimulation && whatIfSimulatedConfig.forceMultiplier !== 1.0) {
       const multiplier = whatIfSimulatedConfig.forceMultiplier;
       const adjusted = JSON.parse(JSON.stringify(base));
@@ -3817,7 +8239,102 @@ ${ddxList}`;
       return adjusted;
     }
     return base;
-  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computeStage]);
+  }, [finalModelConfig, forceMode, forceAnalysis, whatIfScenarios, whatIfSimulatedConfig, computeStage, isScrubbing, scrubPlaybackMs]);
+
+  /**
+   * Dynamics-augmented force analysis consumed by every downstream surface
+   * (HUD, mechanism analysis, panels, overlays). Adds the inertial m·a per
+   * joint via `jointMassAboveFraction` (linked-segment chain), and reclassifies
+   * `status` using the patient-state-aware threshold table so the HUD colors
+   * respect post-op / osteoporotic / pediatric / athlete bands.
+   */
+  const hudForceAnalysis = useMemo<ForceAnalysisResult>(() => {
+    if (!baseHudForceAnalysis || !baseHudForceAnalysis.joints?.length) return baseHudForceAnalysis;
+    // Frame-accurate inertial during scrub: read the centred 2nd-derivative
+    // |a| at the active scrubbed frame so the augmentation reflects the
+    // selected timestamp, not the live-engine global peak. In live mode we
+    // let the augment helper read `getLatestComAccelMag()` itself by passing
+    // `undefined`, which keeps the HUD synced with the live impact reading.
+    const comAccelMps2 = isScrubbing
+      ? forceTimeBuffer.getComAccelMagAtActive()
+      : undefined;
+    return augmentForceAnalysisDynamics(baseHudForceAnalysis, {
+      bodyWeightKg,
+      patientState: patientForceState,
+      comAccelMagN: comAccelMps2,
+    });
+    // NOTE: do NOT depend on `forceTimeMetrics` here — it would create a
+    // feedback loop (push augmented frame → subscribe fires →
+    // setForceTimeMetrics → re-memo → push again at ~60Hz even when no
+    // genuine motion frame arrived). The augment helper reads
+    // `forceTimeBuffer.getLatestComAccelMag()` / `getComAccelMagAtActive()`
+    // directly, so it's already in sync without needing metrics in deps.
+  }, [baseHudForceAnalysis, bodyWeightKg, patientForceState, isScrubbing, scrubPlaybackMs]);
+
+  // ─── Time-aware force buffer push ────────────────────────────────────
+  // Capture every recompute of the AUGMENTED analysis (chain-axial +
+  // inertial m·a + patient-state status) so cumulative dose, rate of
+  // loading, asymmetry, and peak markers are all derived from the same
+  // canonical force model the HUD shows. Pushing the *augmented* result
+  // (not the raw engine output) is what makes the trust + time layers
+  // share one source of truth across Movement Player, phone camera, and
+  // manual sliders. While scrubbing, do NOT push — we'd be writing past
+  // frames as if they were live and corrupting the timeline.
+  useEffect(() => {
+    if (forceTimeBuffer.getPlaybackTime() != null) return;
+    if (!hudForceAnalysis || !hudForceAnalysis.joints || hudForceAnalysis.joints.length === 0) return;
+    const source: 'movement_player' | 'camera' | 'manual' =
+      animationState.isPlaying ? 'movement_player'
+      : cameraPoseActive ? 'camera'
+      : 'manual';
+    forceTimeBuffer.push({
+      result: hudForceAnalysis,
+      bodyWeightKg,
+      source,
+      movementId: animationState.currentMovement ?? null,
+      // Capture the playhead so scrub-back can seek the Movement Player
+      // back to the same frame and the 3D skeleton mirrors the HUD.
+      movementProgress: animationState.isPlaying ? animationState.progress : null,
+    });
+  }, [hudForceAnalysis, bodyWeightKg, animationState.isPlaying, animationState.currentMovement, animationState.progress, cameraPoseActive]);
+
+  // ─── Scrub-back seeks the Movement Player ────────────────────────────
+  // When the clinician pauses and scrubs the time buffer, look up the active
+  // snapshot. If it has a captured movement playhead, pause the Movement
+  // Player and seek it to the same `progress` so the 3D skeleton renders the
+  // pose that produced the scrubbed forces. This is what makes the HUD and
+  // the skeleton time-consistent during scrub-back.
+  useEffect(() => {
+    if (!isScrubbing) return;
+    const snap = forceTimeBuffer.getActiveSnapshot();
+    if (!snap || !snap.movementId || snap.movementProgress == null) return;
+    if (
+      animationState.isPlaying ||
+      animationState.currentMovement !== snap.movementId ||
+      Math.abs((animationState.progress ?? 0) - snap.movementProgress) > 0.001
+    ) {
+      setAnimationState({
+        isPlaying: false,
+        currentMovement: snap.movementId,
+        progress: snap.movementProgress,
+        speed: animationState.speed,
+      });
+    }
+  }, [isScrubbing, scrubPlaybackMs]);
+
+  // Push patient state into the buffer so threshold / band lookups inside
+  // `getMetrics()` use the same context as the HUD.
+  useEffect(() => {
+    forceTimeBuffer.setPatientState(patientForceState);
+  }, [patientForceState]);
+
+  // Subscribe React state to buffer-derived metrics (used by HUD circle + panel).
+  useEffect(() => {
+    setForceTimeMetrics(forceTimeBuffer.getMetrics());
+    return subscribeForceBuffer(() => {
+      setForceTimeMetrics(forceTimeBuffer.getMetrics());
+    });
+  }, []);
 
   const mechanismAnalysisResult = useMemo(() => {
     if (!showInjuryMechanism) return null;
@@ -3835,18 +8352,31 @@ ${ddxList}`;
   const hudWeightDistribution = useMemo(() => {
     if (computeStage < 2) return null;
     if (forceMode && weightDistribution) return weightDistribution;
-    return computeWeightDistribution(finalModelConfig, bodyWeightKg);
-  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution, computeStage]);
+    if (isPoseDragging && hudWeightDistributionRef.current) {
+      return hudWeightDistributionRef.current;
+    }
+    const result = computeWeightDistribution(finalModelConfig, bodyWeightKg);
+    hudWeightDistributionRef.current = result;
+    return result;
+  }, [finalModelConfig, bodyWeightKg, forceMode, weightDistribution, computeStage, isPoseDragging]);
 
   const hudMuscleAnalysis = useMemo(() => {
     if (computeStage < 2) return null;
     if (muscleMode && muscleAnalysis) return muscleAnalysis;
+    if (isPoseDragging && hudMuscleAnalysisRef.current) {
+      return hudMuscleAnalysisRef.current;
+    }
     const base = computeFullMuscleAnalysis(finalModelConfig);
-    return applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
-  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computeStage]);
+    const result = applyOverridesToAnalysis(base, effectiveOverrides, crossMuscleEffects);
+    hudMuscleAnalysisRef.current = result;
+    return result;
+  }, [finalModelConfig, muscleMode, muscleAnalysis, effectiveOverrides, crossMuscleEffects, computeStage, isPoseDragging]);
 
   const unifiedBiomechanicsOutput = useMemo(() => {
     if (computeStage < 3) return null;
+    if (isPoseDragging && cachedBiomechanicsOutput) {
+      return cachedBiomechanicsOutput;
+    }
     return computeUnifiedBiomechanics({
       modelConfig: finalModelConfig,
       heightCm: 170,
@@ -3857,7 +8387,7 @@ ${ddxList}`;
       faultRuleOverrides: unifiedBiomechanicsFaultOverrides.length > 0 ? unifiedBiomechanicsFaultOverrides : undefined,
       previousOutput: previousBiomechanicsOutput,
     });
-  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, computeStage]);
+  }, [finalModelConfig, bodyWeightKg, compensatedOverrides, unifiedBiomechanicsMovementTask, unifiedBiomechanicsProgress, unifiedBiomechanicsFaultOverrides, previousBiomechanicsOutput, computeStage, isPoseDragging, cachedBiomechanicsOutput]);
 
   useEffect(() => {
     if (unifiedBiomechanicsOutput) {
@@ -3867,18 +8397,991 @@ ${ddxList}`;
 
   const slingAnalysis = useMemo(() => {
     if (computeStage < 3) return null;
+    if (isPoseDragging && slingAnalysisRef.current) {
+      return slingAnalysisRef.current;
+    }
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
+    // Merge per-part spotlight adjustments into the engine's duck-typed
+    // override shape so per-part treatments actually re-score weak links.
+    const merged: Record<string, { tension?: number; pathology?: string }> = {};
+    for (const [k, v] of Object.entries(muscleOverrides)) {
+      const tension = 50 + (v.tensionOffset ?? 0) + (v.activationOffset ?? 0) * 0.5 - (v.inhibition ?? 0);
+      merged[k] = {
+        tension: Math.max(0, Math.min(100, tension)),
+        pathology: v.pathology !== 'none' ? v.pathology : undefined,
+      };
+    }
+    for (const [k, patch] of Object.entries(slingPartMuscleAdjustments)) {
+      const existing = merged[k] ?? {};
+      merged[k] = {
+        tension: patch.tension !== undefined
+          ? Math.max(0, Math.min(100, (existing.tension ?? 50) + (patch.tension - 50)))
+          : existing.tension,
+        pathology: patch.pathology ?? existing.pathology,
+      };
+    }
     const slingInput: SlingAnalysisInput = {
       biomechanicsOutput: bioSrc,
-      muscleOverrides: muscleOverrides as Record<string, { tension?: number; pathology?: string }> | undefined,
+      muscleOverrides: Object.keys(merged).length > 0 ? merged : undefined,
       movementTaskId: unifiedBiomechanicsMovementTask ?? undefined,
+      slingActivationOverrides,
     };
     const result = computeSlingAnalysis(slingInput);
     slingAnalysisRef.current = result;
     return result;
-  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, unifiedBiomechanicsMovementTask, computeStage]);
+  }, [unifiedBiomechanicsOutput, cachedBiomechanicsOutput, muscleOverrides, slingPartMuscleAdjustments, unifiedBiomechanicsMovementTask, computeStage, slingActivationOverrides, isPoseDragging]);
 
   const slingTissueRisks = useMemo(() => computeSlingTissueRisks(slingAnalysis), [slingAnalysis]);
+
+  // Compensation Re-Education enrichment (Task #372). Post-processes the
+  // three existing detectors (joint-constraints, pathology compensation,
+  // sling engine) into a unified list of EnrichedCompensation records
+  // tagged with driver / verdict / cost / better pattern / retraining plan.
+  // Consumed by the Movement-Mode Re-Ed UI panel (Task #373).
+  const reEducationCompensations = useMemo<EnrichmentOutput>(() => {
+    const reEdPainMarkers: ReEdPainMarker[] = painMarkers.map(pm => ({
+      nearestBone: pm.nearestBone,
+      anatomicalLabel: pm.anatomicalLabel,
+      type: pm.type,
+      severity: typeof pm.severity === 'number' ? pm.severity : 5,
+    }));
+    // PCP carries chronicity / structural-diagnosis info as free-text answers.
+    // Sniff the combined text for keywords rather than expecting structured fields.
+    const ctxText = [
+      patientContextPayload.free_form ?? '',
+      ...patientContextPayload.answers.map(a => a.answer ?? ''),
+    ].join(' ').toLowerCase();
+    const chronicityMonths = /\bchronic\b/.test(ctxText) ? 12
+      : /\bsubacute\b/.test(ctxText) ? 2
+      : /\bacute\b/.test(ctxText) ? 0.25
+      : undefined;
+    const structuralDiagnosis = /\b(surger|surgical|post[- ]?op|osteoarthrit|frozen shoulder|adhesive capsulit|fracture|labral tear|tear)\b/.test(ctxText);
+    const fa = derivedDrivers?.fearAvoidance;
+    const flags: ReEdPatientFlags = {
+      chronicityMonths,
+      structuralDiagnosis,
+      fearAvoidance: typeof fa === 'number' && fa >= 0.5,
+    };
+    const out = enrichCompensations({
+      jointConstraints: compensationDataState.result,
+      pathology: pathologyCompensation,
+      sling: slingAnalysis,
+      painMarkers: reEdPainMarkers,
+      patientFlags: flags,
+      activeMovementId: compensationDataState.movementName,
+    });
+    reEducationCompensationsRef.current = out;
+    reEducationEnrichedOutputsRef.current = out.enrichedDetectorOutputs;
+    // Defer the setState so it doesn't synchronously interrupt this memo.
+    queueMicrotask(() => setReEducationEnrichedOutputs(out.enrichedDetectorOutputs));
+    return out;
+  }, [compensationDataState, pathologyCompensation, slingAnalysis, painMarkers, patientContextPayload, derivedDrivers]);
+
+  // joint+movement → verdict map for the Movement Findings Stream so
+  // findings created before the latest enrichment cycle still pick up
+  // verdict-coloring (Task #373).
+  const reEdVerdictByMovementId = useMemo<Record<string, MovementFindingVerdict>>(() => {
+    const map: Record<string, MovementFindingVerdict> = {};
+    for (const c of reEducationCompensations.compensations) {
+      const key = `${c.joint}:${c.movement}`;
+      // Keep the highest-cost verdict for any duplicate joint+movement.
+      const existing = map[key];
+      if (!existing) map[key] = c.verdict as MovementFindingVerdict;
+    }
+    return map;
+  }, [reEducationCompensations]);
+
+  // Skeleton overlay (Task #373 — Phase 2 Step 3): per-compensation
+  // bone "cost halo" rendered on the compensating joint. Verdict drives
+  // the color (rose/amber/emerald/slate); costScore drives intensity.
+  // Gated externally by `overlayVisibility.compensationReEd` so the
+  // existing Overlays popover toggle controls these visuals without
+  // touching detection. Joint string handles both snake_case
+  // (jointConstraints) and camelCase (pathology) formats.
+  const reEdCostHaloHighlights = useMemo<Array<{ boneName: string; color: number; intensity: number; label: string }>>(() => {
+    if (skeletonMode !== 'movement') return [];
+    const JOINT_TO_BONE: Record<string, string> = {
+      left_hip: 'Hip_L', right_hip: 'Hip_R', leftHip: 'Hip_L', rightHip: 'Hip_R',
+      left_knee: 'Knee_L', right_knee: 'Knee_R', leftKnee: 'Knee_L', rightKnee: 'Knee_R',
+      left_ankle: 'Ankle_L', right_ankle: 'Ankle_R', leftAnkle: 'Ankle_L', rightAnkle: 'Ankle_R',
+      left_shoulder: 'Shoulder_L', right_shoulder: 'Shoulder_R', leftShoulder: 'Shoulder_L', rightShoulder: 'Shoulder_R',
+      left_elbow: 'Elbow_L', right_elbow: 'Elbow_R', leftElbow: 'Elbow_L', rightElbow: 'Elbow_R',
+      left_scapula: 'Scapula_L', right_scapula: 'Scapula_R',
+      lumbar_spine: 'RootPart1_M', thoracic_spine: 'Spine1_M', cervical_spine: 'Neck_M',
+      pelvis: 'Root_M', spine: 'Spine1_M', neck: 'Neck_M',
+    };
+    const VERDICT_COLOR: Record<string, number> = {
+      harmful: 0xfb7185,     // rose-400
+      optimizable: 0xfbbf24, // amber-400
+      necessary: 0x34d399,   // emerald-400
+      phase_out: 0x94a3b8,   // slate-400
+    };
+    const seen = new Map<string, { color: number; intensity: number; label: string }>();
+    for (const c of reEducationCompensations.compensations) {
+      const bone = JOINT_TO_BONE[c.compensator] ?? JOINT_TO_BONE[c.joint];
+      if (!bone) continue;
+      const color = VERDICT_COLOR[c.verdict] ?? VERDICT_COLOR.optimizable;
+      const intensity = Math.max(0.35, Math.min(0.95, 0.4 + c.costScore * 0.6));
+      const prior = seen.get(bone);
+      if (!prior || intensity > prior.intensity) {
+        seen.set(bone, { color, intensity, label: `Re-ed: ${c.verdict}` });
+      }
+    }
+    return Array.from(seen.entries()).map(([boneName, v]) => ({ boneName, ...v }));
+  }, [skeletonMode, reEducationCompensations]);
+
+  // Re-derive muscle adjustments from the active per-part treatments.
+  // Routes link/attachment treatments through weak-link muscles so the
+  // engine's weak-link detector recomputes downstream of the treatment.
+  const deriveSlingPartMuscleAdj = useCallback(
+    (treatments: Record<string, SlingPartTreatmentRecord>) => {
+      const out: Record<string, { tension?: number; pathology?: PathologyType }> = {};
+      const accum = new Map<string, { tensionDelta: number; pathology?: PathologyType }>();
+      for (const rec of Object.values(treatments)) {
+        const sling = slingAnalysis?.slings.find(s => s.slingId === rec.slingId) ?? null;
+        let muscles: string[];
+        if (rec.partKind === 'muscle') {
+          muscles = [rec.ref];
+        } else if (sling) {
+          muscles = sling.weakLinks.map(w => w.muscle);
+          if (muscles.length === 0) muscles = (sling.muscleScores ?? []).map(m => m.muscle);
+        } else {
+          muscles = [];
+        }
+        const patch = rec.appliedMuscleOverridePatch;
+        const muscleTensionDelta = rec.partKind === 'muscle' && patch
+          ? (patch.tensionOffset ?? 0) + (patch.activationOffset ?? 0) * 0.5 - (patch.inhibition ?? 0)
+          : rec.appliedActivationDelta * 0.6;
+        for (const m of muscles) {
+          const cur = accum.get(m) ?? { tensionDelta: 0 };
+          cur.tensionDelta += muscleTensionDelta;
+          if (rec.partKind === 'muscle' && patch?.pathology) cur.pathology = patch.pathology;
+          accum.set(m, cur);
+        }
+      }
+      for (const [muscle, { tensionDelta, pathology }] of accum) {
+        out[muscle] = {
+          tension: Math.max(0, Math.min(100, 50 + tensionDelta)),
+          pathology,
+        };
+      }
+      return out;
+    },
+    [slingAnalysis],
+  );
+
+  // Reverse-reasoning sling driver analysis (Task #235). Pure deterministic;
+  // shared between SlingAnalysisPanel and the engine tabs so both see the same
+  // hypotheses + sling-driven recommendations.
+  const slingDriverAnalysisResult = useMemo(() => {
+    return runSlingDriverAnalysis(
+      painMarkers.map(pm => ({
+        id: pm.id,
+        nearestBone: pm.nearestBone,
+        anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+        severity: pm.severity,
+        type: pm.type,
+      })),
+      slingAnalysis,
+    );
+  }, [painMarkers, slingAnalysis]);
+  const slingDrivenRecommendations = slingDriverAnalysisResult.recommendations;
+
+  const previousSpotlightIdRef = useRef<SlingId | null>(null);
+  const primaryPainRegion = useMemo<string | null>(() => {
+    if (painMarkers.length === 0) return null;
+    const sorted = [...painMarkers].sort((a, b) => (b.severity ?? 0) - (a.severity ?? 0));
+    const top = sorted[0];
+    return top.anatomicalLabel || top.nearestBone || null;
+  }, [painMarkers]);
+  // Combined marker bias source: pain markers + scar/adhesion bones so
+  // the spotlight selector can lean toward slings whose pathway the
+  // clinician has already flagged with any kind of marker. Engine-detected
+  // weak links still dominate.
+  const spotlightBiasMarkers = useMemo(() => {
+    const out: SpotlightInputMarker[] = painMarkers.map(pm => ({
+      id: pm.id,
+      nearestBone: pm.nearestBone,
+      anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+      severity: pm.severity,
+    }));
+    for (const sc of scarMarkers) {
+      out.push({ id: `scar:${sc.id}`, nearestBone: sc.nearestBone, anatomicalLabel: sc.anatomicalLabel, severity: 0.6 });
+    }
+    for (const ab of adhesionBands) {
+      out.push({ id: `adh:${ab.id}:s`, nearestBone: ab.startBone, severity: 0.5 });
+      out.push({ id: `adh:${ab.id}:e`, nearestBone: ab.endBone, severity: 0.5 });
+    }
+    return out;
+  }, [painMarkers, scarMarkers, adhesionBands]);
+  const spotlightPick = useMemo<SpotlightPick | null>(() => {
+    if (skeletonMode !== 'movement') return null;
+    // Prefer the Re-Ed-enriched sling result so the spotlight sees
+    // driver / verdict / cost / betterPatternId on each sling row,
+    // falling back to the raw sling analysis when enrichment hasn't
+    // computed yet (first frame).
+    const slingForSpotlight = reEducationCompensations.enrichedDetectorOutputs.sling ?? slingAnalysis;
+    if (!slingForSpotlight) return null;
+    return pickSpotlightSling(slingForSpotlight, spotlightBiasMarkers, {
+      pinnedSlingId: pinnedSpotlightSlingId,
+      movementTaskId: unifiedBiomechanicsMovementTask ?? null,
+      lastInteractedBone,
+      previousSpotlightId: previousSpotlightIdRef.current,
+      primaryPainRegion,
+    });
+  }, [skeletonMode, slingAnalysis, reEducationCompensations, spotlightBiasMarkers, pinnedSpotlightSlingId, unifiedBiomechanicsMovementTask, lastInteractedBone, primaryPainRegion]);
+  useEffect(() => {
+    if (spotlightPick) previousSpotlightIdRef.current = spotlightPick.slingId;
+  }, [spotlightPick?.slingId]);
+
+  const recoverySimConditionContext = useMemo<ConditionContext | null>(() => {
+    if (!recoverySimHasClinicalInput && !extractionResult?.mainComplaint && !structuredReasoningData) return null;
+
+    const compromisedTissueInputs = compromisedTissues.map(ct => ({
+      type: ct.tissue_type as string,
+      severity: ct.severity,
+    }));
+
+    const mechCounts: Record<string, number> = {};
+    let nerveRootHit = false;
+    for (const pm of painMarkers as Array<{ painMechanism?: string; anatomicalLabel?: string; description?: string }>) {
+      const m = (pm.painMechanism ?? '').toString().toLowerCase();
+      if (m) mechCounts[m] = (mechCounts[m] ?? 0) + 1;
+      const lbl = `${pm.anatomicalLabel ?? ''} ${pm.description ?? ''}`.toLowerCase();
+      if (/nerve root|radicul|sciatic|c[3-8]|l[3-5]|s1/.test(lbl)) nerveRootHit = true;
+    }
+    let dominantMech = Object.entries(mechCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    if (!dominantMech && structuredReasoningData?.dominantMechanism?.mechanism) {
+      dominantMech = structuredReasoningData.dominantMechanism.mechanism.toLowerCase();
+    }
+    const reasoningText = structuredReasoningData
+      ? `${structuredReasoningData.dominantMechanism?.label ?? ''} ${structuredReasoningData.problemClass?.label ?? ''} ${structuredReasoningData.dominantSymptomDriver?.driver ?? ''}`.toLowerCase()
+      : '';
+    if (!nerveRootHit && /radicul|nerve root|sciatic|c[3-8]|l[3-5]|s1/.test(reasoningText)) {
+      nerveRootHit = true;
+    }
+
+    let romPct: number | null = null;
+    if (romMeasurements.length > 0) {
+      const ratios: number[] = [];
+      for (const m of romMeasurements) {
+        const upper = m.normalRange[1];
+        if (upper > 0) {
+          ratios.push(Math.max(0, Math.min(120, (m.measuredValue / upper) * 100)));
+        }
+      }
+      if (ratios.length > 0) {
+        romPct = ratios.reduce((s, v) => s + v, 0) / ratios.length;
+      }
+    }
+
+    // Per-sling severity (0–100 each). Each sling contributes its
+    // own weak-link count + a small bump for status, plus its
+    // activation-override deviation from baseline. The aggregate is
+    // derived as the max across the per-sling values.
+    const slingSeverityById: Partial<Record<SlingId, number>> = {};
+    if (slingAnalysis) {
+      for (const s of slingAnalysis.slings) {
+        const dys = (s.status === 'underperforming' || s.status === 'compensating') ? 10 : 0;
+        slingSeverityById[s.slingId] = Math.min(100, s.weakLinks.length * 12 + dys);
+      }
+    }
+    let activationDeficitLoad = 0;
+    for (const [id, raw] of Object.entries(slingActivationOverrides)) {
+      if (raw === undefined) continue;
+      const pct = Math.max(0, Math.min(200, raw));
+      const dev = pct - SLING_ACTIVATION_BASELINE;
+      const localLoad = dev < 0 ? Math.abs(dev) : dev * 0.6;
+      activationDeficitLoad += localLoad;
+      // Fold into the matching sling's severity so per-sling
+      // routing/gating reflects the override.
+      const slingId = id as SlingId;
+      const localAdd = Math.min(60, localLoad * 0.4);
+      slingSeverityById[slingId] = Math.min(100, (slingSeverityById[slingId] ?? 0) + localAdd);
+    }
+    let slingSeverity = 0;
+    for (const v of Object.values(slingSeverityById)) {
+      if ((v ?? 0) > slingSeverity) slingSeverity = v ?? 0;
+    }
+
+    const deviations = collectModelConfigDeviations(modelConfig);
+    let deviationMag = 0;
+    for (const d of deviations) deviationMag += Math.abs(d.value);
+    const deviationLoad = Math.min(40, deviationMag * 8);
+    if (romPct === null && deviations.length > 0) {
+      romPct = Math.max(40, 100 - deviationLoad * 1.5);
+    }
+
+    const baselineCap = compromisedTissueInputs.length > 0
+      ? Math.max(20, 60 - compromisedTissueInputs.reduce((s, t) => s + t.severity, 0) * 0.3 - deviationLoad * 0.4)
+      : Math.max(25, 50 - deviationLoad * 0.4);
+    const baselineMotor = Math.max(25, (slingSeverity > 0 ? 70 - slingSeverity * 0.4 : 60) - deviationLoad * 0.5);
+
+    const pathologyParts: string[] = [];
+    if (extractionResult?.mainComplaint) pathologyParts.push(extractionResult.mainComplaint);
+    const topHypothesis = structuredReasoningData?.hypotheses?.[0]?.condition;
+    if (topHypothesis) pathologyParts.push(topHypothesis);
+    if (structuredReasoningData?.problemClass?.label) pathologyParts.push(structuredReasoningData.problemClass.label);
+    if (structuredReasoningData?.reasoningLayers?.tissueFamilySuspicion) {
+      pathologyParts.push(structuredReasoningData.reasoningLayers.tissueFamilySuspicion);
+    }
+    const pathologyText = pathologyParts.length > 0 ? pathologyParts.join(' | ') : null;
+
+    // Task #240 — use the effective (auto-populated + clinician-edited)
+    // patient factors so structured-form edits flow into the sim.
+    const factors = effectivePatientFactors;
+    const mods = effectivePatientModifiers;
+
+    // Task #255 — Natural Progression Layer. Resolve conditionId
+    // from the pathology text the same way `buildConditionContext`
+    // will, then compute the literature-derived prior + shifters and
+    // pass them into the context so `simulateBranch` can anchor the
+    // baseline branch (and lightly modulate the treated branch) to
+    // the natural-history curve. We size the curve to the simulator's
+    // hard upper-bound horizon (`MAX_SIMULATION_WEEKS`) — the
+    // dashboard clamps `input.totalWeeks` to that value, and the
+    // engine's per-week loop truncates to whatever the user picks.
+    // Step 1: classify the complaint string. For most diagnoses this
+    // is the final id. For LBP variants (acute_lbp / subacute_lbp /
+    // chronic_lbp), the classifier picks a default from the text and
+    // the bridge below refines it using structured patient factors so
+    // a plain "low back pain" complaint plus a chronic chronicity
+    // stage routes to chronic_lbp instead of the subacute default.
+    const classifiedNpId = classifyCondition(pathologyText).id;
+    const npConditionId = resolveNaturalProgressionConditionId(classifiedNpId, factors);
+    const naturalProgression = computeNaturalProgression({
+      conditionId: npConditionId,
+      factors,
+      totalWeeks: MAX_SIMULATION_WEEKS,
+    });
+
+    return buildConditionContext({
+      mainComplaint: pathologyText,
+      compromisedTissues: compromisedTissueInputs,
+      scarSeverityList: scarMarkers.map(s => s.severity ?? 0),
+      adhesionCount: adhesionBands.length,
+      painMechanism: dominantMech,
+      hasNerveRoot: nerveRootHit,
+      currentRomPercent: romPct,
+      baselineMotorControl: baselineMotor,
+      baselineCapacity: baselineCap,
+      slingWeakLinkSeverity: slingSeverity,
+      slingSeverities: Object.keys(slingSeverityById).length > 0 ? slingSeverityById : null,
+      ageYears: extractionResult?.patientAge ?? factors.age ?? null,
+      patientHealingMult: mods.healingRateMultiplier,
+      patientPainMult: mods.painSensitivityMultiplier,
+      patientRecurrenceMult: mods.recurrenceRiskMultiplier,
+      patientTissueQualityMult: mods.tissueQualityMultiplier,
+      patientPhaseTimingMult: mods.phaseTimingMultiplier,
+      patientRomCeiling: mods.romCeilingAdjustment,
+      // Task #239 — pipe per-joint load vectors into the ConditionContext
+      // so treatments declaring `loadModification` (rest_offload, taping_bracing,
+      // motor_control, manual_therapy, …) can target the actual dominant
+      // load components on the active skeleton.
+      jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
+      naturalProgression,
+    });
+  }, [recoverySimHasClinicalInput, extractionResult, painMarkers, compromisedTissues, scarMarkers, adhesionBands, romMeasurements, structuredReasoningData, slingAnalysis, modelConfig, slingActivationOverrides, collectModelConfigDeviations, hudForceAnalysis, effectivePatientFactors, effectivePatientModifiers]);
+
+  const naturalTimelineRequestContext = useMemo<NaturalTimelineRequestContext | null>(() => {
+    if (!showRecoverySim) return null;
+    const hasInput = recoverySimHasClinicalInput || !!extractionResult?.mainComplaint || !!structuredReasoningData;
+    if (!hasInput) return null;
+    const factors = autoPopulateFromPipeline(extractionResult ?? null, structuredReasoningData ?? null, DEFAULT_PATIENT_FACTORS);
+    return {
+      clinical_summary: structuredReasoningData
+        ? `${structuredReasoningData.dominantMechanism?.label ?? ''} | ${structuredReasoningData.problemClass?.label ?? ''} | ${structuredReasoningData.dominantSymptomDriver?.driver ?? ''}`.trim()
+        : undefined,
+      main_complaint: extractionResult?.mainComplaint ?? undefined,
+      pain_markers: (painMarkers as unknown as Array<Record<string, unknown>>).map(pm => ({
+        anatomical_label: String(pm.anatomicalLabel ?? ''),
+        symptom_type: pm.symptomType ? String(pm.symptomType) : undefined,
+        pain_mechanism: pm.painMechanism ? String(pm.painMechanism) : undefined,
+        description: pm.description ? String(pm.description) : undefined,
+        severity: typeof pm.severity === 'number' ? pm.severity : undefined,
+      })),
+      compromised_tissues: compromisedTissues.map(ct => {
+        const r = ct as unknown as Record<string, unknown>;
+        return {
+          tissue_type: String(ct.tissue_type),
+          tissue_id: String(r.tissue_id ?? r.id ?? ct.tissue_type),
+          severity: ct.severity,
+          rationale: r.rationale ? String(r.rationale) : undefined,
+        };
+      }),
+      has_nerve_root: /nerve root|radicul|sciatic/.test(JSON.stringify(painMarkers).toLowerCase()),
+      sling_weak_links: slingAnalysis
+        ? slingAnalysis.slings.flatMap(s =>
+            (s.weakLinks ?? []).map(wl => ({
+              sling: s.label ?? s.slingId ?? 'sling',
+              weakLink: typeof wl === 'string' ? wl : String(wl),
+              severity: s.status === 'compensating' ? 70 : s.status === 'underperforming' ? 55 : 30,
+            }))
+          )
+        : undefined,
+      sling_activation_overrides: (() => {
+        const labelById = new Map<string, string>();
+        if (slingAnalysis) {
+          for (const s of slingAnalysis.slings) labelById.set(s.slingId, s.label ?? s.slingId);
+        }
+        const entries: Array<{ sling: string; activation_percent: number; band: string; deficit_severity: number }> = [];
+        for (const [id, raw] of Object.entries(slingActivationOverrides)) {
+          if (raw === undefined) continue;
+          const pct = Math.max(0, Math.min(200, raw));
+          if (pct === SLING_ACTIVATION_BASELINE) continue;
+          const dev = pct - SLING_ACTIVATION_BASELINE;
+          const band =
+            pct < SLING_ACTIVATION_BASELINE
+              ? (pct <= 30 ? 'severe_under' : 'mild_under')
+              : (pct >= 170 ? 'severe_over' : 'mild_over');
+          const deficit_severity = Math.min(100, Math.round(dev < 0 ? Math.abs(dev) : dev * 0.6));
+          entries.push({
+            sling: labelById.get(id) ?? id,
+            activation_percent: Math.round(pct),
+            band,
+            deficit_severity,
+          });
+        }
+        return entries.length > 0 ? entries : undefined;
+      })(),
+      joint_deviations: collectModelConfigDeviations(modelConfig).map(d => ({
+        joint: d.joint,
+        parameter: d.param,
+        degrees: d.value,
+      })),
+      postural_deviations: collectModelConfigDeviations(modelConfig).reduce<Record<string, number>>((acc, d) => {
+        acc[`${d.joint}.${d.param}`] = d.value;
+        return acc;
+      }, {}),
+      region_highlights: [
+        ...scarMarkers.map(s => ({ region: String((s as unknown as Record<string, unknown>).anatomicalLabel ?? 'scar'), type: 'scar', severity: s.severity ?? 0 })),
+        ...adhesionBands.map(b => ({ region: String((b as unknown as Record<string, unknown>).anatomicalLabel ?? 'adhesion'), type: 'adhesion', severity: ((b as unknown as Record<string, unknown>).severity as number) ?? 0 })),
+        ...romMeasurements.map(m => ({
+          region: String((m as unknown as Record<string, unknown>).joint ?? (m as unknown as Record<string, unknown>).movement ?? 'rom'),
+          type: 'rom_restriction',
+          severity: m.normalRange[1] > 0 ? Math.max(0, Math.round(100 - (m.measuredValue / m.normalRange[1]) * 100)) : undefined,
+          label: `${(m as unknown as Record<string, unknown>).movement ?? ''}: ${m.measuredValue}/${m.normalRange[1]}°`,
+        })),
+      ],
+      patient_factors: {
+        age: factors.age ?? extractionResult?.patientAge ?? null,
+        bmi: factors.bmi,
+        smoking: factors.smoking,
+        diabetes: factors.diabetes,
+        activity_level: factors.activityLevel,
+        sleep_quality: factors.sleepQuality,
+        psychological_risk: factors.psychologicalRisk,
+        previous_episodes: factors.previousEpisodes,
+        chronicity: factors.chronicity,
+        compliance_percent: factors.compliance,
+        symptom_duration: extractionResult?.duration ?? null,
+        irritability: extractionResult?.irritability ?? null,
+      },
+    };
+  }, [showRecoverySim, recoverySimHasClinicalInput, extractionResult, structuredReasoningData, painMarkers, compromisedTissues, slingAnalysis, modelConfig, scarMarkers, adhesionBands, romMeasurements, slingActivationOverrides, collectModelConfigDeviations]);
+
+  /** Stable dedup signature for the natural-timeline request. Built
+   *  from clinically meaningful fields only (with quantized numeric
+   *  values) so trivial floating-point drift from the live 3D model
+   *  state — driven by the simulator's auto-sync skeleton wiring —
+   *  cannot retrigger an AI fetch. The full live context is still
+   *  POSTed to the server; this signature just controls when we
+   *  *consider* the request inputs to have meaningfully changed. */
+  const naturalTimelineSignature = useMemo<string | null>(() => {
+    if (!naturalTimelineRequestContext) return null;
+    const ctx = naturalTimelineRequestContext;
+    const bucket = (n: number | null | undefined, step: number) =>
+      n === null || n === undefined || !Number.isFinite(n) ? null : Math.round(n / step) * step;
+    const sigPainMarkers = (ctx.pain_markers ?? [])
+      .map(pm => [
+        pm.anatomical_label ?? '',
+        pm.symptom_type ?? '',
+        pm.pain_mechanism ?? '',
+        bucket(pm.severity, 5),
+      ].join('|'))
+      .sort();
+    const sigTissues = (ctx.compromised_tissues ?? [])
+      .map(t => [t.tissue_id, t.tissue_type, bucket(t.severity, 5)].join('|'))
+      .sort();
+    const sigSlings = (ctx.sling_weak_links ?? [])
+      .map(s => [s.sling, s.weakLink, bucket(s.severity, 10)].join('|'))
+      .sort();
+    const sigSlingActivation = (ctx.sling_activation_overrides ?? [])
+      .map(o => [o.sling, bucket(o.activation_percent, 10), o.band].join('|'))
+      .sort();
+    const sigRegions = (ctx.region_highlights ?? [])
+      .map(r => [r.region, r.type, bucket(r.severity ?? null, 10)].join('|'))
+      .sort();
+    const f: Record<string, string | number | boolean | null | undefined> = ctx.patient_factors ?? {};
+    const num = (v: string | number | boolean | null | undefined): number | null =>
+      typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) ? Number(v) : null;
+    const str = (v: string | number | boolean | null | undefined): string =>
+      v === null || v === undefined ? '' : String(v);
+    const sigFactors = [
+      bucket(num(f.age), 5),
+      bucket(num(f.bmi), 2),
+      str(f.smoking),
+      str(f.diabetes),
+      str(f.activity_level),
+      str(f.sleep_quality),
+      str(f.psychological_risk),
+      bucket(num(f.previous_episodes), 1),
+      str(f.chronicity),
+      bucket(num(f.compliance_percent), 10),
+      str(f.symptom_duration),
+      str(f.irritability),
+    ].join('|');
+    return JSON.stringify({
+      cs: ctx.clinical_summary ?? '',
+      mc: ctx.main_complaint ?? '',
+      pm: sigPainMarkers,
+      tis: sigTissues,
+      nr: !!ctx.has_nerve_root,
+      sl: sigSlings,
+      sla: sigSlingActivation,
+      rh: sigRegions,
+      pf: sigFactors,
+      // joint_deviations + postural_deviations intentionally OMITTED:
+      // they are driven by the live skeleton state and would otherwise
+      // retrigger an AI fetch on every chart scrub.
+    });
+  }, [naturalTimelineRequestContext]);
+
+  const naturalTimeline = useNaturalTimeline({
+    context: naturalTimelineRequestContext,
+    enabled: showRecoverySim,
+    signature: naturalTimelineSignature,
+    patientContext: patientContextPayload,
+  });
+
+  /** Resolve the same archetype the dashboard will render so the
+   *  case-specific plan request sends matching phase ids/names. The
+   *  dashboard mirrors this resolution: trust the precomputed
+   *  archetypeId on conditionContext if available, otherwise fall back
+   *  to label-based resolution. */
+  const recoverySimArchetype = useMemo(() => {
+    if (!recoverySimConditionContext) return null;
+    const precomputed = recoverySimConditionContext.archetypeId;
+    if (precomputed && RECOVERY_ARCHETYPES[precomputed]) return RECOVERY_ARCHETYPES[precomputed];
+    return getArchetypeForCondition(recoverySimConditionContext.conditionId, recoverySimConditionContext.conditionLabel);
+  }, [recoverySimConditionContext]);
+
+  const recoverySimPhases = useMemo(() => {
+    if (!recoverySimArchetype) return [] as Array<{ id: string; name: string; subtitle?: string }>;
+    return recoverySimArchetype.stages.map(s => ({ id: s.id, name: s.name, subtitle: s.subtitle }));
+  }, [recoverySimArchetype]);
+
+  /** Case-specific plan signature. Reuses the natural-timeline signature
+   *  (which already excludes high-frequency live skeleton fields) and
+   *  adds the natural-timeline verdict + archetype phase ids so the
+   *  plan refetches whenever the verdict or archetype changes. */
+  const caseSpecificPlanSignature = useMemo<string | null>(() => {
+    if (!naturalTimelineSignature || !naturalTimeline.result || recoverySimPhases.length === 0) return null;
+    const nt = naturalTimeline.result;
+    const ntSig = JSON.stringify({
+      pf: nt.per_finding.map(f => [f.finding_id, f.healing_class, f.expected_weeks_to_resolution, Math.round(f.residual_deficit_percent / 5) * 5].join('|')).sort(),
+      ow: [Math.round(nt.overall_window_weeks.expected), Math.round(nt.overall_window_weeks.best), Math.round(nt.overall_window_weeks.worst)],
+      cr: Math.round(nt.chronicity_risk_percent / 10) * 10,
+      rr: Math.round(nt.recurrence_risk_percent / 10) * 10,
+      fr: Math.round(nt.flare_risk_percent / 10) * 10,
+    });
+    return JSON.stringify({
+      base: naturalTimelineSignature,
+      arch: recoverySimArchetype?.id ?? '',
+      phases: recoverySimPhases.map(p => p.id),
+      nt: ntSig,
+    });
+  }, [naturalTimelineSignature, naturalTimeline.result, recoverySimPhases, recoverySimArchetype]);
+
+  const caseSpecificPlan = useCaseSpecificPlan({
+    context: naturalTimelineRequestContext,
+    naturalTimeline: naturalTimeline.result,
+    phases: recoverySimPhases,
+    archetypeId: recoverySimArchetype?.id,
+    conditionLabel: recoverySimConditionContext?.conditionLabel ?? extractionResult?.mainComplaint ?? undefined,
+    qaHistory: naturalTimeline.qaHistory,
+    enabled: showRecoverySim && !!naturalTimeline.result && recoverySimPhases.length > 0,
+    signature: caseSpecificPlanSignature,
+    patientContext: patientContextPayload,
+  });
+
+  /** Derive a downstream patient-context status for each AI panel.
+   *  - "absent"   : prediction exists but the clinician hasn't supplied
+   *                 any patient context yet (non-blocking accuracy hint).
+   *  - "updating" : the clinician has context, but the panel is mid-
+   *                 refresh OR the displayed result was generated with
+   *                 a different (stale) context signature.
+   *  - "applied"  : the displayed result already reflects the latest
+   *                 patient context. */
+  const patientContextAnsweredCount = patientContextPayload.answers.length;
+  const naturalTimelinePcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (naturalTimeline.loading) return "updating";
+    if (naturalTimeline.appliedPatientContextSig !== naturalTimeline.currentPatientContextSig) return "updating";
+    if (!naturalTimeline.result) return "updating";
+    return "applied";
+  }, [
+    hasPatientContext,
+    naturalTimeline.loading,
+    naturalTimeline.result,
+    naturalTimeline.appliedPatientContextSig,
+    naturalTimeline.currentPatientContextSig,
+  ]);
+  const caseSpecificPlanPcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (caseSpecificPlan.loading) return "updating";
+    if (caseSpecificPlan.appliedPatientContextSig !== caseSpecificPlan.currentPatientContextSig) return "updating";
+    if (!caseSpecificPlan.result) return "updating";
+    return "applied";
+  }, [
+    hasPatientContext,
+    caseSpecificPlan.loading,
+    caseSpecificPlan.result,
+    caseSpecificPlan.appliedPatientContextSig,
+    caseSpecificPlan.currentPatientContextSig,
+  ]);
+  /** The recovery-simulation chip rolls up both downstream calls — if
+   *  EITHER is still mid-refresh we show "updating" so the clinician
+   *  knows the simulation isn't yet a complete reflection of the new
+   *  context. */
+  const recoverySimPcStatus = useMemo<"absent" | "updating" | "applied">(() => {
+    if (!hasPatientContext) return "absent";
+    if (naturalTimelinePcStatus === "updating" || caseSpecificPlanPcStatus === "updating") return "updating";
+    return "applied";
+  }, [hasPatientContext, naturalTimelinePcStatus, caseSpecificPlanPcStatus]);
+
+  /** When the patient-context payload changes, debounce-fire an
+   *  incremental parse so the PREDICTION refreshes alongside the
+   *  natural-timeline / case-specific-plan / recovery-sim hooks (which
+   *  already auto-refire via their dedup signature). This makes the
+   *  "submit / update context" experience consistent across all four
+   *  AI surfaces — no manual button required.
+   *
+   *  We only fire when:
+   *    - a prediction has actually been made (a parse result exists), AND
+   *    - the patient-context payload signature genuinely changed
+   *      (prevents auto-fire on initial mount or empty -> empty churn). */
+  const patientContextSig = useMemo(
+    () => buildPatientContextSig(patientContextPayload),
+    [patientContextPayload],
+  );
+  // Mirror onto ref so the autopilot chain runner (declared earlier in
+  // render order) can fold it into the research dedup hash.
+  patientContextSigRef.current = patientContextSig;
+
+  // ─── Active Movement Mode wiring ──────────────────────
+  // (`activeCaseId` is declared earlier — before the savedHypothesesQuery
+  // that references it — to avoid a TDZ ReferenceError on render.)
+  const activeCapacitiesEnabled = skeletonMode === 'movement' && !!activeCaseId;
+  const {
+    profile: activeCapacityProfile,
+    effectiveProfile: activeCapacityEffective,
+    profileMap: activeCapacityMap,
+    generate: generateActiveCapacity,
+    refreshFromContext: refreshActiveCapacity,
+    generating: generatingActiveCapacity,
+    refreshing: refreshingActiveCapacity,
+  } = useActiveCapacities(activeCaseId, activeCapacitiesEnabled);
+  void activeCapacityEffective;
+
+  // Slim painMarkers + intakeContext payload forwarded to the AI generator.
+  const activeCapacityAiContext = useMemo(() => {
+    const markers = painMarkers.map(m => ({
+      location: m.anatomicalLabel || m.nearestBone,
+      type: m.type,
+      symptomType: m.symptomType,
+      description: m.description,
+      subjectiveHistory: m.subjectiveHistory,
+      painMechanism: m.painMechanism,
+      nerveRoot: m.nerveRoot,
+      severity: m.severity,
+    })).filter(m => m.location);
+    const intake: Record<string, string | number | boolean> = {};
+    if (patientContextPayload.free_form) intake.free_form = patientContextPayload.free_form.slice(0, 1500);
+    for (const a of patientContextPayload.answers) {
+      if (!a.answer || !a.prompt) continue;
+      const key = a.prompt.slice(0, 80);
+      intake[key] = a.answer.slice(0, 400);
+    }
+    return { markers, intake };
+  }, [painMarkers, patientContextPayload]);
+
+  // Stable hash of the AI context — must match the server's
+  // `computeAiContextSignature` so we can compare against the
+  // `aiContextSignature` persisted on the profile. Hashes EVERY field
+  // the server forwards to the AI (full description, subjectiveHistory,
+  // painMechanism, nerveRoot, severity, plus the full intake), so any
+  // edit that changes the model's input forces a re-derive.
+  const currentAiContextSig = useMemo(
+    () => computeAiContextSignature(activeCapacityAiContext.markers, activeCapacityAiContext.intake),
+    [activeCapacityAiContext],
+  );
+
+  // Auto-generate the capacity profile the first time the clinician
+  // enters Movement Mode for a case with no active-capacity rows yet.
+  // Uses a ref so the 250 ms-deferred call always reads the LATEST
+  // marker/intake context — without it the closure would capture
+  // whatever context was current when the effect first scheduled,
+  // missing edits made during the debounce window.
+  const activeCapacityAiContextRef = useRef(activeCapacityAiContext);
+  useEffect(() => {
+    activeCapacityAiContextRef.current = activeCapacityAiContext;
+  }, [activeCapacityAiContext]);
+  useEffect(() => {
+    if (skeletonMode !== 'movement') return;
+    if (!activeCaseId) return;
+    if (activeCapacityProfile) return;
+    if (generatingActiveCapacity) return;
+    const t = window.setTimeout(() => {
+      const ctx = activeCapacityAiContextRef.current;
+      generateActiveCapacity.mutate({
+        refresh: false,
+        painMarkers: ctx.markers,
+        intakeContext: ctx.intake,
+      });
+    }, 250);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skeletonMode, activeCaseId, activeCapacityProfile, generatingActiveCapacity]);
+
+  // Re-infer painful arcs whenever the clinician changes pain markers or
+  // patient context. Compares the live signature against the one persisted
+  // on the profile, so changes made OUTSIDE Movement Mode (Posture mode,
+  // intake form, marker placement on body scan) are picked up the next
+  // time the profile + context land together. Debounced 1.5 s.
+  useEffect(() => {
+    if (!activeCaseId) return;
+    if (!activeCapacityProfile) return;
+    if (generatingActiveCapacity || refreshingActiveCapacity) return;
+    const persistedSig = activeCapacityProfile.aiContextSignature ?? '';
+    if (persistedSig === currentAiContextSig) return;
+    const t = window.setTimeout(() => {
+      const ctx = activeCapacityAiContextRef.current;
+      refreshActiveCapacity.mutate({
+        painMarkers: ctx.markers,
+        intakeContext: ctx.intake,
+      });
+    }, 1500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCaseId, activeCapacityProfile, currentAiContextSig, generatingActiveCapacity, refreshingActiveCapacity]);
+
+  const [painfulArcFlares, setPainfulArcFlares] = useState<Array<{
+    joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number; timestamp: number;
+  }>>([]);
+  const handlePainfulArcFlare = useCallback((flare: {
+    joint: string; movement: string; angle: number; intensity: number; arcStart: number; arcEnd: number;
+  }) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    const now = Date.now();
+    setPainfulArcFlares(prev => [
+      { ...flare, timestamp: now },
+      ...prev.filter(f => now - f.timestamp < 8000),
+    ].slice(0, 6));
+  }, []);
+
+  const handleActiveMovementAttempt = useCallback(async (attempt: {
+    joint: string;
+    movement: string;
+    achievedAngle: number;
+    activeRomMax: number;
+    passiveRomMax: number;
+    inPainfulArc: boolean;
+    exceededActiveLimit: boolean;
+    compensationsTriggered: string[];
+  }) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+    const condition = (summary && summary.length <= 240 ? summary : desc).slice(0, 240) || 'Unspecified condition';
+    const id = `mf-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Stamp the Re-Ed verdict onto the finding at creation time so the
+    // Findings Stream can render verdict-coloring even after the
+    // enrichment memo recomputes. Falls back to the live map prop when
+    // unavailable.
+    const reEdMatch = reEducationCompensationsRef.current?.compensations.find(
+      c => c.joint === attempt.joint && c.movement === attempt.movement,
+    );
+    const placeholder: MovementFinding = {
+      id,
+      timestamp: Date.now(),
+      joint: attempt.joint,
+      movement: attempt.movement,
+      achievedAngle: attempt.achievedAngle,
+      inPainfulArc: attempt.inPainfulArc,
+      exceededActiveLimit: attempt.exceededActiveLimit,
+      sentence: '',
+      loading: true,
+      verdict: reEdMatch?.verdict as MovementFindingVerdict | undefined,
+    };
+    // Cap stream at 12 most-recent findings.
+    setMovementFindings(prev => [placeholder, ...prev].slice(0, 12));
+    try {
+      const res = await fetch('/api/movement-findings/summarise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          condition,
+          caseSummaryShort: summary ? summary.slice(0, 800) : undefined,
+          ...attempt,
+        }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const sentence = (data?.sentence as string) || `${attempt.joint} ${attempt.movement} reached ${Math.round(attempt.achievedAngle)}°.`;
+      setMovementFindings(prev => prev.map(f => f.id === id ? { ...f, sentence, loading: false } : f));
+    } catch (err) {
+      setMovementFindings(prev => prev.map(f => f.id === id ? { ...f, sentence: `${attempt.joint} ${attempt.movement} reached ${Math.round(attempt.achievedAngle)}° (offline).`, loading: false } : f));
+    }
+  }, [lastClinicalParseResult]);
+
+  const movementSimContext = useMemo<MovementSimContext>(() => {
+    const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+    const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+    const condition = (extractionResult?.mainComplaint
+      || (summary && summary.length <= 240 ? summary : desc)
+      || '').slice(0, 240) || 'Unspecified condition';
+    const caseSummary = (summary || desc).slice(0, 1600);
+
+    const caseIrritability = (extractionResult?.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined;
+    const painfulTissues = painMarkers
+      .map(m => ({
+        label: (m.anatomicalLabel || m.nearestBone || '').toString().trim(),
+        severity: typeof m.severity === 'number' ? m.severity : undefined,
+        type: (m.symptomType || m.type || undefined) as string | undefined,
+        irritability: caseIrritability,
+      }))
+      .filter(t => t.label.length > 0)
+      .slice(0, 12);
+
+    const postureDeviations = collectModelConfigDeviations(modelConfig)
+      .map(d => `${d.joint}.${d.param} = ${Math.round(d.value * 100) / 100}`)
+      .slice(0, 16);
+
+    const slingActivations = (slingAnalysis?.slings || [])
+      .map(s => ({ slingId: s.slingId as string, activation: typeof s.activationLevelPct === 'number' ? s.activationLevelPct : 0 }))
+      .slice(0, 8);
+
+    const topJoints = (hudForceAnalysis?.joints || [])
+      .slice()
+      .sort((a, b) => (b as { magnitudeBW?: number }).magnitudeBW
+        != null && (a as { magnitudeBW?: number }).magnitudeBW != null
+        ? ((b as { magnitudeBW?: number }).magnitudeBW! - (a as { magnitudeBW?: number }).magnitudeBW!)
+        : 0)
+      .slice(0, 5)
+      .map(j => {
+        const jj = j as { name?: string; jointName?: string; type?: string; magnitudeBW?: number; status?: string };
+        const name = jj.name || jj.jointName || jj.type || 'joint';
+        const bw = typeof jj.magnitudeBW === 'number' ? `${jj.magnitudeBW.toFixed(2)}×BW` : '';
+        return `${name} ${bw}${jj.status ? ` (${jj.status})` : ''}`.trim();
+      });
+    const hudForceSummary = topJoints.length ? `Top joint loads: ${topJoints.join('; ')}` : '';
+
+    const capRows = activeCapacityEffective?.rows ?? activeCapacityProfile?.rows ?? [];
+    const activeCapacityProfilePayload = capRows.slice(0, 32).map(r => {
+      const out: { joint: string; movement: string; activeRom?: [number, number]; painfulArc?: [number, number]; activeStrengthPct?: number } = {
+        joint: r.joint, movement: r.movement,
+        activeRom: [Math.round(r.activeRomMin), Math.round(r.activeRomMax)],
+        activeStrengthPct: Math.round(r.activeStrengthPct),
+      };
+      if (r.painfulArc) out.painfulArc = [Math.round(r.painfulArc.start), Math.round(r.painfulArc.end)];
+      return out;
+    });
+
+    return { condition, caseSummary, painfulTissues, postureDeviations, slingActivations, hudForceSummary, activeCapacityProfile: activeCapacityProfilePayload };
+  }, [
+    lastClinicalParseResult, extractionResult, painMarkers, modelConfig,
+    collectModelConfigDeviations, slingAnalysis, hudForceAnalysis,
+    activeCapacityEffective, activeCapacityProfile,
+  ]);
+
+  const [movementSimTissueOverlay, setMovementSimTissueOverlay] = useState<Array<{ tissue: string; tone: 'green' | 'amber' }>>([]);
+
+  useEffect(() => {
+    setMovementSimTissueOverlay([]);
+  }, [activeCaseId, skeletonMode]);
+
+  const handleMovementSimResult = useCallback((res: MovementSimResult, plan: MovementSimIntervention[]) => {
+    if (skeletonModeRef.current !== 'movement') return;
+    const overlay = res.tissueLoadImpact
+      .filter(t => t.loadDirection === 'down' || t.loadDirection === 'up')
+      .map(t => ({
+        tissue: t.tissue,
+        tone: (t.loadDirection === 'down' ? 'green' : 'amber') as 'green' | 'amber',
+      }));
+    setMovementSimTissueOverlay(overlay);
+
+    const id = `mfsim-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const verdictText = res.netVerdict.toUpperCase();
+    const planLine = plan.length
+      ? plan.map(p => describeIntervention(p)).join(' + ')
+      : 'no interventions';
+    const headline = res.verdictRationale
+      ? `${verdictText} (${planLine}): ${res.verdictRationale}`
+      : `${verdictText} (${planLine}) — ${res.confidence} confidence.`;
+    const tissueLine = res.tissueLoadImpact.length
+      ? ' · ' + res.tissueLoadImpact.slice(0, 3).map(t => `${t.tissue} load ${t.loadDirection}, sx ${t.symptomDirection}`).join('; ')
+      : '';
+    setMovementFindings(prev => [{
+      id,
+      timestamp: Date.now(),
+      joint: 'simulator',
+      movement: 'AI sim',
+      achievedAngle: 0,
+      inPainfulArc: res.netVerdict === 'mixed',
+      exceededActiveLimit: res.netVerdict === 'harmful',
+      sentence: headline + tissueLine,
+      loading: false,
+    }, ...prev].slice(0, 12));
+  }, []);
+
+  const handleMovementSimReset = useCallback(() => {
+    setMovementSimTissueOverlay([]);
+  }, []);
+
+  // Lightweight reshape of the capacity map → the prop expected by
+  // PureThreeGLBViewer (lookup by `joint:movement`). We pass the
+  // *effective* profile (passive×0.85 fallback while AI is generating)
+  // so dragging is gated immediately when the clinician flips into
+  // Movement Mode rather than waiting for the request to return.
+  const viewerActiveCapacities = useMemo(() => {
+    if (skeletonMode !== 'movement') return null;
+    if (activeCapacityMap) return activeCapacityMap;
+    if (activeCapacityEffective) {
+      const m: Record<string, typeof activeCapacityEffective.rows[number]> = {};
+      for (const r of activeCapacityEffective.rows) m[`${r.joint}:${r.movement}`] = r;
+      return m;
+    }
+    return null;
+  }, [skeletonMode, activeCapacityMap, activeCapacityEffective]);
+
+  const lastAppliedPcSigRef = useRef<string>('');
+  const pcAutoApplyTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    // When the case is cleared (no parse result), reset the applied-sig
+    // ref so the next case doesn't inherit a stale signature and trigger
+    // an unnecessary incremental parse on first context entry.
+    if (!lastClinicalParseResult) {
+      lastAppliedPcSigRef.current = '';
+      if (pcAutoApplyTimerRef.current) {
+        window.clearTimeout(pcAutoApplyTimerRef.current);
+        pcAutoApplyTimerRef.current = null;
+      }
+      return;
+    }
+    if (lastAppliedPcSigRef.current === patientContextSig) return;
+    if (pcAutoApplyTimerRef.current) window.clearTimeout(pcAutoApplyTimerRef.current);
+    pcAutoApplyTimerRef.current = window.setTimeout(() => {
+      lastAppliedPcSigRef.current = patientContextSig;
+      clinicalTextInputRef.current?.triggerIncrementalParse();
+    }, 900);
+    return () => {
+      if (pcAutoApplyTimerRef.current) {
+        window.clearTimeout(pcAutoApplyTimerRef.current);
+        pcAutoApplyTimerRef.current = null;
+      }
+    };
+  }, [patientContextSig, lastClinicalParseResult]);
 
   const clinicalPlan = useMemo<ClinicalPlanResult | null>(() => {
     const bioSrc = unifiedBiomechanicsOutput ?? cachedBiomechanicsOutput;
@@ -3896,7 +9399,7 @@ ${ddxList}`;
       painMarkers: painMarkers.map(pm => ({
         id: pm.id,
         label: pm.anatomicalLabel || pm.nearestBone,
-        severity: (pm as Record<string, unknown>).severity as number | undefined,
+        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
         type: pm.type,
         description: pm.description,
       })),
@@ -3955,10 +9458,336 @@ ${ddxList}`;
     return Array.from(clinicalMap.values()).sort((a, b) => b.severity - a.severity);
   }, [compromisedTissues, slingTissueRisks]);
 
-  const slingOverlayActive = rightPanelTab === 'slings' && slingOverlayVisible && !!slingAnalysis;
+  const tissueIntelligenceMap = useMemo(() => {
+    const map = new Map<string, TissueIntelligence>();
+    try {
+      const jointForceData = hudForceAnalysis?.joints?.map((f: JointSurfaceForce) => ({
+        boneName: f.boneName,
+        totalForce: f.totalForce,
+        status: f.status,
+        label: f.label,
+      })) ?? [];
+
+      const chainScores = Array.from(chainIntegrityScores.entries()).map(([chainId, val]) => ({
+        chainId,
+        score: val.score,
+        issues: val.issues,
+      }));
+
+      const postureDeviations: Record<string, number> = {};
+      if (modelConfig?.spine?.thoracicKyphosis !== undefined) postureDeviations['thoracicKyphosis'] = modelConfig.spine.thoracicKyphosis as number;
+      if (modelConfig?.spine?.forwardHead !== undefined) postureDeviations['forwardHead'] = modelConfig.spine.forwardHead as number;
+      if (modelConfig?.spine?.lumbarLordosis !== undefined) postureDeviations['lumbarLordosis'] = modelConfig.spine.lumbarLordosis as number;
+      if (modelConfig?.pelvis?.tilt !== undefined) postureDeviations['pelvicTilt'] = modelConfig.pelvis.tilt as number;
+
+      const painMarkersInput = painMarkers.map(pm => ({
+        label: pm.anatomicalLabel || pm.nearestBone,
+        severity: ((pm as unknown as Record<string, unknown>).severity as number | undefined) ?? 5,
+        type: pm.type,
+        description: pm.description,
+      }));
+
+      const mapChainToFasciaIds = (chainId: string): string[] => {
+        const c = chainId.toLowerCase();
+        if (c.startsWith('superficial_back')) return ['sbl'];
+        if (c.startsWith('superficial_front')) return ['sfl'];
+        if (c.startsWith('deep_front')) return ['dfl'];
+        if (c.startsWith('lateral_line_l')) return ['lateral_l'];
+        if (c.startsWith('lateral_line_r')) return ['lateral_r'];
+        if (c.startsWith('lateral_line')) return ['lateral_l', 'lateral_r'];
+        if (c.startsWith('spiral')) return ['spiral'];
+        if (c.startsWith('arm_line_l')) return ['front_arm_l'];
+        if (c.startsWith('arm_line_r')) return ['front_arm_r'];
+        if (c.startsWith('arm_line')) return ['front_arm_l', 'front_arm_r'];
+        return [];
+      };
+      const scarTissueIds: string[] = [];
+      for (const scar of scarMarkers) {
+        try {
+          const impact = getScarImpact(scar);
+          for (const ac of impact.affectedChains) {
+            const cid = (ac.chain as { id?: string }).id;
+            if (cid) scarTissueIds.push(...mapChainToFasciaIds(cid));
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const ad of adhesionBands) {
+        if (ad.depth === 'deep') scarTissueIds.push('dfl');
+        scarTissueIds.push('sfl');
+      }
+
+      const results = aggregateTissueIntelligence({
+        aiCompromisedTissues: compromisedTissues,
+        slingTissueRisks,
+        jointForceData,
+        muscleOverrides: compensatedOverrides as unknown as Record<string, { pathology?: string; inhibition?: number; isManual?: boolean }>,
+        painMarkers: painMarkersInput,
+        chainIntegrityScores: chainScores,
+        scarTissueIds: scarTissueIds.length > 0 ? Array.from(new Set(scarTissueIds)) : undefined,
+        postureDeviations,
+      });
+      for (const r of results) {
+        map.set(`${r.tissueType}:${r.tissueId}`, r);
+      }
+    } catch (err) {
+      console.warn('[TissueIntelligence] aggregation failed', err);
+    }
+    return map;
+  }, [compromisedTissues, slingTissueRisks, hudForceAnalysis, chainIntegrityScores, modelConfig, painMarkers, compensatedOverrides, scarMarkers, adhesionBands]);
+
+  const inflammationIntelligenceMap = useMemo(() => {
+    const list = filterInflammationIntelligence(Array.from(tissueIntelligenceMap.values()), 6);
+    const map = new Map<string, TissueIntelligence>();
+    for (const r of list) map.set(`${r.tissueType}:${r.tissueId}`, r);
+    return map;
+  }, [tissueIntelligenceMap]);
+
+  const hubCompromisedTissues = useMemo(() => {
+    const map = new Map<string, CompromisedTissue>();
+    for (const ct of compromisedTissues) {
+      const key = `${ct.tissue_type}:${ct.tissue_id}`;
+      const existing = map.get(key);
+      if (!existing || ct.severity > existing.severity) {
+        map.set(key, ct);
+      }
+    }
+    for (const intel of Array.from(inflammationIntelligenceMap.values())) {
+      const key = `${intel.tissueType}:${intel.tissueId}`;
+      const existing = map.get(key);
+      const sev = Math.max(0, Math.min(1, intel.severity ?? 0));
+      const conf: 'confirmed' | 'predicted' = intel.confidence === 'high' ? 'confirmed' : 'predicted';
+      const rationale = intel.rationale || (intel.evidence[0]?.note ?? 'Clinical inflammation');
+      if (!existing) {
+        map.set(key, {
+          tissue_type: intel.tissueType as CompromisedTissue['tissue_type'],
+          tissue_id: intel.tissueId,
+          severity: sev,
+          rationale,
+          confidence: conf,
+        });
+      } else if (sev > existing.severity) {
+        map.set(key, { ...existing, severity: sev });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.severity - a.severity).slice(0, 6);
+  }, [compromisedTissues, inflammationIntelligenceMap]);
+
+  const [causalChainTissueId, setCausalChainTissueId] = useState<string | null>(null);
+  const handleTissueCausalChainSelect = useCallback((tissueId: string) => {
+    setCausalChainTissueId(prev => (prev === tissueId ? null : tissueId));
+  }, []);
+
+  const causalChainHighlights = useMemo(() => {
+    if (!causalChainTissueId) return [];
+    let intel: import('@/lib/tissueIntelligence').TissueIntelligence | undefined;
+    for (const v of Array.from(tissueIntelligenceMap.values())) {
+      if (v.tissueId === causalChainTissueId) { intel = v; break; }
+    }
+    if (!intel) return [];
+    const REGION_TO_BONES: Record<string, string[]> = {
+      'lumbar spine': ['RootPart1_M', 'RootPart2_M', 'Spine1_M'],
+      'thoracic spine': ['Spine1_M', 'Chest_M'],
+      'cervical spine': ['NeckPart1_M', 'NeckPart2_M', 'Head_M'],
+      'thoracolumbar fascia': ['RootPart1_M', 'Spine1_M'],
+      'pelvis': ['Root_M', 'Hip_L', 'Hip_R'],
+      'hip': ['Hip_L', 'Hip_R'],
+      'knee': ['Knee_L', 'Knee_R'],
+      'ankle': ['Ankle_L', 'Ankle_R'],
+      'foot': ['Toes_L', 'Toes_R'],
+      'plantar fascia': ['Ankle_L', 'Ankle_R', 'Toes_L', 'Toes_R'],
+      'quadriceps': ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'],
+      'hamstrings': ['Hip_L', 'Hip_R', 'Knee_L', 'Knee_R'],
+      'calf': ['Knee_L', 'Knee_R', 'Ankle_L', 'Ankle_R'],
+      'shoulder': ['Shoulder_L', 'Shoulder_R'],
+      'scapular stabilisers': ['Scapula_L', 'Scapula_R'],
+      'scapula': ['Scapula_L', 'Scapula_R'],
+      'elbow': ['Elbow_L', 'Elbow_R'],
+      'wrist': ['Wrist_L', 'Wrist_R'],
+    };
+    const lookupBones = (region: string): string[] => {
+      const r = region.toLowerCase().trim();
+      if (REGION_TO_BONES[r]) return REGION_TO_BONES[r];
+      for (const [k, v] of Object.entries(REGION_TO_BONES)) {
+        if (r.includes(k) || k.includes(r)) return v;
+      }
+      return [];
+    };
+    const out: Array<{ boneName: string; color: number; intensity: number; glowSize?: number }> = [];
+    const seen = new Set<string>();
+    for (const b of intel.bones || []) {
+      if (seen.has(b)) continue;
+      seen.add(b);
+      out.push({ boneName: b, color: 0xa855f7, intensity: 0.95, glowSize: 1.6 });
+    }
+    for (const up of intel.compensation.upstream) {
+      for (const b of lookupBones(up.region)) {
+        if (seen.has(b)) continue;
+        seen.add(b);
+        out.push({ boneName: b, color: 0x3b82f6, intensity: 0.7, glowSize: 1.3 });
+      }
+    }
+    for (const dn of intel.compensation.downstream) {
+      for (const b of lookupBones(dn.region)) {
+        if (seen.has(b)) continue;
+        seen.add(b);
+        out.push({ boneName: b, color: 0xfb923c, intensity: 0.7, glowSize: 1.3 });
+      }
+    }
+    return out;
+  }, [causalChainTissueId, tissueIntelligenceMap]);
+
+  // Tissue-specific highlight set (replaces the legacy "inflammation cloud"). Only emits
+  // when in a non-muscle tissue view and at least one clinical input exists. The viewer
+  // renders catalogued tissues as procedural geometry and falls back to a labelled generic
+  // ring on the first available bone for tissues without a catalogue recipe.
+  const tissueIntelligenceHighlights = useMemo(() => {
+    type Highlight = ReturnType<typeof tissueIntelligenceToOverlayHighlight> & { colorOverride?: number };
+    const out: Highlight[] = [];
+
+    const showIntelligence = tissueViewMode && tissueViewMode !== 'muscle';
+    const hasClinicalInput =
+      painMarkers.length > 0 ||
+      compromisedTissues.length > 0 ||
+      scarMarkers.length > 0 ||
+      adhesionBands.length > 0 ||
+      Object.keys(compensatedOverrides || {}).length > 0;
+    if (showIntelligence && hasClinicalInput) {
+      for (const intel of inflammationIntelligenceMap.values()) {
+        if ((intel.severity ?? 0) < 0.25) continue;
+        if (intel.state.healingStage === 'baseline') continue; // Task #396: suppress yellow "at-risk" halos
+        out.push(tissueIntelligenceToOverlayHighlight(intel));
+      }
+    }
+
+    if (skeletonMode === 'movement' && movementSimTissueOverlay.length > 0) {
+      const matchTissueIds = (label: string): string[] => {
+        const l = label.toLowerCase();
+        const ids: string[] = [];
+        const add = (id: string) => { if (TISSUE_ANCHOR_CATALOGUE[id] && !ids.includes(id)) ids.push(id); };
+        const sides: Array<'l' | 'r'> = /\bleft|\(l\)/.test(l) ? ['l'] : /\bright|\(r\)/.test(l) ? ['r'] : ['l', 'r'];
+        const map: Array<[RegExp, string]> = [
+          [/plantar fasc/, 'plantar_fascia'],
+          [/achilles/, 'achilles'],
+          [/supraspinat|rotator cuff/, 'supraspinatus'],
+          [/common extensor|lateral epicond|tennis elbow/, 'common_extensor'],
+          [/gluteus med|glute med/, 'gluteus_medius'],
+          [/patellar tendon|patellar/, 'patellar'],
+          [/biceps/, 'biceps_long_head'],
+          [/glenohumeral|gh joint/, 'glenohumeral'],
+          [/hip joint|coxofemoral/, 'hip'],
+          [/tibiofemoral|knee joint/, 'tibiofemoral'],
+          [/talocrural|ankle joint/, 'talocrural'],
+          [/humeroulnar|elbow joint/, 'humeroulnar'],
+          [/sacroiliac|si joint/, 'si'],
+          [/median nerve/, 'median'],
+          [/ulnar nerve/, 'ulnar'],
+          [/radial nerve/, 'radial'],
+          [/sciatic/, 'sciatic'],
+          [/femoral nerve/, 'femoral'],
+          [/peroneal nerve/, 'peroneal'],
+        ];
+        for (const [re, base] of map) {
+          if (re.test(l)) for (const s of sides) add(`${base}_${s}`);
+        }
+        if (/lumbar facet|lumbar spine/.test(l)) add('facet_lumbar');
+        if (/cervical facet|cervical spine/.test(l)) add('facet_cervical');
+        if (/superficial back line|sbl/.test(l)) add('sbl');
+        if (/superficial front line|sfl/.test(l)) add('sfl');
+        if (/deep front line|dfl/.test(l)) add('dfl');
+        if (/lateral line/.test(l)) for (const s of sides) add(`lateral_${s}`);
+        if (/spiral line/.test(l)) add('spiral');
+        if (/front arm line/.test(l)) for (const s of sides) add(`front_arm_${s}`);
+        return ids;
+      };
+      const seen = new Set(out.map(h => h.tissueId));
+      for (const t of movementSimTissueOverlay) {
+        const ids = matchTissueIds(t.tissue);
+        const colorOverride = t.tone === 'green' ? 0x10b981 : 0xf59e0b;
+        if (ids.length === 0) {
+          const fallbackId = `mvsim_fallback:${t.tissue.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40)}`;
+          if (!seen.has(fallbackId)) {
+            out.push({
+              tissueId: fallbackId,
+              tissueType: 'tendon',
+              label: t.tissue,
+              bones: [],
+              severity: 0.5,
+              healingStage: 'baseline',
+              irritability: 'low',
+              isDeep: false,
+              hasRecipe: false,
+              colorOverride,
+            });
+            seen.add(fallbackId);
+          }
+          continue;
+        }
+        for (const id of ids) {
+          if (seen.has(id)) {
+            const idx = out.findIndex(h => h.tissueId === id);
+            if (idx >= 0) out[idx] = { ...out[idx], colorOverride };
+            continue;
+          }
+          const recipe = TISSUE_ANCHOR_CATALOGUE[id];
+          out.push({
+            tissueId: id,
+            tissueType: 'tendon',
+            label: t.tissue,
+            bones: [],
+            severity: 0.6,
+            healingStage: 'baseline',
+            irritability: 'low',
+            isDeep: !!recipe?.isDeep,
+            hasRecipe: !!recipe,
+            colorOverride,
+          });
+          seen.add(id);
+        }
+      }
+    }
+
+    return out;
+  }, [
+    inflammationIntelligenceMap, tissueViewMode, painMarkers, compromisedTissues,
+    scarMarkers, adhesionBands, compensatedOverrides,
+    skeletonMode, movementSimTissueOverlay,
+  ]);
+
+  // Task #323 — review-3/4: the BiomechanicsHUD Slings pin is the single
+  // source of truth for whether the on-skeleton sling overlay is rendered.
+  // The side-panel `slingOverlayVisible` toggle now controls panel-only
+  // visualization (chips, charts) and no longer gates the on-body lines,
+  // matching the slingPathwayVisualization render gate downstream.
+  const slingOverlayActive = slingsOverlayPinned && !!slingAnalysis;
   useEffect(() => {
     if (!slingOverlayActive) setExpandedSlingDetailId(null);
   }, [slingOverlayActive]);
+  // Task #323: auto-clear the HUD-driven pin when leaving Movement Mode so
+  // the overlay doesn't linger into Posture Mode where its assumptions
+  // (live load transfer during dynamic effort) don't hold.
+  useEffect(() => {
+    if (skeletonMode !== 'movement' && slingsOverlayPinned) {
+      setSlingsOverlayPinned(false);
+    }
+  }, [skeletonMode, slingsOverlayPinned]);
+
+  // Auto-pin the slings overlay in Movement Mode when a prediction is active;
+  // the ref preserves a clinician's manual unpin within a single Movement Mode entry.
+  const movementAutoPinnedRef = useRef(false);
+  useEffect(() => {
+    if (skeletonMode !== 'movement') {
+      movementAutoPinnedRef.current = false;
+      return;
+    }
+    if (movementAutoPinnedRef.current || slingsOverlayPinned) return;
+    const hasPredSeed = painMarkers.some(m => m.source === 'prediction') || predictionHasSeededRef.current;
+    if (hasPredSeed && slingAnalysis) {
+      movementAutoPinnedRef.current = true;
+      setSlingsOverlayPinned(true);
+    }
+  }, [skeletonMode, painMarkers, slingAnalysis, slingsOverlayPinned]);
 
   const biomechanicsFaultHighlights = useMemo(() => {
     const FAULT_JOINT_TO_BONE: Record<string, string> = {
@@ -4027,9 +9856,31 @@ ${ddxList}`;
   }, [hudMuscleAnalysis, showUnifiedChainPanel, chainIntegrityScores]);
 
   const predictedPainSpots = useMemo((): PredictedPainSpot[] => {
-    if (computeStage < 4) return [];
-    return computePredictedPain(effectiveModelConfig);
-  }, [effectiveModelConfig, computeStage]);
+    const base = computeStage < 4 ? [] : computePredictedPain(effectiveModelConfig);
+    if (skeletonMode !== 'movement' || painfulArcFlares.length === 0) return base;
+    const now = Date.now();
+    const jointToBone: Record<string, string> = {
+      leftShoulder: 'mixamorig:LeftShoulder', rightShoulder: 'mixamorig:RightShoulder',
+      leftHip: 'mixamorig:LeftUpLeg', rightHip: 'mixamorig:RightUpLeg',
+      leftKnee: 'mixamorig:LeftLeg', rightKnee: 'mixamorig:RightLeg',
+      leftAnkle: 'mixamorig:LeftFoot', rightAnkle: 'mixamorig:RightFoot',
+      leftElbow: 'mixamorig:LeftForeArm', rightElbow: 'mixamorig:RightForeArm',
+      lumbar_spine: 'mixamorig:Spine', thoracic_spine: 'mixamorig:Spine1', cervical_spine: 'mixamorig:Neck',
+    };
+    const flareSpots: PredictedPainSpot[] = painfulArcFlares
+      .filter(f => now - f.timestamp < 8000)
+      .map(f => ({
+        id: `flare-${f.joint}-${f.movement}-${f.timestamp}`,
+        boneName: jointToBone[f.joint] || 'mixamorig:Hips',
+        label: `${f.joint} ${f.movement} painful arc`,
+        confidence: 0.85,
+        severity: f.intensity,
+        rationale: `Active movement entered painful arc ${f.arcStart}–${f.arcEnd}° at ${Math.round(f.angle)}°`,
+        category: 'muscular',
+        position: { x: 0, y: 0, z: 0 },
+      }));
+    return [...base, ...flareSpots];
+  }, [effectiveModelConfig, computeStage, skeletonMode, painfulArcFlares]);
 
   const [showPredictedPain, setShowPredictedPain] = useState(true);
 
@@ -4228,8 +10079,17 @@ ${ddxList}`;
         if (!boneNames.includes(spot.boneName)) boneNames.push(spot.boneName);
       }
     }
+    // Ensure the spotlight pathway bones are tracked in the bone-screen
+    // projection ref so the spotlight panel can place its 3D hotspot
+    // dots over the actual sling parts on the canvas.
+    if (skeletonMode === 'movement' && spotlightPick) {
+      const pathway = getSlingBonePathway(spotlightPick.slingId);
+      for (const b of pathway) {
+        if (!boneNames.includes(b)) boneNames.push(b);
+      }
+    }
     return boneNames;
-  }, [showTreatmentOverlay, liveTreatmentPriorities.targets, showPredictedPain, predictedPainSpots]);
+  }, [showTreatmentOverlay, liveTreatmentPriorities.targets, showPredictedPain, predictedPainSpots, skeletonMode, spotlightPick]);
 
   const tissueViewOverlay = useMemo(() => {
     if (!tissueViewMode || tissueViewMode === 'muscle') return null;
@@ -4657,7 +10517,7 @@ ${ddxList}`;
 
   const painDriverReports = useMemo((): PainDriverReport[] => {
     if (painMarkers.length === 0) return [];
-    const forces = calculatePosturalForces(effectiveModelConfig, fascialModifiers);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig), fascialModifiers);
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const allPropEffects = propagateChainEffects(baseMuscleTensions.tensions, compensatedOverrides);
     const allChainEffects: import("@/lib/myofascialChains").ChainEffect[] = [];
@@ -4729,7 +10589,10 @@ ${ddxList}`;
   const hasManualTensions = Object.keys(manualChainTensions).length > 0;
   const fascialChainVizProp = useMemo(() => {
     if (!showUnifiedChainPanel) return undefined;
-    if (!tensionTabActive && !hasManualTensions) return undefined;
+    // Task #399 — previously gated on `tensionTabActive || hasManualTensions`,
+    // which meant the muscle-mesh highlight pipeline (driven by activeChainIds)
+    // only fired on the Tension tab. Removing the gate so muscle paint shows
+    // whenever the panel is open with at least one active chain.
     const combinedPainChains = Array.from(new Set([...painAffectedChainIds, ...painDriverChainIds]));
     return {
       enabled: true,
@@ -4742,13 +10605,236 @@ ${ddxList}`;
     };
   }, [showUnifiedChainPanel, tensionTabActive, hasManualTensions, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
+  // Task #399 — Kinetic chain (Explorer tab) → muscle group id mapping.
+  // The Explorer tab in UnifiedChainPanel uses KINETIC_CHAINS (`selectedChainId`)
+  // which carries anatomical labels like "Gastrocnemius" that don't match GLB
+  // muscle group ids. We translate the kinetic chain into:
+  //   - MYOFASCIAL_CHAINS ids (chains whose `links[].muscleId` are GLB groups), and
+  //   - FUNCTIONAL_SLINGS ids (slings whose `pairs[]` are GLB groups).
+  // Both feed the muscle-mesh paint pipeline so the actual muscles colour-up
+  // in the chain colour, instead of dropping translucent bone-glow spheres.
+  const KINETIC_TO_MYOFASCIAL: Record<string, { chains?: string[]; slings?: string[] }> = {
+    posterior_chain:        { chains: ['superficial_back_l', 'superficial_back_r'] },
+    anterior_chain:         { chains: ['superficial_front_l', 'superficial_front_r'] },
+    lateral_chain:          { chains: ['lateral_line_l', 'lateral_line_r'] },
+    spiral_chain:           { chains: ['spiral_line_l', 'spiral_line_r'] },
+    upper_extremity_chain:  { chains: ['arm_line_l', 'arm_line_r'] },
+    lower_extremity_chain:  { chains: ['deep_front_l', 'deep_front_r'] },
+    deep_longitudinal:        { slings: ['deep_longitudinal'] },
+    posterior_oblique_sling:  { slings: ['posterior_oblique'] },
+    anterior_oblique_sling:   { slings: ['anterior_oblique'] },
+    lateral_subsystem:        { slings: ['lateral_sling'] },
+  };
+
+  const chainMuscleHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
+    if (!fascialChainVizProp) return { groups: [], colors: {} };
+    const groups: string[] = [];
+    const colors: Record<string, string> = {};
+    const seen = new Set<string>();
+
+    const orderedChainIds: string[] = [];
+    const chainSeen = new Set<string>();
+    for (const id of [...activeChainIds, ...painAffectedChainIds, ...painDriverChainIds]) {
+      if (chainSeen.has(id)) continue;
+      chainSeen.add(id);
+      orderedChainIds.push(id);
+    }
+    for (const chainId of orderedChainIds) {
+      const chain = MYOFASCIAL_CHAINS.find(c => c.id === chainId);
+      if (!chain) continue;
+      for (const link of chain.links) {
+        if (seen.has(link.muscleId)) continue;
+        seen.add(link.muscleId);
+        groups.push(link.muscleId);
+        colors[link.muscleId] = chain.color;
+      }
+    }
+
+    // Explorer tab: paint muscles for the user-selected kinetic chain
+    if (selectedChainId) {
+      const kineticChain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
+      const mapping = KINETIC_TO_MYOFASCIAL[selectedChainId] ?? {};
+      const kineticColor = kineticChain?.color ?? '#22c55e';
+      // Explorer-selected kinetic chains take precedence over the existing
+      // myofascial-tab colours so the user sees a single coherent chain
+      // colour across the whole pathway.
+      const addMuscle = (muscleId: string) => {
+        if (!seen.has(muscleId)) {
+          seen.add(muscleId);
+          groups.push(muscleId);
+        }
+        colors[muscleId] = kineticColor;
+      };
+      const sideSuffix = selectedChainSide === 'left' ? '_l' : selectedChainSide === 'right' ? '_r' : null;
+      const muscleMatchesSide = (muscleId: string) => {
+        if (!sideSuffix) return true;
+        if (muscleId.endsWith('_l') || muscleId.endsWith('_r')) return muscleId.endsWith(sideSuffix);
+        return true;
+      };
+      for (const myoId of mapping.chains ?? []) {
+        if (sideSuffix && (myoId.endsWith('_l') || myoId.endsWith('_r')) && !myoId.endsWith(sideSuffix)) continue;
+        const chain = MYOFASCIAL_CHAINS.find(c => c.id === myoId);
+        if (!chain) continue;
+        for (const link of chain.links) addMuscle(link.muscleId);
+      }
+      for (const slingId of mapping.slings ?? []) {
+        const sling = FUNCTIONAL_SLINGS.find(s => s.id === slingId);
+        if (!sling) continue;
+        for (const [a, b] of sling.pairs) {
+          if (muscleMatchesSide(a)) addMuscle(a);
+          if (muscleMatchesSide(b)) addMuscle(b);
+        }
+      }
+    }
+
+    return { groups, colors };
+  }, [fascialChainVizProp, activeChainIds, painAffectedChainIds, painDriverChainIds, selectedChainId, selectedChainSide]);
+
+  // Task #389 — Sling overlay used to feed every muscle in the selected sling
+  // into the muscle-glow pipeline, which clones the GLB body-mesh material
+  // with `emissive = sling color` + `opacity 0.85`. With multi-muscle slings
+  // (e.g. posterior oblique = lat + glute + hamstring + ...) this draped
+  // large translucent yellow/amber volumes across chest, shoulders, and back,
+  // obscuring the avatar. The 3D sling pathways (tubes, dots, status labels,
+  // reroute arrows) are rendered independently in PureThreeGLBViewer at
+  // ~L4569+, so the sling stays fully visible without the body-paint.
+  // Task #404 — Build a `{groups, colors}` map from manual muscle-popup
+  // overrides so the affected GLB muscle groups can be tinted directly on
+  // the body mesh (mirroring the Task #399 fascial-chain fix). This
+  // replaces the previous `muscleOverrideHighlights` array that fed
+  // bone-anchored translucent sphere "clouds" into `highlightBoneNames`.
+  // Colours come from the canonical `getClinicalStatusColor` helper so the
+  // tint matches the same red/orange/blue/purple convention used by the
+  // muscle popup and the right-side Muscle Analysis panel.
+  // Declared above `mergedHighlightMuscleGroups` to keep useMemo
+  // initialization order safe (no const TDZ).
+  const muscleOverrideMeshHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
+    const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
+    if (entries.length === 0) return { groups: [], colors: {} };
+
+    const MUSCLE_TO_GROUPS: Record<string, string[]> = {
+      l_glut_max: ['glute_l'], l_glut_med: ['glute_l'], l_glut_min: ['glute_l'], l_piriformis: ['glute_l'],
+      r_glut_max: ['glute_r'], r_glut_med: ['glute_r'], r_glut_min: ['glute_r'], r_piriformis: ['glute_r'],
+      l_rect_fem: ['quad_l'], l_vast_lat: ['quad_l'], l_vast_med: ['quad_l'], l_hamstrings: ['quad_l', 'glute_l'],
+      r_rect_fem: ['quad_r'], r_vast_lat: ['quad_r'], r_vast_med: ['quad_r'], r_hamstrings: ['quad_r', 'glute_r'],
+      l_hip_flexors: ['quad_l'], l_adductors: ['quad_l'],
+      r_hip_flexors: ['quad_r'], r_adductors: ['quad_r'],
+      l_gastroc: ['calf_l'], l_soleus: ['calf_l'],
+      r_gastroc: ['calf_r'], r_soleus: ['calf_r'],
+      l_tib_ant: ['shin_l'], l_peroneals: ['shin_l'], l_tib_post: ['shin_l'], l_plantar_fascia: ['shin_l', 'foot_l'],
+      r_tib_ant: ['shin_r'], r_peroneals: ['shin_r'], r_tib_post: ['shin_r'], r_plantar_fascia: ['shin_r', 'foot_r'],
+      l_ant_deltoid: ['deltoid_l'], l_mid_deltoid: ['deltoid_l'], l_post_deltoid: ['deltoid_l'], l_supraspinatus: ['scapula_l'],
+      r_ant_deltoid: ['deltoid_r'], r_mid_deltoid: ['deltoid_r'], r_post_deltoid: ['deltoid_r'], r_supraspinatus: ['scapula_r'],
+      l_infraspinatus: ['scapula_l'], l_upper_trap: ['neck', 'scapula_l'], l_lower_trap: ['scapula_l'],
+      r_infraspinatus: ['scapula_r'], r_upper_trap: ['neck', 'scapula_r'], r_lower_trap: ['scapula_r'],
+      l_rhomboids: ['scapula_l'], l_serratus_ant: ['scapula_l', 'chest'],
+      r_rhomboids: ['scapula_r'], r_serratus_ant: ['scapula_r', 'chest'],
+      l_biceps: ['bicep_l'], l_triceps: ['bicep_l'], l_wrist_flex: ['bicep_l'], l_wrist_ext: ['bicep_l'],
+      r_biceps: ['bicep_r'], r_triceps: ['bicep_r'], r_wrist_flex: ['bicep_r'], r_wrist_ext: ['bicep_r'],
+      l_pec_major: ['chest'], l_pec_minor: ['chest'],
+      r_pec_major: ['chest'], r_pec_minor: ['chest'],
+      rectus_abdominis: ['core'], transverse_abdominis: ['core'], obliques: ['core'],
+      erector_spinae_lumbar: ['core', 'spine'], erector_spinae_thoracic: ['spine'],
+      multifidus: ['core', 'spine'],
+    };
+
+    // Severity rank used to resolve collisions when several manually-edited
+    // muscles project onto the same mesh group (e.g. l_glut_max + l_glut_med
+    // → glute_l). The most diagnostic clinical state wins so the clinician
+    // sees the worst affected status, not whichever was iterated last.
+    const STATUS_RANK: Record<ClinicalStatus, number> = {
+      spasm: 7,
+      overactive: 6,
+      shortened: 5,
+      inhibited: 4,
+      weak: 3,
+      lengthened: 2,
+      normal: 1,
+    };
+
+    // Prefer the analyzed clinicalStatus from `muscleAnalysis` so the body
+    // tint matches what the muscle popup itself shows. Fall back to a
+    // direct override→status derivation when analysis hasn't recomputed yet
+    // (first paint after a slider drag, before the engine repopulates).
+    const analyzedById = new Map<string, ClinicalStatus>();
+    if (muscleAnalysis) {
+      for (const m of muscleAnalysis.allMuscles) {
+        analyzedById.set(m.id, m.clinicalStatus);
+      }
+    }
+    const statusFromOverride = (ov: MuscleOverride): ClinicalStatus => {
+      if (ov.pathology && ov.pathology !== 'none') return 'spasm';
+      if (ov.inhibition > 30) return 'inhibited';
+      if (ov.tensionOffset > 15) return 'overactive';
+      if (ov.tensionOffset < -15) return 'lengthened';
+      if (ov.lengthOverride === 'shortened') return 'shortened';
+      if (ov.lengthOverride === 'lengthened') return 'lengthened';
+      if (ov.activationOffset > 15) return 'overactive';
+      if (ov.activationOffset < -15) return 'weak';
+      return 'normal';
+    };
+
+    const groupStatus: Record<string, ClinicalStatus> = {};
+
+    for (const [muscleId, ov] of entries) {
+      if (!ov) continue;
+      const groups = MUSCLE_TO_GROUPS[muscleId];
+      if (!groups) continue;
+
+      const status = analyzedById.get(muscleId) ?? statusFromOverride(ov);
+      if (status === 'normal') continue; // nothing diagnostic to tint
+
+      for (const g of groups) {
+        const existing = groupStatus[g];
+        if (!existing || STATUS_RANK[status] > STATUS_RANK[existing]) {
+          groupStatus[g] = status;
+        }
+      }
+    }
+
+    const colors: Record<string, string> = {};
+    for (const [g, status] of Object.entries(groupStatus)) {
+      colors[g] = getClinicalStatusColor(status);
+    }
+    return { groups: Object.keys(colors), colors };
+  }, [muscleOverrides, muscleAnalysis]);
+
+  const mergedHighlightMuscleGroups = useMemo<string[] | undefined>(() => {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    for (const g of biomechanicalMuscleHighlights) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
+    for (const g of chainMuscleHighlights.groups) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
+    // Task #404 — include groups from muscle-popup overrides so the GLB
+    // mesh paints them (replaces the removed bone-cloud highlights).
+    for (const g of muscleOverrideMeshHighlights.groups) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
+    return merged.length > 0 ? merged : undefined;
+  }, [biomechanicalMuscleHighlights, chainMuscleHighlights, muscleOverrideMeshHighlights]);
+
+  const mergedMuscleHighlightColors = useMemo<Record<string, string> | undefined>(() => {
+    // Task #404 — Override-derived colours sit between chain colours and
+    // explicit `muscleHighlightColors` so a clinician's manual popup edit
+    // beats the chain default but still yields to other explicit highlights.
+    const merged: Record<string, string> = {
+      ...chainMuscleHighlights.colors,
+      ...muscleOverrideMeshHighlights.colors,
+      ...muscleHighlightColors,
+    };
+    return Object.keys(merged).length > 0 ? merged : undefined;
+  }, [chainMuscleHighlights, muscleOverrideMeshHighlights, muscleHighlightColors]);
+
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
   }, []);
 
   const treatmentPlan = useMemo(() => {
     if (rightPanelTab !== 'treatment') return null;
-    const forces = calculatePosturalForces(effectiveModelConfig);
+    const forces = calculatePosturalForces(withForceContext(effectiveModelConfig));
     const muscles = computeFullMuscleAnalysis(effectiveModelConfig);
     const corr = computeCrossSystemCorrelation({
       painMarkers: painMarkers.map(pm => ({ id: pm.id, position: pm.position, label: pm.anatomicalLabel || pm.nearestBone, type: pm.type, severity: (pm as any).severity ?? 5, description: pm.description, subjectiveHistory: pm.subjectiveHistory })),
@@ -4784,93 +10870,17 @@ ${ddxList}`;
   const getEvidenceGradeColor = (grade: EvidenceGrade) => grade === 'A' ? 'bg-green-500/20 text-green-400 border-green-500/30' : grade === 'B' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : grade === 'C' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-500/20 text-gray-400 border-gray-500/30';
 
 
-  const chainHighlightBones = useMemo(() => {
-    if (!selectedChainId) return undefined;
-    const chain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
-    if (!chain) return undefined;
-    const colorHex = parseInt(chain.color.replace('#', ''), 16);
-    const boneNames = getChainBoneNames(selectedChainId, 'both');
-    const uniqueBones = Array.from(new Set(boneNames));
-    return uniqueBones.map(boneName => ({
-      boneName,
-      color: colorHex,
-      intensity: 0.7,
-      glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.25 : 0.2,
-    }));
-  }, [selectedChainId]);
+  // Task #399 — replaced bone-glow translucent-sphere overlay with muscle-mesh
+  // highlighting on the Explorer tab. The kinetic chain selection now feeds
+  // `chainMuscleHighlights` (above) which paints the actual GLB muscle groups
+  // in the chain colour, instead of stacking 6-9 large translucent spheres at
+  // each bone (which clinicians described as "clouds overlaying the muscles").
+  const chainHighlightBones = useMemo(() => undefined, []);
 
-  const muscleOverrideHighlights = useMemo(() => {
-    const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
-    if (entries.length === 0) return [];
-
-    const MUSCLE_TO_BONES: Record<string, string[]> = {
-      l_glut_max: ['Hip_L'], l_glut_med: ['Hip_L'], l_glut_min: ['Hip_L'], l_piriformis: ['Hip_L'],
-      r_glut_max: ['Hip_R'], r_glut_med: ['Hip_R'], r_glut_min: ['Hip_R'], r_piriformis: ['Hip_R'],
-      l_rect_fem: ['Hip_L', 'Knee_L'], l_vast_lat: ['Knee_L'], l_vast_med: ['Knee_L'], l_hamstrings: ['Hip_L', 'Knee_L'],
-      r_rect_fem: ['Hip_R', 'Knee_R'], r_vast_lat: ['Knee_R'], r_vast_med: ['Knee_R'], r_hamstrings: ['Hip_R', 'Knee_R'],
-      l_hip_flexors: ['Hip_L'], l_adductors: ['Hip_L'],
-      r_hip_flexors: ['Hip_R'], r_adductors: ['Hip_R'],
-      l_gastroc: ['Knee_L', 'Ankle_L'], l_soleus: ['Ankle_L'],
-      r_gastroc: ['Knee_R', 'Ankle_R'], r_soleus: ['Ankle_R'],
-      l_tib_ant: ['Ankle_L'], l_peroneals: ['Ankle_L'], l_tib_post: ['Ankle_L'], l_plantar_fascia: ['Ankle_L'],
-      r_tib_ant: ['Ankle_R'], r_peroneals: ['Ankle_R'], r_tib_post: ['Ankle_R'], r_plantar_fascia: ['Ankle_R'],
-      l_ant_deltoid: ['Shoulder_L'], l_mid_deltoid: ['Shoulder_L'], l_post_deltoid: ['Shoulder_L'], l_supraspinatus: ['Shoulder_L'],
-      r_ant_deltoid: ['Shoulder_R'], r_mid_deltoid: ['Shoulder_R'], r_post_deltoid: ['Shoulder_R'], r_supraspinatus: ['Shoulder_R'],
-      l_infraspinatus: ['Shoulder_L'], l_upper_trap: ['Shoulder_L', 'Neck_M'], l_lower_trap: ['Shoulder_L'],
-      r_infraspinatus: ['Shoulder_R'], r_upper_trap: ['Shoulder_R', 'Neck_M'], r_lower_trap: ['Shoulder_R'],
-      l_rhomboids: ['Shoulder_L'], l_serratus_ant: ['Shoulder_L'],
-      r_rhomboids: ['Shoulder_R'], r_serratus_ant: ['Shoulder_R'],
-      l_biceps: ['Elbow_L'], l_triceps: ['Elbow_L'], l_wrist_flex: ['Elbow_L'], l_wrist_ext: ['Elbow_L'],
-      r_biceps: ['Elbow_R'], r_triceps: ['Elbow_R'], r_wrist_flex: ['Elbow_R'], r_wrist_ext: ['Elbow_R'],
-      l_pec_major: ['Shoulder_L'], l_pec_minor: ['Shoulder_L'],
-      r_pec_major: ['Shoulder_R'], r_pec_minor: ['Shoulder_R'],
-      rectus_abdominis: ['RootPart1_M'], transverse_abdominis: ['RootPart1_M'], obliques: ['RootPart1_M'],
-      erector_spinae_lumbar: ['RootPart1_M'], erector_spinae_thoracic: ['Spine1Part2_M'],
-      multifidus: ['RootPart1_M'],
-    };
-
-    const boneAccum: Record<string, { color: number; intensity: number; count: number }> = {};
-
-    for (const [muscleId, ov] of entries) {
-      if (!ov) continue;
-      const bones = MUSCLE_TO_BONES[muscleId];
-      if (!bones) continue;
-
-      let color = 0x22c55e;
-      let intensity = 0.4;
-
-      if (ov.pathology !== 'none') {
-        color = 0xef4444; intensity = 0.7;
-      } else if (ov.inhibition > 30) {
-        color = 0xa855f7; intensity = 0.4 + (ov.inhibition / 100) * 0.4;
-      } else if (ov.tensionOffset > 15) {
-        color = 0xf97316; intensity = 0.5 + (ov.tensionOffset / 40) * 0.3;
-      } else if (ov.tensionOffset < -15) {
-        color = 0x3b82f6; intensity = 0.5;
-      } else if (ov.lengthOverride === 'shortened') {
-        color = 0xef4444; intensity = 0.5;
-      } else if (ov.lengthOverride === 'lengthened') {
-        color = 0x3b82f6; intensity = 0.5;
-      } else if (ov.activationOffset > 15) {
-        color = 0x22c55e; intensity = 0.5;
-      } else if (ov.activationOffset < -15) {
-        color = 0xa855f7; intensity = 0.5;
-      }
-
-      for (const bone of bones) {
-        if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
-          boneAccum[bone] = { color, intensity, count: (boneAccum[bone]?.count || 0) + 1 };
-        }
-      }
-    }
-
-    return Object.entries(boneAccum).map(([boneName, { color, intensity }]) => ({
-      boneName,
-      color,
-      intensity,
-      glowSize: boneName.includes('Root') || boneName.includes('Spine') ? 0.22 : 0.18,
-    }));
-  }, [muscleOverrides]);
+  // Task #404 — `muscleOverrideMeshHighlights` is now declared earlier
+  // (just above `mergedHighlightMuscleGroups`) so the merger memos that
+  // depend on it are evaluated *after* its initialization. Avoids the
+  // const TDZ violation flagged in code review.
 
   const influenceHighlights = useMemo(() => {
     const entries = Object.entries(influenceMap);
@@ -4897,7 +10907,10 @@ ${ddxList}`;
     };
 
     const boneAccum: Record<string, { color: number; intensity: number }> = {};
-    const overrideBones = new Set(muscleOverrideHighlights.map(h => h.boneName));
+    // Task #404 — muscle-override highlights now paint the body mesh
+    // directly (no bone-anchored spheres), so there is no longer an
+    // `overrideBones` set to suppress here. Influence pathway clouds
+    // remain bone-anchored as before.
 
     for (const [groupId, entry] of entries) {
       const bones = GROUP_TO_BONES[groupId];
@@ -4909,7 +10922,6 @@ ${ddxList}`;
       const color = PATHWAY_COLORS[dominant];
 
       for (const bone of bones) {
-        if (overrideBones.has(bone)) continue;
         if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
           boneAccum[bone] = { color, intensity };
         }
@@ -4922,12 +10934,326 @@ ${ddxList}`;
       intensity,
       glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.20 : 0.16,
     }));
-  }, [influenceMap, muscleOverrideHighlights]);
+  }, [influenceMap]);
 
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
+  // Plan factors / modifiers / constraints — lifted to component scope so the
+  // OrchestratePlanProvider's clinicalContext can be assembled at the top
+  // level (the inline-rendered Master Plan card needs the same context the
+  // right-side My Plan tab uses, but the card is mounted unconditionally so
+  // the derivation must live outside the per-tab render branch).
+  const planFactors = useMemo(
+    () => autoPopulateFromPipeline(extractionResult ?? null, structuredReasoningData ?? null, DEFAULT_PATIENT_FACTORS),
+    [extractionResult, structuredReasoningData],
+  );
+  const planMods = useMemo(() => computePatientModifiers(planFactors, null), [planFactors]);
+  const planConstraints = useMemo<string[]>(() => {
+    const out: string[] = [];
+    const er = extractionResult as unknown as Record<string, unknown> | undefined;
+    const collectStrings = (v: unknown) => {
+      if (!v) return;
+      if (Array.isArray(v)) {
+        v.forEach(item => {
+          if (typeof item === 'string' && item.trim()) out.push(item.trim());
+          else if (item && typeof item === 'object') {
+            const obj = item as Record<string, unknown>;
+            const label = obj.label ?? obj.name ?? obj.description ?? obj.flag;
+            if (typeof label === 'string' && label.trim()) out.push(label.trim());
+          }
+        });
+      } else if (typeof v === 'string' && v.trim()) {
+        out.push(v.trim());
+      }
+    };
+    if (er) {
+      collectStrings(er.redFlags);
+      collectStrings(er.yellowFlags);
+      collectStrings(er.precautions);
+      collectStrings(er.contraindications);
+      collectStrings(er.comorbidities);
+      collectStrings(er.currentMedications);
+      collectStrings(er.relevantHistory);
+    }
+    return out;
+  }, [extractionResult]);
+  const orchestrateClinicalContext = useMemo(() => {
+    const archetypePhase = recoverySimArchetype?.id || (recoverySimArchetype?.stages?.[0]?.id ?? undefined);
+    return {
+      topHypothesis:
+        structuredReasoningData?.hypotheses?.[0]?.condition
+        || extractionResult?.mainComplaint
+        || mechanismAnalysisResult?.overallMechanismSummary?.split(/[.,;]/)[0]?.trim()
+        || undefined,
+      irritability: extractionResult?.irritability || undefined,
+      stage: extractionResult?.duration || undefined,
+      recoveryPhase: archetypePhase || extractionResult?.duration || undefined,
+      primaryRegion:
+        (mechanismAnalysisResult?.topContributors?.[0] as { region?: string } | undefined)?.region
+        || painMarkers[0]?.anatomicalLabel
+        || painMarkers[0]?.nearestBone
+        || undefined,
+      patientFactors: {
+        age: planFactors.age ?? undefined,
+        healingMultiplier: planMods.healingRateMultiplier,
+        painSensitivityMultiplier: planMods.painSensitivityMultiplier,
+        tissueQualityMultiplier: planMods.tissueQualityMultiplier,
+        phaseTimingMultiplier: planMods.phaseTimingMultiplier,
+        recurrenceRiskMultiplier: planMods.recurrenceRiskMultiplier,
+        romCeilingAdjustment: planMods.romCeilingAdjustment,
+        archetypeId: recoverySimArchetype?.id,
+        archetypeName: recoverySimArchetype?.name,
+      },
+      constraints: planConstraints.length > 0 ? planConstraints.slice(0, 12) : undefined,
+    };
+  }, [structuredReasoningData, extractionResult, mechanismAnalysisResult, recoverySimArchetype, painMarkers, planFactors, planMods, planConstraints]);
+
+  // ===== Treatment Rationale clinical-context bundle (Task #274) =====
+  // Extends the orchestrate context with rich clinical signals (pain
+  // markers, sling drivers, fascial chain tensions, kinetic-chain
+  // integrity, compromised tissues, scars/adhesions, force hotspots,
+  // postural deviations, natural progression) so the rationale endpoint
+  // can tie each treatment back to the actual clinical picture.
+  const rationaleClinicalContext = useMemo<RationaleClinicalContextInput>(() => {
+    // Pain markers — count, structures, mechanisms, severity summary.
+    const painStructures = Array.from(new Set(
+      painMarkers
+        .map(m => m.anatomicalLabel || m.nearestBone || '')
+        .filter(s => s && s.length > 0)
+    )).slice(0, 12);
+    const painMechanisms = Array.from(new Set(
+      painMarkers
+        .map(m => (m as { mechanism?: string }).mechanism)
+        .filter((s): s is string => !!s && s.length > 0)
+    )).slice(0, 6);
+    const severities = painMarkers
+      .map(m => (m as { severity?: number; intensity?: number }).severity ?? (m as { intensity?: number }).intensity)
+      .filter((n): n is number => typeof n === 'number');
+    const severitySummary = severities.length > 0
+      ? `${severities.length} marker${severities.length === 1 ? '' : 's'}, peak ${Math.max(...severities)}/10, avg ${Math.round((severities.reduce((a, b) => a + b, 0) / severities.length) * 10) / 10}/10`
+      : undefined;
+
+    // Sling drivers — pull from slingAnalysisRef (latest computed result).
+    const sa = slingAnalysisRef.current;
+    const slingDrivers: RationaleClinicalContextInput['slingDrivers'] = [];
+    if (sa) {
+      const dom = sa.dominantDysfunction
+        ? sa.slings.find(s => s.slingId === sa.dominantDysfunction)
+        : null;
+      if (dom) {
+        slingDrivers.push({
+          sling: dom.label,
+          role: 'dominant-dysfunction',
+          drivingFinding: dom.narrative?.slice(0, 180) || dom.weakLinks?.[0]?.muscle || dom.commonDysfunctions?.[0],
+        });
+      }
+      if (sa.secondaryIssue) {
+        const sec = sa.slings.find(s => s.slingId === sa.secondaryIssue!.slingId);
+        slingDrivers.push({
+          sling: sec?.label || sa.secondaryIssue.slingId,
+          role: 'secondary',
+          drivingFinding: sa.secondaryIssue.summary?.slice(0, 180),
+        });
+      }
+    }
+
+    // Fascial chain tensions — driving + active chain ids → labels.
+    let fascialTensions: RationaleClinicalContextInput['fascialTensions'] | undefined;
+    if (fascialChainVizProp) {
+      const chainLabel = (id: string) => MYOFASCIAL_CHAINS.find(c => c.id === id)?.name || id;
+      const driving = (fascialChainVizProp.painHighlightChains || []).map(chainLabel).slice(0, 6);
+      const active = (fascialChainVizProp.activeChains || []).map(chainLabel).slice(0, 6);
+      const propagationCount = fascialChainVizProp.propagationDeltas
+        ? Object.keys(fascialChainVizProp.propagationDeltas as Record<string, unknown>).length
+        : undefined;
+      fascialTensions = { drivingChains: driving, activeChains: active, propagationCount };
+    }
+
+    // Kinetic-chain integrity — surface only chains with score < 80.
+    const chainIntegrity: RationaleClinicalContextInput['chainIntegrity'] = [];
+    hudChainIntegrity.forEach((entry, chainId) => {
+      if (entry.score < 80) {
+        chainIntegrity.push({
+          chain: chainId.replace(/_/g, ' '),
+          score: entry.score,
+          issues: (entry.issues || []).slice(0, 4),
+        });
+      }
+    });
+    const chainIntegrityTrim = chainIntegrity
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 6);
+
+    // Compromised tissues — name, status, region.
+    const compromisedTissuesSummary = compromisedTissues.slice(0, 12).map(t => {
+      const rawStatus = (t as { status?: string }).status;
+      const rawSeverity = (t as { severity?: unknown }).severity;
+      let statusStr: string | undefined;
+      if (typeof rawStatus === "string" && rawStatus.trim().length > 0) {
+        statusStr = rawStatus.trim();
+      } else if (typeof rawSeverity === "string" && rawSeverity.trim().length > 0) {
+        statusStr = rawSeverity.trim();
+      } else if (typeof rawSeverity === "number" && Number.isFinite(rawSeverity)) {
+        const n = rawSeverity;
+        if (n >= 0 && n <= 1) {
+          const pct = Math.round(n * 100);
+          const band = n >= 0.66 ? "high" : n >= 0.33 ? "moderate" : "low";
+          statusStr = `${band} (${pct}%)`;
+        } else if (n >= 0 && n <= 100) {
+          const pct = Math.round(n);
+          const band = pct >= 66 ? "high" : pct >= 33 ? "moderate" : "low";
+          statusStr = `${band} (${pct}%)`;
+        } else {
+          statusStr = String(Math.round(n));
+        }
+      }
+      if (statusStr && statusStr.length > 60) statusStr = statusStr.slice(0, 60);
+      return {
+        name: (t as { name?: string; tissue?: string }).name || (t as { tissue?: string }).tissue || 'tissue',
+        status: statusStr,
+        region: (t as { region?: string; location?: string }).region || (t as { location?: string }).location,
+      };
+    });
+
+    // Scar / adhesion load.
+    let scarLoad: RationaleClinicalContextInput['scarLoad'] | undefined;
+    if (scarMarkers.length > 0 || adhesionBands.length > 0) {
+      const regions = Array.from(new Set([
+        ...scarMarkers.map(s => (s as { region?: string; nearestBone?: string }).region || (s as { nearestBone?: string }).nearestBone || ''),
+        ...adhesionBands.map(a => (a as { region?: string }).region || ''),
+      ].filter(s => s && s.length > 0))).slice(0, 6);
+      scarLoad = {
+        scarCount: scarMarkers.length,
+        adhesionCount: adhesionBands.length,
+        regions,
+      };
+    }
+
+    // Force hotspots — top joints by peak force / asymmetry from hudForceAnalysis.
+    let forceHotspots: RationaleClinicalContextInput['forceHotspots'] | undefined;
+    const fa = hudForceAnalysis as unknown as {
+      joints?: Array<{ jointName?: string; jointId?: string; peakForceN?: number; forceN?: number; asymmetryIndex?: number; asymmetry?: number }>;
+    } | undefined;
+    if (fa?.joints && fa.joints.length > 0) {
+      const sorted = [...fa.joints]
+        .map(j => ({
+          joint: j.jointName || j.jointId || 'joint',
+          peakForceN: j.peakForceN ?? j.forceN,
+          asymmetryIndex: j.asymmetryIndex ?? j.asymmetry,
+        }))
+        .filter(j => (typeof j.peakForceN === 'number' && j.peakForceN > 0) || (typeof j.asymmetryIndex === 'number' && j.asymmetryIndex > 0.1))
+        .sort((a, b) => (b.peakForceN || 0) - (a.peakForceN || 0))
+        .slice(0, 5);
+      if (sorted.length > 0) forceHotspots = sorted;
+    }
+
+    // Postural deviations summary.
+    let posturalDeviations: RationaleClinicalContextInput['posturalDeviations'] | undefined;
+    if (posturalMetrics) {
+      const pm = posturalMetrics as unknown as {
+        summary?: string;
+        overallScore?: number;
+        score?: number;
+        deviations?: Array<{ name?: string; severity?: string }>;
+      };
+      const summaryBits: string[] = [];
+      if (pm.summary) summaryBits.push(pm.summary);
+      if (pm.deviations?.length) {
+        summaryBits.push(pm.deviations.slice(0, 4).map(d => `${d.name}${d.severity ? ` (${d.severity})` : ''}`).join(', '));
+      }
+      const score = pm.overallScore ?? pm.score;
+      const severity = typeof score === 'number'
+        ? (score < 50 ? 'severe' : score < 75 ? 'moderate' : 'mild')
+        : undefined;
+      if (summaryBits.length > 0 || severity) {
+        posturalDeviations = {
+          summary: summaryBits.join(' · ').slice(0, 280) || undefined,
+          severity,
+        };
+      }
+    }
+
+    // Natural progression risks.
+    let naturalProgression: RationaleClinicalContextInput['naturalProgression'] | undefined;
+    if (naturalTimeline?.result) {
+      const nt = naturalTimeline.result;
+      naturalProgression = {
+        window: nt.overall_window_weeks
+          ? `${Math.round(nt.overall_window_weeks.best)}–${Math.round(nt.overall_window_weeks.worst)} wk (expected ${Math.round(nt.overall_window_weeks.expected)})`
+          : undefined,
+        chronicityRiskPercent: nt.chronicity_risk_percent,
+        recurrenceRiskPercent: nt.recurrence_risk_percent,
+      };
+    }
+
+    // Tendon inflammation — pull from compromised tissues whose name mentions tendon/bursa/fasciitis.
+    const tendonInflammation = compromisedTissues
+      .filter(t => /tendon|bursa|fasciitis|tendinosis|tendinopathy/i.test((t as { name?: string }).name || ''))
+      .map(t => (t as { name?: string }).name)
+      .filter((n): n is string => !!n)
+      .slice(0, 6);
+
+    // Thoracic stiffness — derive from chain integrity entries that mention thoracic.
+    const thoracicEntry = chainIntegrityTrim.find(c => /thoracic|trunk/i.test(c.chain));
+    const thoracicStiffness = thoracicEntry
+      ? `${thoracicEntry.chain} integrity ${Math.round(thoracicEntry.score)}/100${thoracicEntry.issues?.length ? ` — ${thoracicEntry.issues.slice(0, 2).join(', ')}` : ''}`
+      : undefined;
+
+    return {
+      ...orchestrateClinicalContext,
+      painMarkers: painMarkers.length > 0 ? {
+        count: painMarkers.length,
+        structures: painStructures,
+        mechanisms: painMechanisms.length > 0 ? painMechanisms : undefined,
+        severitySummary,
+      } : undefined,
+      slingDrivers: slingDrivers.length > 0 ? slingDrivers : undefined,
+      fascialTensions,
+      chainIntegrity: chainIntegrityTrim.length > 0 ? chainIntegrityTrim : undefined,
+      compromisedTissues: compromisedTissuesSummary.length > 0 ? compromisedTissuesSummary : undefined,
+      scarLoad,
+      forceHotspots,
+      posturalDeviations,
+      thoracicStiffness,
+      tendonInflammation: tendonInflammation.length > 0 ? tendonInflammation : undefined,
+      naturalProgression,
+    };
+  }, [
+    orchestrateClinicalContext,
+    painMarkers,
+    fascialChainVizProp,
+    hudChainIntegrity,
+    compromisedTissues,
+    scarMarkers,
+    adhesionBands,
+    hudForceAnalysis,
+    posturalMetrics,
+    naturalTimeline?.result,
+  ]);
+
   return (
     <Suspense fallback={<LazyPanelFallback />}>
+    <PlanCartProvider>
+    <TreatmentSimulationProvider value={treatmentSimulationContextValue}>
+    <PlanCartHydrationBridge
+      onItemsChange={handlePlanCartItemsChange}
+      registerReplaceAll={handlePlanCartRegisterReplaceAll}
+    />
+    <TreatmentPlanCartBridge
+      registerAdd={(fn) => { planCartTreatmentRef.current = fn; }}
+    />
+    <OrchestratePlanProvider
+      clinicalContext={orchestrateClinicalContext}
+      autoOrganizeNonce={orchestrateAutoNonce}
+      onAutoTriggerConsumed={() => {
+        setOrchestrateAutoNonce(null);
+        // The build cascade's auto-trigger has been consumed — return the
+        // state machine to 'idle' so the Build-full-plan button re-enables.
+        setAutoBuildState(prev => (prev === 'organizing' ? 'idle' : prev));
+        setAutoBuildFailures(new Set());
+      }}
+    >
+    <TreatmentRationaleProvider clinicalContext={rationaleClinicalContext}>
     <div className="h-[calc(100vh-4rem)] w-full bg-gray-900 flex flex-col overflow-hidden">
     <div className="flex-1 relative overflow-hidden min-h-0">
       {!modelReady && (
@@ -5180,6 +11506,19 @@ ${ddxList}`;
               </div>
             )}
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
+            {(() => {
+              // Movement Mode is interactive by default — derive an effective
+              // "pose interaction enabled" flag that is true when the user
+              // explicitly turned Pose on OR is in Movement Mode without any
+              // mutually-exclusive tool active. This single derived value
+              // lights up every existing pose-mode gate inside the viewer.
+              const movementImplicitPose =
+                skeletonMode === 'movement' &&
+                !painMarkerMode &&
+                !cameraMode &&
+                !cameraPoseActive;
+              const effectiveEnablePoseMode = poseMode || movementImplicitPose;
+              const __viewer = (
             <PureThreeGLBViewer
               modelPath={cameraPoseActive ? "/models/xbot.glb" : "/models/skeleton_character.glb"}
               modelConfig={finalModelConfig as any}
@@ -5198,16 +11537,29 @@ ${ddxList}`;
                   intensity: 0.5,
                 })),
               ]}
-              highlightBoneNames={chainHighlightBones || muscleOverrideHighlights.length > 0 || influenceHighlights.length > 0 || visualizationBoneHighlights.length > 0 || mechanismHighlightBones.length > 0 ? [
-                ...(chainHighlightBones || []),
-                ...muscleOverrideHighlights,
-                ...influenceHighlights,
-                ...visualizationBoneHighlights,
-                ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
-              ] : undefined}
+              highlightBoneNames={(() => {
+                // Task #404 — muscleOverrideHighlights removed from this
+                // list; muscle-popup edits now tint the GLB mesh groups
+                // through `mergedMuscleHighlightColors` instead of drawing
+                // bone-anchored translucent spheres.
+                const boneSources = overlayVisibility.boneGlow ? [
+                  ...(chainHighlightBones || []),
+                  ...visualizationBoneHighlights,
+                  ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
+                ] : [];
+                const compensationSources = overlayVisibility.compensationGlow ? [
+                  ...influenceHighlights,
+                  ...causalChainHighlights,
+                ] : [];
+                const merged = [...boneSources, ...compensationSources];
+                return merged.length > 0 ? merged : undefined;
+              })()}
+              tissueIntelligenceHighlights={overlayVisibility.tissueIntelligence && tissueIntelligenceHighlights.length > 0 ? tissueIntelligenceHighlights : undefined}
               enablePainMarkers={painMarkerMode}
               activePainMarkerType={activePainMarkerType}
-              painMarkers={painMarkers}
+              pulseAtFailureBeat={sfvOverlayActive ? sfvAtBeat : false}
+              failureBoneSet={sfvOverlayActive ? sfvFailureBoneSet : undefined}
+              painMarkers={overlayVisibility.painMarkers ? (sfvOverlayActive ? [] : painMarkers) : []}
               onPainMarkerAdd={handlePainMarkerAdd}
               onPainMarkerMove={handlePainMarkerMove}
               onPainMarkerRemove={handlePainMarkerRemove}
@@ -5216,14 +11568,33 @@ ${ddxList}`;
                 const marker = painMarkers.find(m => m.id === id);
                 if (marker) setClinicalBubbleMarker(marker);
               }}
-              enableRomMode={romMode}
-              onRomJointSelect={handleRomJointSelect}
+              enableRomMode={false}
               selectedRomJointId={selectedRomJoint?.id || null}
-              enablePoseMode={poseMode}
+              enableJointZoomMode={skeletonMode === 'movement'}
+              onJointZoomSelect={(side) => {
+                // Task #391 v1 lock — once a hip is open, ignore further
+                // hip clicks and surface the required "close first" hint
+                // instead of switching directly between sides.
+                if (hipZoomSide) {
+                  toast({
+                    title: 'Close current Joint Zoom first',
+                    description: `Close the ${hipZoomSide === 'left' ? 'left' : 'right'} hip panel, then click the other hip to inspect it.`,
+                  });
+                  return;
+                }
+                setHipZoomSide(side);
+              }}
+              enablePoseMode={effectiveEnablePoseMode}
               onModelConfigChange={updateModelConfig}
-              enableZoomTool={zoomToolMode}
-              onLandmarkSelect={handleLandmarkSelect}
+              skeletonMode={skeletonMode}
+              treatmentMarker={treatmentViewerMarker}
+              activeCapacities={viewerActiveCapacities}
+              onActiveMovementAttempt={handleActiveMovementAttempt}
+              onPainfulArcFlare={handlePainfulArcFlare}
+              enableZoomTool={false}
               forceOverlay={(() => {
+                if (!overlayVisibility.forceArrows) return null;
+                if (showMechanicsAnalyser && !mechanicsOverlay.jointReactionArrows) return null;
                 const activeForceData = hudForceAnalysis ?? (forceMode && forceAnalysis ? forceAnalysis : null);
                 if (forceMode && activeForceData) {
                   const base = activeForceData.joints.filter(j => enabledForceJoints.has(j.id));
@@ -5238,6 +11609,9 @@ ${ddxList}`;
                   const boneSet = new Set(mechanismBoneIds);
                   return hudForceAnalysis.joints.filter((j: { boneName: string }) => boneSet.has(j.boneName));
                 }
+                if (showMechanicsAnalyser && mechanicsOverlay.jointReactionArrows && hudForceAnalysis) {
+                  return hudForceAnalysis.joints;
+                }
                 return null;
               })()}
               bodyWeightKg={bodyWeightKg}
@@ -5250,30 +11624,37 @@ ${ddxList}`;
               onMuscleGroupClick={(groupId, screenX, screenY) => {
                 setClickedMusclePopup(prev => prev?.groupId === groupId ? null : { groupId, screenX, screenY });
               }}
-              highlightMuscleGroups={biomechanicalMuscleHighlights.length > 0 ? biomechanicalMuscleHighlights : undefined}
-              muscleHighlightColors={Object.keys(muscleHighlightColors).length > 0 ? muscleHighlightColors : undefined}
+              highlightMuscleGroups={overlayVisibility.muscleGlow ? mergedHighlightMuscleGroups : []}
+              muscleHighlightColors={overlayVisibility.muscleGlow ? mergedMuscleHighlightColors : {}}
               animationState={animationState}
               onAnimationProgress={handleAnimationProgress}
               animationConstraints={animationConstraints}
               environmentPreset={environmentPreset}
-              fascialChainVisualization={fascialChainVizProp}
+              fascialChainVisualization={overlayVisibility.fascialChains ? fascialChainVizProp : undefined}
               onChainNodeClick={handleChainNodeClick}
-              scarMarkers={scarMarkers}
-              adhesionBands={adhesionBands}
-              onScarMarkerClick={(id) => setEditingScar(id)}
+              scarMarkers={overlayVisibility.scarAdhesion ? scarMarkers : []}
+              adhesionBands={overlayVisibility.scarAdhesion ? adhesionBands : []}
               treatmentBoneNames={treatmentBoneNames}
               onBoneScreenPositions={handleBoneScreenPositions}
-              dermatomeHighlightBones={dermatomeHighlightBones}
-              nerveRootLabels={nerveRootLabels}
-              referralZoneBones={referralZoneBones}
-              tissueViewOverlay={tissueViewOverlay}
-              biomechanicsFaultHighlights={biomechanicsFaultHighlights}
+              dermatomeHighlightBones={overlayVisibility.dermatomeNerve ? dermatomeHighlightBones : []}
+              nerveRootLabels={overlayVisibility.dermatomeNerve ? nerveRootLabels : []}
+              referralZoneBones={overlayVisibility.dermatomeNerve ? referralZoneBones : []}
+              tissueViewOverlay={overlayVisibility.tissueIntelligence ? tissueViewOverlay : null}
+              biomechanicsFaultHighlights={[
+                ...(overlayVisibility.boneGlow ? (biomechanicsFaultHighlights ?? []) : []),
+                ...(overlayVisibility.compensationReEd ? reEdCostHaloHighlights : []),
+              ]}
               onModelLoadProgress={handleModelLoadProgress}
               onModelReady={handleModelReady}
               onModelLoadError={handleModelLoadError}
-              slingPathwayVisualization={rightPanelTab === 'slings' && slingOverlayVisible && slingAnalysis ? {
+              slingPathwayVisualization={overlayVisibility.slingPathways && (slingsOverlayPinned || (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)) && slingAnalysis ? {
                 enabled: true,
-                activeSlingId: selectedSlingId,
+                // In Movement Mode the spotlight pick drives the on-skeleton
+                // highlight only when the spotlight is enabled — otherwise
+                // the legacy Sling Analysis selection wins.
+                activeSlingId: (skeletonMode === 'movement' && movementSpotlightEnabled && spotlightPick)
+                  ? spotlightPick.slingId
+                  : selectedSlingId,
                 slings: slingAnalysis.slings.map(s => ({
                   id: s.slingId,
                   label: s.label,
@@ -5317,49 +11698,286 @@ ${ddxList}`;
                   setTissueDisambiguationEntries(matches.map(m => ({ id: m.id, label: m.label })));
                 }
               } : undefined}
-              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || (!!tissueViewMode && tissueViewMode !== 'muscle')}
+              enableSkeletonClick={!!tissueViewMode && tissueViewMode !== 'muscle'}
               goalStateOverlay={goalOverlayData}
-              onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
-                if (scarPlacementMode) {
-                  const newScar: ScarMarker = {
-                    id: `scar_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    position,
-                    nearestBone,
-                    anatomicalLabel,
-                    type: scarPlacementMode,
-                    length: 0.08,
-                    width: 0.03,
-                    orientation: 0,
-                    affectedLayers: ['superficial'],
-                    severity: 3,
-                    age: 'chronic',
-                    mobility: 'tethered',
-                    painOnPalpation: 3,
-                    notes: '',
-                  };
-                  setScarMarkers(prev => [...prev, newScar]);
-                  setEditingScar(newScar.id);
-                  setScarPlacementMode(null);
-                } else if (adhesionPlacementStep === 'start') {
-                  setPendingAdhesionStart({ position, bone: nearestBone });
-                  setAdhesionPlacementStep('end');
-                } else if (adhesionPlacementStep === 'end' && pendingAdhesionStart) {
-                  const newBand: AdhesionBand = {
-                    id: `adhesion_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    startPosition: pendingAdhesionStart.position,
-                    endPosition: position,
-                    startBone: pendingAdhesionStart.bone,
-                    endBone: nearestBone,
-                    restrictedMovements: [],
-                    tensionLevel: 50,
-                    depth: 'superficial',
-                  };
-                  setAdhesionBands(prev => [...prev, newBand]);
-                  setAdhesionPlacementStep('idle');
-                  setPendingAdhesionStart(null);
-                }
-              }}
             />
+            ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'treatment') return (
+              <div className="relative w-full h-full ring-2 ring-amber-500/70 ring-inset rounded-md" data-testid="treatment-mode-frame">
+                <div className="absolute inset-0">{__viewer}</div>
+                <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="treatment-mode-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  TREATMENT
+                  {treatmentPerforming && <span className="text-amber-100 font-normal">· performing…</span>}
+                </div>
+                <div className="absolute top-2 right-2 z-30 w-[320px] max-w-[40vw] pointer-events-auto" data-testid="treatment-hud-slot">
+                  <TreatmentTechniqueHUD
+                    jointKey={treatmentJointKey}
+                    setJointKey={setTreatmentJointKey}
+                    technique={treatmentTechnique}
+                    setTechnique={setTreatmentTechnique}
+                    positionPreset={treatmentPositionPreset}
+                    setPositionPreset={setTreatmentPositionPreset}
+                    contactRegionLabel={treatmentContactRegion || treatmentDirection?.defaultContactRegion || ''}
+                    techniqueString={treatmentClinical?.techniqueString ?? ''}
+                    scorecard={treatmentScorecard}
+                    onPerform={handlePerformTreatment}
+                    performing={treatmentPerforming}
+                    onResetPatientState={handleResetTreatmentState}
+                    onClose={() => setSkeletonMode('posture')}
+                    log={persistedTreatmentState.log.map(e => ({
+                      id: e.id,
+                      technique: e.technique,
+                      performedAt: e.performedAt,
+                      clinicalDelta: {
+                        romDeltaDeg: e.clinicalDelta?.romDeltaDeg ?? 0,
+                        painDelta: e.clinicalDelta?.painDelta ?? 0,
+                        effectivenessScore: e.clinicalDelta?.effectivenessScore ?? 0,
+                      },
+                    }))}
+                  />
+                </div>
+                <div className="absolute bottom-2 right-2 z-30 w-[340px] max-w-[42vw] pointer-events-auto" data-testid="treatment-response-slot">
+                  <TreatmentResponsePanel
+                    mechanical={treatmentMechanical}
+                    neuromuscular={treatmentNeuromuscular}
+                    clinical={treatmentClinical}
+                    irritability={treatmentIrritabilityScalar}
+                  />
+                </div>
+              </div>
+            ); if (skeletonMode === 'movement') return (
+              <div className="relative w-full h-full ring-2 ring-emerald-500/70 ring-inset rounded-md" data-testid="movement-mode-frame">
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    opacity: (sfvSlingVisualizationVisible && activeFailureSel?.ghostMode === 'compare' && !sfvActualVisible) ? 0.12 : 1,
+                    transition: 'opacity 180ms ease',
+                  }}
+                  data-testid="sfv-actual-layer"
+                >
+                  {__viewer}
+                </div>
+                <div className="absolute top-2 left-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-[10px] font-semibold shadow-lg" data-testid="movement-mode-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                  Active Movement Mode
+                  {generatingActiveCapacity && <span className="text-emerald-100 font-normal">· generating capacities…</span>}
+                </div>
+                {/* Task #391 — Joint Zoom panel. Hip pick spheres on the
+                    main viewer are auto-enabled in Movement Mode; clicking
+                    L or R hip opens this panel directly (no toggle). */}
+                {hipZoomSide && (
+                  <HipZoomPanel
+                    side={hipZoomSide}
+                    hipConfig={(hipZoomSide === 'left' ? modelConfig?.leftHip : modelConfig?.rightHip) || {}}
+                    pathology={hipZoomPathology}
+                    onClose={() => setHipZoomSide(null)}
+                    position={hipZoomPosition}
+                    onPositionChange={setHipZoomPosition}
+                  />
+                )}
+                {refreshingActiveCapacity && !generatingActiveCapacity && (
+                  <div
+                    className="absolute top-2 right-2 z-30 pointer-events-none flex items-center gap-1.5 px-2 py-1 rounded-full bg-rose-500/90 text-white text-[10px] font-semibold shadow-lg"
+                    data-testid="painmap-refresh-badge"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                    Updating pain map…
+                  </div>
+                )}
+                {skeletonMode === 'movement' && slingAnalysis && movementSpotlightEnabled && spotlightPick && (
+                  <MovementSlingSpotlight
+                    analysis={slingAnalysis}
+                    painMarkers={spotlightBiasMarkers}
+                    pinnedSpotlightSlingId={pinnedSpotlightSlingId}
+                    onPin={(slingId) => setPinnedSpotlightSlingId(slingId)}
+                    selectedSlingId={selectedSlingId}
+                    onSelectSling={(slingId) => setSelectedSlingId(slingId)}
+                    onExpandDetail={(slingId) => {
+                      setSelectedSlingId(slingId);
+                      setExpandedSlingDetailId(prev => prev === slingId ? null : slingId);
+                    }}
+                    onJumpToSlingTab={() => {
+                      setRightPanelTab('slings');
+                      setChatPanelOpen(true);
+                    }}
+                    spotlightPick={spotlightPick}
+                    movementTaskId={unifiedBiomechanicsMovementTask ?? null}
+                    primaryPainRegion={primaryPainRegion}
+                    slingActivationOverrides={slingActivationOverrides}
+                    boneScreenPositionsRef={boneScreenPositionsRef}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    partTreatments={slingPartTreatments}
+                    onApplyPartTreatment={(rec, cartItem) => {
+                      const prior = slingPartTreatments[rec.partId];
+                      if (prior?.cartItemId) {
+                        planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== prior.cartItemId));
+                      }
+                      const nextTreatments = { ...slingPartTreatments, [rec.partId]: rec };
+                      setSlingPartTreatments(nextTreatments);
+                      setSlingPartMuscleAdjustments(deriveSlingPartMuscleAdj(nextTreatments));
+                      planCartReplaceAllRef.current?.([
+                        ...(planCartItemsState ?? []).filter(it => it.id !== cartItem.id && (!prior?.cartItemId || it.id !== prior.cartItemId)),
+                        cartItem,
+                      ]);
+                    }}
+                    onClearPartTreatment={(partId) => {
+                      const rec = slingPartTreatments[partId];
+                      const { [partId]: _omit, ...nextTreatments } = slingPartTreatments;
+                      setSlingPartTreatments(nextTreatments);
+                      setSlingPartMuscleAdjustments(deriveSlingPartMuscleAdj(nextTreatments));
+                      if (rec?.cartItemId) {
+                        planCartReplaceAllRef.current?.((planCartItemsState ?? []).filter(it => it.id !== rec.cartItemId));
+                      }
+                    }}
+                    pulseAtFailureBeat={sfvAtBeat}
+                    failureBoneSet={sfvFailureBoneSet}
+                    onClose={() => setMovementSpotlightEnabled(false)}
+                  />
+                )}
+                {/* Sling failure visualizer SVG overlay anchored to live
+                    bone screen positions: continuous tube + tension pulse +
+                    failure-frame badge + reroute arrow for the active scenario. */}
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && activeFailureSel.ghostMode === 'compare' && sfvIntendedVisible && (
+                  <div
+                    className="absolute inset-0 z-10 pointer-events-none"
+                    style={{ opacity: sfvGhostOpacity, mixBlendMode: 'screen' }}
+                    data-testid="sfv-intended-ghost-layer"
+                  >
+                    <PureThreeGLBViewer
+                      modelPath="/models/skeleton_character.glb"
+                      modelConfig={finalModelConfig}
+                      className="w-full h-full"
+                      animationState={{
+                        ...animationState,
+                        currentMovement: activeFailureSel.scenario.triggerMovementId,
+                      }}
+                      environmentPreset={environmentPreset}
+                      showMuscles={false}
+                    />
+                  </div>
+                )}
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && activeFailureSel.ghostMode === 'compare' && (
+                  <div
+                    className="absolute z-30 flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-900/85 border border-gray-700/60 shadow-lg backdrop-blur text-[10px] text-gray-200"
+                    style={{ top: 'calc(3.5rem + 310px)', right: '0.75rem' }}
+                    data-testid="sfv-ghost-controls"
+                  >
+                    <button
+                      onClick={() => setSfvActualVisible(v => !v)}
+                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvActualVisible ? 'bg-rose-500/30 text-rose-200' : 'bg-gray-800 text-gray-500 line-through'}`}
+                      data-testid="sfv-toggle-actual"
+                    >
+                      Actual
+                    </button>
+                    <button
+                      onClick={() => setSfvIntendedVisible(v => !v)}
+                      className={`px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider ${sfvIntendedVisible ? 'bg-emerald-500/30 text-emerald-200' : 'bg-gray-800 text-gray-500 line-through'}`}
+                      data-testid="sfv-toggle-intended"
+                    >
+                      Intended
+                    </button>
+                    <span className="text-gray-400">Opacity</span>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={0.9}
+                      step={0.05}
+                      value={sfvGhostOpacity}
+                      onChange={(e) => setSfvGhostOpacity(parseFloat(e.target.value))}
+                      className="w-20 accent-emerald-400"
+                      data-testid="sfv-opacity-slider"
+                      disabled={!sfvIntendedVisible}
+                    />
+                    <span className="font-mono text-emerald-300 w-7 text-right">{Math.round(sfvGhostOpacity * 100)}%</span>
+                  </div>
+                )}
+                {skeletonMode === 'movement' && activeFailureSel && sfvSlingVisualizationVisible && (
+                  <SlingFailureVisualizerOverlay
+                    scenario={activeFailureSel.scenario}
+                    bonePathway={getSlingBonePathway(activeFailureSel.sling.slingId)}
+                    slingColor={activeFailureSel.sling.color}
+                    progress={animationState.progress}
+                    boneScreenPositionsRef={boneScreenPositionsRef}
+                    isPlaying={!!animationState.isPlaying}
+                    ghostMode={activeFailureSel.ghostMode}
+                  />
+                )}
+                {/* Reopen pill — visible only in Movement Mode when the
+                    panel has been closed and there is sling analysis to
+                    show. Brings the visualizer back without forcing the
+                    user to re-run analysis. */}
+                {skeletonMode === 'movement' && slingAnalysis && !slingFailureVisualizerOpen && (() => {
+                  const hasCompromised = slingAnalysis.slings.some(s => s.status !== 'normal');
+                  return (
+                    <button
+                      onClick={() => setSlingFailureVisualizerOpen(true)}
+                      className={`absolute z-30 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10.5px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm transition-colors ${
+                        hasCompromised
+                          ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-500/40 text-rose-200'
+                          : 'bg-slate-700/40 hover:bg-slate-700/60 border-slate-500/40 text-slate-200'
+                      }`}
+                      style={{ top: 'calc(3.5rem + 350px)' }}
+                      data-testid="sfv-reopen-pill"
+                      title={hasCompromised ? 'Show Sling Failure Visualizer' : 'Show Sling Failure Visualizer (no compromised slings on this case)'}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${hasCompromised ? 'bg-rose-400' : 'bg-slate-400'}`} />
+                      Sling Failure Visualizer
+                      {!hasCompromised && <span className="text-slate-400/80 normal-case tracking-normal text-[9.5px] font-normal ml-1">· no compromised slings</span>}
+                    </button>
+                  );
+                })()}
+                {/* Floating panel — lists compromised slings, plays the
+                    trigger movement, scrubs the timeline, shows joint
+                    deltas + narration. */}
+                {skeletonMode === 'movement' && slingAnalysis && slingFailureVisualizerOpen && (
+                  <SlingFailureVisualizerPanel
+                    caseId={activeCaseId ?? 'case-default'}
+                    condition={lastClinicalParseResult?.clinical_summary || lastClinicalParseResult?.original_description || null}
+                    analysis={slingAnalysis}
+                    markers={painMarkers.map(pm => ({
+                      nearestBone: pm.nearestBone,
+                      anatomicalLabel: pm.anatomicalLabel,
+                      severity: typeof pm.severity === 'number' ? pm.severity : undefined,
+                    }))}
+                    animationState={animationState}
+                    onAnimationStateChange={setAnimationState}
+                    onActiveScenarioChange={setActiveFailureSel}
+                    onClose={() => setSlingFailureVisualizerOpen(false)}
+                    pathologyCompensation={pathologyCompensation}
+                    position={sfvPanelPosition}
+                    onPositionChange={setSfvPanelPosition}
+                    slingVisualizationVisible={sfvSlingVisualizationVisible}
+                    onSlingVisualizationToggle={() => setSfvSlingVisualizationVisible(v => !v)}
+                  />
+                )}
+                {/* Movement Findings panel — mounted inside the
+                    movement-mode frame so its DraggableShell uses the
+                    viewer container as offsetParent (viewer-relative
+                    clamping, never escapes the viewer). Hidden when the
+                    sidebar is open to mirror the right-rail behavior. */}
+                {!sidebarOpen && (
+                  <MovementFindingsStream
+                    findings={movementFindings}
+                    onClear={() => setMovementFindings([])}
+                    position={movementFindingsPosition}
+                    onPositionChange={setMovementFindingsPosition}
+                    verdictByMovementId={reEdVerdictByMovementId}
+                  />
+                )}
+                {/* Compensation Re-Education panel (Task #373) — surfaces
+                    driver / verdict / cost / better-pattern / phased plan
+                    for the highest-cost compensation on the active case.
+                    Hidden when no enriched compensations exist or when
+                    the clinician has closed it for this session. */}
+                {skeletonMode === 'movement' && movementReEdPanelEnabled && reEducationCompensations.compensations.length > 0 && (
+                  <MovementReEducationPanel
+                    enrichment={reEducationCompensations}
+                    movementTaskId={unifiedBiomechanicsMovementTask ?? null}
+                    onClose={() => setMovementReEdPanelEnabled(false)}
+                  />
+                )}
+              </div>
+            ); return __viewer; })()}
 
             {expandedSlingDetailId && slingAnalysis && (() => {
               const slingData = slingAnalysis.slings.find(s => s.slingId === expandedSlingDetailId);
@@ -5478,8 +12096,13 @@ ${ddxList}`;
               onAnimationStateChange={setAnimationState}
               onConstraintsChange={setAnimationConstraints}
               onCompensationChange={handleCompensationChange}
-              modelConfig={finalModelConfig as any}
+              modelConfig={finalModelConfig}
               muscleRestrictionEffects={muscleRestrictionEffects}
+              diagnosisMovements={provocationMovements}
+              diagnosisCondition={provocationHypothesis?.condition || null}
+              diagnosisLoading={provocationLoading}
+              diagnosisError={provocationError ? (provocationError as Error).message : null}
+              onRegenerateDiagnosisMovements={provocationQueryEnabled ? handleRegenerateProvocations : undefined}
             />
 
             {/* Clinical Presets Panel */}
@@ -5843,7 +12466,23 @@ ${ddxList}`;
                           Reset
                         </button>
                       )}
-                      <button onClick={() => setClickedMusclePopup(null)} className="text-gray-400 hover:text-white p-0.5">
+                      <button
+                        onClick={() => {
+                          // Task #404 — Closing the popup also clears the
+                          // group's manual overrides so the body-mesh tint
+                          // disappears with the popup (per task AC: close
+                          // OR reset removes the highlight cleanly). The
+                          // explicit Reset button uses the same clearing
+                          // path; X just composes Reset + dismiss.
+                          setMuscleOverrides(prev => {
+                            const next = { ...prev };
+                            group.muscles.forEach(m => delete next[m.id]);
+                            return next;
+                          });
+                          setClickedMusclePopup(null);
+                        }}
+                        className="text-gray-400 hover:text-white p-0.5"
+                      >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -7293,6 +13932,8 @@ ${ddxList}`;
                 painTensionContributors={painTensionContributors}
                 selectedChainId={selectedChainId}
                 setSelectedChainId={setSelectedChainId}
+                selectedChainSide={selectedChainSide}
+                setSelectedChainSide={setSelectedChainSide}
                 clinicalConsequences={clinicalConsequences}
               />
             )}
@@ -7525,81 +14166,6 @@ ${ddxList}`;
               </div>
             )}
 
-            {/* Zoom Tool Region Navigator with Landmark Browser */}
-            {zoomToolMode && (() => {
-              const stripSide = (label: string) => label.replace(/^(Left |Right )/, '').replace(/ \(.*\)$/, '');
-
-              return (
-              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[230px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Search className="h-3.5 w-3.5 text-cyan-400" />
-                    <span className="text-[11px] font-semibold text-white">Anatomy Browser</span>
-                  </div>
-                  <button className="text-gray-400 hover:text-white" onClick={() => setZoomToolMode(false)}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <p className="text-[9px] text-gray-400 mb-2">Select a region to zoom in, or expand to pick a specific landmark.</p>
-                <div className="space-y-0.5">
-                  {zoomRegionLandmarks.map(({ region, label, landmarks }) => {
-                    const isExpanded = expandedZoomRegion === region;
-                    const isActive = zoomToRegion === region;
-                    return (
-                      <div key={region} className="rounded-md overflow-hidden">
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            className={`flex-1 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-l-md transition-colors text-left ${
-                              isActive
-                                ? 'bg-cyan-500/25 text-cyan-300'
-                                : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
-                            }`}
-                            onClick={() => { setZoomToRegion(region); setExpandedZoomRegion(isExpanded ? null : region); }}
-                          >
-                            <Bone className="h-3 w-3 flex-shrink-0 opacity-60" />
-                            <span className="flex-1">{label}</span>
-                            <span className="text-[8px] text-gray-500">{landmarks.length}</span>
-                          </button>
-                          <button
-                            className={`px-1.5 py-1.5 rounded-r-md transition-colors ${
-                              isExpanded
-                                ? 'bg-cyan-500/25 text-cyan-300'
-                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                            }`}
-                            onClick={(e) => { e.stopPropagation(); setExpandedZoomRegion(isExpanded ? null : region); if (!isExpanded) setZoomToRegion(region); }}
-                          >
-                            <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                        </div>
-                        {isExpanded && landmarks.length > 0 && (
-                          <div className="ml-2 mt-0.5 mb-1 border-l border-cyan-500/20 pl-2 space-y-0.5">
-                            {landmarks.map((lm) => (
-                              <button
-                                key={lm.boneName}
-                                className="w-full flex items-center gap-1.5 text-[9px] px-1.5 py-1 rounded text-left text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
-                                onClick={() => {
-                                  handleLandmarkSelect({ label: lm.label, boneName: lm.boneName, position: { x: 0, y: 0, z: 0 } });
-                                }}
-                              >
-                                <MapPin className="h-2.5 w-2.5 flex-shrink-0 text-cyan-500/50" />
-                                <span className="truncate">{stripSide(lm.label)}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  className="w-full mt-2 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-                  onClick={() => { setZoomToRegion('full_body'); setExpandedZoomRegion(null); }}
-                >
-                  Reset to Full Body
-                </button>
-              </div>
-              );
-            })()}
 
             {/* Clinical Highlights Legend */}
             {clinicalHighlights.length > 0 && !forceMode && (
@@ -7641,6 +14207,8 @@ ${ddxList}`;
                       line: { bg: 'bg-pink-500', shadow: '#ff4488', label: 'Line' },
                     };
                     const tc = typeColors[m.type || 'point'] || typeColors.point;
+                    const sourceText = formatMarkerSourceAttribution(m);
+                    const canReSeed = m.id.startsWith('pred-seed-') && m.source !== 'prediction' && (m.sourceKind != null);
                     return (
                     <div key={m.id} className="bg-white/5 rounded px-2 py-1.5">
                       <div className="flex items-center gap-2 group">
@@ -7648,10 +14216,31 @@ ${ddxList}`;
                         <div className="flex-1 min-w-0">
                           <span
                             className="text-[11px] text-white truncate block font-medium cursor-pointer hover:text-teal-300 transition-colors"
+                            title={sourceText ?? m.anatomicalLabel}
                             onClick={(e) => { e.stopPropagation(); setClinicalBubbleMarker(m); setClinicalBubbleSeverity("moderate"); }}
                           >{m.anatomicalLabel}</span>
                           <div className="flex items-center gap-1 flex-wrap">
                             <span className="text-[9px] text-gray-400 uppercase">{tc.label}</span>
+                            {m.source === 'prediction' && (
+                              <span
+                                className="text-[8px] px-1 rounded bg-cyan-900/50 text-cyan-300 border border-cyan-500/40"
+                                title={sourceText ?? 'Auto-placed from clinical prediction'}
+                                data-testid={`marker-source-ai-${m.id}`}
+                              >
+                                AI
+                              </span>
+                            )}
+                            {canReSeed && (
+                              <button
+                                type="button"
+                                className="text-[8px] px-1 rounded bg-cyan-900/30 text-cyan-300/80 border border-cyan-500/30 hover:bg-cyan-900/60 hover:text-cyan-200 transition-colors"
+                                title={sourceText ? `Re-seed from AI: ${sourceText}` : 'Restore AI-suggested placement'}
+                                data-testid={`marker-reseed-${m.id}`}
+                                onClick={(e) => { e.stopPropagation(); handleReSeedPredictionMarker(m.id); }}
+                              >
+                                Re-seed
+                              </button>
+                            )}
                             {m.painMechanism && (
                               <span className={`text-[8px] px-1 rounded ${m.painMechanism === 'neuropathic' ? 'bg-blue-900/40 text-blue-300' : m.painMechanism === 'myofascial' ? 'bg-orange-900/40 text-orange-300' : m.painMechanism === 'central_sensitization' ? 'bg-pink-900/40 text-pink-300' : 'bg-red-900/40 text-red-300'}`}>
                                 {m.painMechanism === 'central_sensitization' ? 'central' : m.painMechanism}
@@ -7694,6 +14283,14 @@ ${ddxList}`;
                           onClick={() => { setEditingMarkerId(m.id); setMarkerDescription(m.description || ''); }}
                         >
                           "{m.description}"
+                        </p>
+                      )}
+                      {sourceText && (
+                        <p
+                          className="text-[10px] text-cyan-300/80 mt-1 ml-4 leading-snug"
+                          data-testid={`marker-source-attribution-${m.id}`}
+                        >
+                          {sourceText}
                         </p>
                       )}
                       {editingMarkerId === m.id ? (
@@ -7756,7 +14353,85 @@ ${ddxList}`;
             )}
 
             {/* Clinical Bubble */}
-            {clinicalBubbleMarker && (
+            {clinicalBubbleMarker && (() => {
+              // Build the structured "Why this marker" rationale from data
+              // already in memory: marker attribution + tissue intelligence
+              // (rationale / candidates / descriptors / aggravators) +
+              // provocation expectations. No new AI calls.
+              const liveMarker = painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker;
+              let markerRationale: MarkerRationale | null = null;
+              if (liveMarker.sourceKind === 'tissue' && liveMarker.sourceTissueLabel) {
+                const tissueKey = `${liveMarker.sourceTissueType ?? ''}:${liveMarker.sourceTissueId ?? ''}`;
+                const intel = tissueIntelligenceMap.get(tissueKey);
+                const sevBlurb = typeof liveMarker.sourceTissueSeverity === 'number'
+                  ? ` (severity ${liveMarker.sourceTissueSeverity.toFixed(1)}/10)`
+                  : '';
+                const tissueType = liveMarker.sourceTissueType ? `${liveMarker.sourceTissueType}: ` : '';
+                const evidence: string[] = [];
+                if (intel?.rationale) evidence.push(intel.rationale);
+                const irritability = intel?.state.irritability;
+                const healingStage = intel?.state.healingStage;
+                if (irritability && (irritability === 'high' || irritability === 'moderate')) {
+                  evidence.push(`State: ${irritability} irritability${healingStage && healingStage !== 'baseline' ? ` · ${healingStage} stage` : ''}`);
+                }
+                const candidates = intel?.painBehavior?.candidates ?? [];
+                for (const c of candidates.slice(0, 2)) {
+                  evidence.push(`Pain generator: ${c.label} (${Math.round(c.probability * 100)}%) — ${c.rationale}`);
+                }
+                const descriptors = intel?.painBehavior?.descriptors ?? [];
+                if (descriptors.length > 0) {
+                  evidence.push(`Descriptors: ${descriptors.slice(0, 4).join(', ')}`);
+                }
+                const aggravators = intel?.painBehavior?.aggravators ?? [];
+                if (aggravators.length > 0) {
+                  evidence.push(`Aggravated by: ${aggravators.slice(0, 3).map(a => a.label).join(', ')}`);
+                }
+                if (intel) {
+                  const overloadPct = Math.round(intel.capacityDemand.overloadRatio * 100);
+                  if (overloadPct >= 80) {
+                    evidence.push(`Capacity vs demand: ${overloadPct}% (overloaded)`);
+                  }
+                }
+                markerRationale = {
+                  sourceKind: 'tissue',
+                  condition: liveMarker.sourceHypothesisCondition || undefined,
+                  primary: `Compromised ${tissueType}${liveMarker.sourceTissueLabel}${sevBlurb}`,
+                  evidence,
+                  edited: liveMarker.source !== 'prediction',
+                };
+              } else if (liveMarker.sourceKind === 'provocation' && liveMarker.sourceProvocationLabel) {
+                const movement = provocationMovements.find(
+                  pm => pm.name === liveMarker.sourceProvocationMovement,
+                );
+                const site = movement?.expectedProvocationSites?.find(
+                  s => s.label === liveMarker.sourceProvocationLabel,
+                );
+                const evidence: string[] = [];
+                if (movement?.clinicalRationale) evidence.push(movement.clinicalRationale);
+                if (movement?.positiveFinding) evidence.push(`Positive finding: ${movement.positiveFinding}`);
+                if (movement?.setupPosture) evidence.push(`Setup: ${movement.setupPosture}`);
+                if (typeof site?.severity === 'number') {
+                  evidence.push(`Expected reproduction: ${liveMarker.sourceProvocationLabel} (~${site.severity}/10)`);
+                }
+                const hyp = clinicalReasoningData?.hypotheses?.find(
+                  h => h.id === liveMarker.sourceHypothesisId
+                    || h.condition === liveMarker.sourceHypothesisCondition,
+                );
+                for (const ev of (hyp?.supportingEvidence ?? []).slice(0, 2)) {
+                  evidence.push(`Supports hypothesis: ${ev}`);
+                }
+                const movementName = liveMarker.sourceProvocationMovement
+                  ? `${liveMarker.sourceProvocationMovement}`
+                  : 'Provocation test';
+                markerRationale = {
+                  sourceKind: 'provocation',
+                  condition: liveMarker.sourceHypothesisCondition || undefined,
+                  primary: `${movementName} → expected pain at ${liveMarker.sourceProvocationLabel}`,
+                  evidence,
+                  edited: liveMarker.source !== 'prediction',
+                };
+              }
+              return (
               <Suspense fallback={<LazyPanelFallback />}>
               <ClinicalBubble
                 key={clinicalBubbleMarker.id}
@@ -7802,9 +14477,31 @@ ${ddxList}`;
                 onSubjectiveHistoryChange={(mId, history) => {
                   setPainMarkers(prev => prev.map(m => m.id === mId ? { ...m, subjectiveHistory: history } : m));
                 }}
+                sourceAttribution={formatMarkerSourceAttribution(
+                  painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker
+                )}
+                onReSeed={(() => {
+                  const live = painMarkers.find(m => m.id === clinicalBubbleMarker.id) ?? clinicalBubbleMarker;
+                  // Only expose Re-seed when the seed has been edited by the
+                  // clinician; an active 'prediction' marker is already at the
+                  // AI-suggested placement.
+                  if (!live.id.startsWith('pred-seed-') || live.source === 'prediction' || live.sourceKind == null) {
+                    return undefined;
+                  }
+                  return (mId: string) => {
+                    handleReSeedPredictionMarker(mId);
+                    setPainMarkers(curr => {
+                      const fresh = curr.find(m => m.id === mId);
+                      if (fresh) setClinicalBubbleMarker(fresh);
+                      return curr;
+                    });
+                  };
+                })()}
+                markerRationale={markerRationale}
               />
               </Suspense>
-            )}
+              );
+            })()}
 
             {showPainIntelligence && clinicalBubbleMarker && (
               <div className="absolute top-2 right-2 z-50 animate-in slide-in-from-right-2 duration-200">
@@ -7853,131 +14550,6 @@ ${ddxList}`;
               </div>
             )}
 
-            {/* ROM Joint Slider Panel */}
-            {selectedRomJoint && romMode && (
-              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2 z-20 w-72 max-h-[calc(100%-16px)] overflow-y-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-[11px] text-blue-300 uppercase tracking-wider font-medium">ROM Assessment</p>
-                    <p className="text-[13px] text-white font-semibold">{selectedRomJoint.label}</p>
-                  </div>
-                  <button
-                    className="text-gray-400 hover:text-white"
-                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {selectedRomJoint.movements.map(movement => {
-                    const isDeficitType = movement.id.includes('deficit') || movement.label.toLowerCase().includes('contracture') || movement.label.toLowerCase().includes('lag');
-                    const val = romValues[movement.id] ?? (isDeficitType ? 0 : movement.normalRange[1]);
-                    const maxRange = isDeficitType ? Math.max(movement.normalRange[1] * 6, 30) : Math.max(movement.normalRange[1], 10);
-                    const restricted = isDeficitType ? val > movement.normalRange[1] : val < movement.normalRange[1];
-                    const pct = isDeficitType
-                      ? (maxRange > 0 ? Math.round(((maxRange - val) / maxRange) * 100) : 100)
-                      : (maxRange > 0 ? Math.round((val / maxRange) * 100) : 100);
-                    return (
-                      <div key={movement.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-gray-300">{movement.label}</span>
-                          <span className={`text-[12px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
-                            {val}{movement.unit}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Slider
-                            value={[val]}
-                            min={0}
-                            max={maxRange}
-                            step={1}
-                            onValueChange={([v]) => setRomValues(prev => ({ ...prev, [movement.id]: v }))}
-                            className="flex-1"
-                          />
-                          <span className="text-[9px] text-gray-500 w-14 text-right">
-                            {isDeficitType ? 'Accept:' : 'Normal:'} {movement.normalRange[1]}{movement.unit}
-                          </span>
-                        </div>
-                        {restricted && (
-                          <div className="mt-0.5 h-1 rounded-full bg-gray-700 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1 mt-3">
-                  <Button
-                    size="sm"
-                    className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={handleRomSave}
-                  >
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Save Measurements
-                  </Button>
-                  <button
-                    className="text-[10px] text-gray-400 hover:text-white px-2"
-                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ROM Measurements List */}
-            {romMeasurements.length > 0 && romMode && !selectedRomJoint && (
-              <div className="absolute bottom-12 right-2 bg-black/80 backdrop-blur rounded-lg px-3 py-2 z-10 w-72 max-h-64 overflow-y-auto">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] text-blue-300 uppercase tracking-wider font-medium">ROM Findings ({romMeasurements.length})</p>
-                  <button
-                    className="text-[10px] text-red-400 hover:text-red-300"
-                    onClick={() => setRomMeasurements([])}
-                  >
-                    Clear All
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  {romMeasurements.map((m, i) => {
-                    const restricted = isRomRestricted(m);
-                    return (
-                      <div key={i} className="flex items-center gap-2 bg-white/5 rounded px-2 py-1">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${restricted ? 'bg-amber-400' : 'bg-green-400'}`} />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[10px] text-gray-400">{m.jointLabel}</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[11px] text-white truncate">{m.movementLabel}</span>
-                            <span className={`text-[11px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
-                              {m.measuredValue}{m.unit}
-                            </span>
-                            <span className="text-[9px] text-gray-500">/ {m.normalRange[1]}{m.unit}</span>
-                          </div>
-                        </div>
-                        <button
-                          className="text-gray-500 hover:text-red-400"
-                          onClick={() => setRomMeasurements(prev => prev.filter((_, idx) => idx !== i))}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full mt-2 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={handleRomSendToChat}
-                  disabled={isStreaming}
-                >
-                  <Stethoscope className="h-3 w-3 mr-1" />
-                  Send ROM to Chat
-                </Button>
-              </div>
-            )}
 
             {/* Skeleton controls bar */}
             <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1 z-10 pointer-events-none [&>*]:pointer-events-auto">
@@ -8040,7 +14612,6 @@ ${ddxList}`;
                     const newMode = !painMarkerMode;
                     setPainMarkerMode(newMode);
                     if (newMode) {
-                      setRomMode(false);
                       setPoseMode(false);
                       setCameraMode(false);
                       setCameraPoseActive(false);
@@ -8061,68 +14632,82 @@ ${ddxList}`;
                   {painMarkerMode ? 'Marking...' : 'Mark Pain'}
                 </Button>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${romMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !romMode;
-                  setRomMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setPoseMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
-                  } else {
-                    setSelectedRomJoint(null);
-                    setRomValues({});
-                  }
-                }}
-              >
-                <Ruler className="h-3 w-3 mr-1" />
-                {romMode ? 'Measuring...' : 'Measure ROM'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !poseMode;
-                  setPoseMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setRomMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    setSelectedRomJoint(null);
-                    toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
-                  }
-                }}
-              >
-                <Hand className="h-3 w-3 mr-1" />
-                {poseMode ? 'Posing...' : 'Pose'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${zoomToolMode ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !zoomToolMode;
-                  setZoomToolMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setRomMode(false);
-                    setPoseMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    toast({ title: "Zoom & Landmark Tool", description: "Scroll to zoom into specific anatomical structures. Click on a labeled landmark to place a pain marker and get AI clinical analysis." });
-                  }
-                }}
-              >
-                <Search className="h-3 w-3 mr-1" />
-                {zoomToolMode ? 'Zooming...' : 'Zoom'}
-              </Button>
+              {skeletonMode === 'movement' ? (
+                <>
+                  <div
+                    className="h-7 px-2 flex items-center text-[10px] rounded-md bg-emerald-500/15 text-emerald-200 border border-emerald-500/40 select-none"
+                    data-testid="auto-pose-indicator"
+                    title="Movement Mode is interactive by default — joints respond to click & drag automatically."
+                  >
+                    <Hand className="h-3 w-3 mr-1" />
+                    Auto-pose: ON
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMovementSpotlightEnabled(v => !v)}
+                    className={`h-7 px-2 flex items-center text-[10px] rounded-md border select-none transition-colors ${
+                      movementSpotlightEnabled
+                        ? 'bg-amber-500/20 text-amber-100 border-amber-500/50 hover:bg-amber-500/30'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-600/60 hover:bg-slate-700/80'
+                    }`}
+                    data-testid="toggle-movement-spotlight"
+                    title="Auto-detect the failing sling for this movement and surface treat-on-skeleton actions."
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${movementSpotlightEnabled ? 'bg-amber-300 animate-pulse' : 'bg-slate-500'}`} />
+                    Sling spotlight: {movementSpotlightEnabled ? 'ON' : 'OFF'}
+                  </button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
+                    onClick={() => {
+                      setRightPanelTab('slings');
+                      setChatPanelOpen(true);
+                    }}
+                    data-testid="movement-toolbar-open-slings"
+                    title="Open the slings analysis panel."
+                  >
+                    <GitBranch className="h-3 w-3 mr-1" />
+                    Slings
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs shadow-sm bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50"
+                    onClick={() => {
+                      if (sidebarOpen) setSidebarOpen(false);
+                      setMovementSimExpandSignal(s => s + 1);
+                    }}
+                    data-testid="movement-toolbar-open-ai-sim"
+                    title="Open the Movement AI Simulator panel."
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Simulator
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={`h-7 text-xs shadow-sm ${poseMode ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                  onClick={() => {
+                    const newMode = !poseMode;
+                    setPoseMode(newMode);
+                    if (newMode) {
+                      setPainMarkerMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
+                      toast({ title: "Pose Mode", description: "Click and drag limbs to adjust the skeleton pose. Double-click to reset a joint." });
+                    }
+                  }}
+                >
+                  <Hand className="h-3 w-3 mr-1" />
+                  {poseMode ? 'Posing...' : 'Pose'}
+                </Button>
+              )}
+              {skeletonMode !== 'movement' && (
+              <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -8171,39 +14756,6 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${correlationMode ? 'bg-violet-500 text-white hover:bg-violet-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !correlationMode;
-                  setCorrelationMode(newMode);
-                  if (newMode) {
-                    toast({ title: "Clinical Correlation", description: "Cross-system analysis active. Place pain markers to see correlated chains, muscles, forces, and root cause analysis." });
-                  }
-                }}
-              >
-                <Network className="h-3 w-3 mr-1" />
-                {correlationMode ? 'Correlate On' : 'Correlate'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showScarPanel ? 'bg-pink-500 text-white hover:bg-pink-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !showScarPanel;
-                  setShowScarPanel(newMode);
-                  if (newMode) {
-                    toast({ title: "Scar Tissue Mapping", description: "Document surgical scars and adhesion bands on the 3D model. Click placement buttons then click the skeleton." });
-                  }
-                }}
-              >
-                <Scissors className="h-3 w-3 mr-1" />
-                Scars
-                {scarMarkers.length > 0 && (
-                  <span className="ml-1 bg-pink-400 text-white text-[9px] rounded-full px-1 leading-tight">{scarMarkers.length}</span>
-                )}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
                 className={`h-7 text-xs shadow-sm ${tissueViewMode ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
                   if (tissueViewMode) {
@@ -8222,56 +14774,104 @@ ${ddxList}`;
               <Button
                 variant="secondary"
                 size="sm"
-                className={`h-7 text-xs shadow-sm ${showRiskDashboard ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowRiskDashboard(!showRiskDashboard)}
-              >
-                <Shield className="h-3 w-3 mr-1" />
-                Risk
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showInjuryMechanism ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowInjuryMechanism(!showInjuryMechanism)}
-              >
-                <Link2 className="h-3 w-3 mr-1" />
-                Mechanism
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showSimTimeline ? 'bg-sky-500 text-white hover:bg-sky-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => setShowSimTimeline(!showSimTimeline)}
-              >
-                <Clock className="h-3 w-3 mr-1" />
-                Timeline
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${clinicalReasoningOpen && reasoningActiveTab === 'evidence' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                className={`h-7 text-xs shadow-sm ${showRecoverySim ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
                 onClick={() => {
-                  if (clinicalReasoningOpen && reasoningActiveTab === 'evidence') {
-                    setClinicalReasoningOpen(false);
-                  } else {
-                    setClinicalReasoningOpen(true);
-                    setReasoningRequestedTab('evidence');
-                  }
+                  const next = !showRecoverySim;
+                  setShowRecoverySim(next);
+                  if (next && showMechanicsAnalyser) setShowMechanicsAnalyser(false);
                 }}
               >
-                <BookOpen className="h-3 w-3 mr-1" />
-                Evidence
-                {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse inline-block" />}
-                {!evidenceLoading && evidenceEngineResult && (() => {
-                  const totalCount = (evidenceEngineResult.pubmedPapers?.length || 0) + (evidenceEngineResult.options?.length || 0);
-                  return totalCount > 0 ? (
-                    <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 min-w-[14px] text-center inline-block">{totalCount}</span>
-                  ) : (
-                    <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
-                  );
-                })()}
+                <Activity className="h-3 w-3 mr-1" />
+                Recovery Sim
               </Button>
-              <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${showMechanicsAnalyser ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  const next = !showMechanicsAnalyser;
+                  setShowMechanicsAnalyser(next);
+                  if (next && showRecoverySim) setShowRecoverySim(false);
+                }}
+                data-testid="toggle-mechanics-analyser"
+              >
+                <span className="font-serif italic mr-1 text-[12px] leading-none">Σ</span>
+                Mechanics Analyser
+              </Button>
+              </>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${skeletonMode === 'movement' ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  setSkeletonMode(prev => {
+                    const next = prev === 'movement' ? 'posture' : 'movement';
+                    // entering Movement Mode closes the
+                    // sibling viewer panels (Recovery Sim + Mechanics
+                    // Analyser) so the static-posture clinical pipeline
+                    // and movement gating cannot run side-by-side.
+                    // Task #376 — switching INTO Movement also leaves
+                    // Treatment cleanly (the only other interactive mode).
+                    if (next === 'movement') {
+                      if (showRecoverySim) setShowRecoverySim(false);
+                      if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                      // Movement Mode is interactive by default — clear the
+                      // mutually-exclusive tools that would otherwise gate the
+                      // implicit pose interaction (mirrors the Pose button).
+                      // Also clear the explicit poseMode flag so movement-mode
+                      // conflict gating is the sole owner of interaction state
+                      // (no hidden coupling where leftover poseMode keeps pose
+                      // interaction on after a conflicting tool activates).
+                      setPoseMode(false);
+                      setPainMarkerMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
+                    } else {
+                      // Leaving Movement Mode tears down the Joint Zoom UI
+                      // (Task #391 — hip zoom is movement-mode only in v1).
+                      setHipZoomSide(null);
+                    }
+                    return next;
+                  });
+                }}
+                data-testid="toggle-skeleton-mode"
+                title={skeletonMode === 'movement' ? 'Switch back to Posture Mode' : 'Active Movement Mode — click and drag any joint'}
+              >
+                <Activity className="h-3 w-3 mr-1" />
+                {skeletonMode === 'movement' ? 'Movement Mode' : skeletonMode === 'treatment' ? 'Treatment Mode' : 'Posture Mode'}
+              </Button>
+              {/* Task #376 — Treatment Mode toggle. Mutually exclusive
+                  with Posture / Movement / sibling viewer panels.
+                  Amber colour matches the frame glow + HUD badge. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={`h-7 text-xs shadow-sm ${skeletonMode === 'treatment' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                onClick={() => {
+                  setSkeletonMode(prev => {
+                    const next = prev === 'treatment' ? 'posture' : 'treatment';
+                    if (next === 'treatment') {
+                      if (showRecoverySim) setShowRecoverySim(false);
+                      if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
+                      setPoseMode(false);
+                      setPainMarkerMode(false);
+                      setCameraMode(false);
+                      setCameraPoseActive(false);
+                      setSelectedRomJoint(null);
+                    }
+                    return next;
+                  });
+                }}
+                data-testid="toggle-treatment-mode"
+                title={skeletonMode === 'treatment' ? 'Switch back to Posture Mode' : 'Treatment Mode — simulate manual therapy on the patient'}
+              >
+                <Hand className="h-3 w-3 mr-1" />
+                {skeletonMode === 'treatment' ? 'Treatment Mode' : 'Treatment'}
+              </Button>
+              {skeletonMode !== 'movement' && skeletonMode !== 'treatment' && (
+              <>
               <Button
                 variant="secondary"
                 size="sm"
@@ -8290,54 +14890,69 @@ ${ddxList}`;
                 <SlidersHorizontal className="h-3 w-3 mr-1" />
                 Controls
               </Button>
-              <div className="relative">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className={`h-7 text-xs shadow-sm ${showEnvironmentPicker ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                  onClick={() => setShowEnvironmentPicker(!showEnvironmentPicker)}
+              <Popover open={showOverlayPopover} onOpenChange={setShowOverlayPopover}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className={`h-7 text-xs shadow-sm ${overlayHiddenCount > 0 ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
+                    title={overlayHiddenCount > 0 ? `${overlayHiddenCount} overlay${overlayHiddenCount === 1 ? '' : 's'} hidden` : 'Show / hide individual skeleton overlays'}
+                    data-testid="toggle-overlay-popover"
+                  >
+                    <Layers3 className="h-3 w-3 mr-1" />
+                    Overlays
+                    {overlayHiddenCount > 0 && (
+                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded-full bg-white/25 min-w-[14px] text-center inline-block">{overlayHiddenCount}</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  className="w-72 p-3 bg-gray-900/95 backdrop-blur-sm border-gray-700/50 text-gray-100"
+                  data-testid="overlay-popover-content"
                 >
-                  <Palette className="h-3 w-3 mr-1" />
-                  Scene
-                </Button>
-                {showEnvironmentPicker && (
-                  <div className="absolute bottom-full mb-2 left-0 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl p-3 w-56 z-50 animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-[11px] font-semibold text-white">Virtual Environment</span>
-                      <button onClick={() => setShowEnvironmentPicker(false)} className="text-gray-400 hover:text-white">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ENVIRONMENT_PRESETS.map(env => (
-                        <button
-                          key={env.id}
-                          onClick={() => {
-                            setEnvironmentPreset(env.id);
-                            setShowEnvironmentPicker(false);
-                          }}
-                          className={`group rounded-lg overflow-hidden border transition-all ${
-                            environmentPreset === env.id
-                              ? 'border-indigo-500 ring-1 ring-indigo-500/40'
-                              : 'border-gray-700/50 hover:border-gray-600'
-                          }`}
-                        >
-                          <div
-                            className="h-10 w-full"
-                            style={{ background: env.thumbnail }}
-                          />
-                          <div className={`px-2 py-1.5 ${environmentPreset === env.id ? 'bg-indigo-500/15' : 'bg-gray-800/80'}`}>
-                            <div className={`text-[10px] font-medium truncate ${environmentPreset === env.id ? 'text-indigo-300' : 'text-gray-300 group-hover:text-white'}`}>
-                              {env.name}
-                            </div>
-                            <div className="text-[8px] text-gray-500 truncate">{env.description}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-semibold text-white">Skeleton overlays</span>
+                    <button
+                      onClick={() => setOverlayVisibility({ ...DEFAULT_OVERLAY_VISIBILITY })}
+                      className="text-[10px] text-gray-400 hover:text-white underline-offset-2 hover:underline"
+                      data-testid="overlay-reset-all"
+                    >
+                      show all
+                    </button>
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
+                    {OVERLAY_DEFINITIONS.map(def => {
+                      const on = overlayVisibility[def.key];
+                      return (
+                        <label
+                          key={def.key}
+                          className={`flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer border transition-colors ${on ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-800/90' : 'bg-gray-800/20 border-gray-800/40 hover:bg-gray-800/40'}`}
+                          data-testid={`overlay-toggle-${def.key}`}
+                        >
+                          <span
+                            className={`mt-0.5 h-3 w-3 rounded-sm shrink-0 ${on ? '' : 'opacity-30'}`}
+                            style={{ backgroundColor: def.chipColor, boxShadow: on ? `0 0 6px ${def.chipColor}80` : 'none' }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-[11px] font-medium leading-tight ${on ? 'text-white' : 'text-gray-400'}`}>{def.label}</div>
+                            <div className="text-[9px] text-gray-500 leading-tight mt-0.5 truncate">{def.description}</div>
+                          </div>
+                          <Switch
+                            checked={on}
+                            onCheckedChange={(checked) => setOverlayVisibility(prev => ({ ...prev, [def.key]: checked }))}
+                            className="mt-0.5 scale-75 origin-right"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-gray-700/50 text-[9px] text-gray-500 leading-snug">
+                    Toggling a layer off hides it instantly. Choices last for the session and reset on hard refresh.
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Button
                 variant="secondary"
                 size="sm"
@@ -8435,17 +15050,25 @@ ${ddxList}`;
                   setPainMarkerMode(false);
                   setForceMode(false);
                   setMuscleMode(false);
-                  setRomMode(false);
                   setPoseMode(false);
-                  setZoomToolMode(false);
-                  setScarPlacementMode(null);
-                  setAdhesionPlacementStep('idle');
-                  setPendingAdhesionStart(null);
 
                   clinicalTextAppliedRef.current = null;
+                  // Voice Activity dock: session reset clears the
+                  // entry log, hides the dock, and bumps the session
+                  // key so the dock fully remounts and forgets any
+                  // collapse/unread state from the previous session.
+                  setVoiceActivityEntries([]);
+                  setVoiceDockVisible(false);
+                  setVoiceDockSessionKey(k => k + 1);
+                  pendingVoiceTriggerRef.current = null;
                   lastReasoningTriggerRef.current = '';
                   slingAnalysisRef.current = null;
+                  setSlingActivationOverrides({});
                   compensationDataRef.current = { result: null, movementName: null, restrictions: {} };
+                  setCompensationDataState({ result: null, movementName: null, restrictions: {} });
+                  reEducationCompensationsRef.current = null;
+                  reEducationEnrichedOutputsRef.current = { jointConstraints: null, pathology: null, sling: null };
+                  setReEducationEnrichedOutputs({ jointConstraints: null, pathology: null, sling: null });
                   subjectiveHistoryRef.current = '';
                   if (clinicalReasoningTimerRef.current) {
                     clearTimeout(clinicalReasoningTimerRef.current);
@@ -8466,175 +15089,11 @@ ${ddxList}`;
                 <Bone className="h-3 w-3 mr-1" />
                 Reset Skeleton
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-7 text-xs bg-gradient-to-r from-teal-500 to-teal-600 text-white hover:from-teal-600 hover:to-teal-700 shadow-sm"
-                onClick={handleAnalyzeSkeleton}
-                disabled={isStreaming}
-              >
-                <Scan className="h-3 w-3 mr-1" />
-                Analyze Skeleton
-              </Button>
+              </>
+              )}
               </div>
             </div>
 
-            {showScarPanel && (
-              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Scissors className="h-3.5 w-3.5 text-pink-400" />
-                    <span className="text-[11px] font-semibold text-white">Scar Tissue Mapping</span>
-                  </div>
-                  <button onClick={() => setShowScarPanel(false)} className="text-gray-400 hover:text-white">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {scarPlacementMode && (
-                  <div className="mb-2 p-2 rounded-lg bg-pink-500/20 border border-pink-500/30 text-[9px] text-pink-300">
-                    Click on the skeleton to place a {SCAR_TYPES[scarPlacementMode].label.toLowerCase()}
-                    <button className="ml-2 text-pink-400 hover:text-white underline" onClick={() => setScarPlacementMode(null)}>Cancel</button>
-                  </div>
-                )}
-                {adhesionPlacementStep !== 'idle' && (
-                  <div className="mb-2 p-2 rounded-lg bg-red-500/20 border border-red-500/30 text-[9px] text-red-300">
-                    {adhesionPlacementStep === 'start' ? 'Click skeleton for adhesion START point' : 'Click skeleton for adhesion END point'}
-                    <button className="ml-2 text-red-400 hover:text-white underline" onClick={() => { setAdhesionPlacementStep('idle'); setPendingAdhesionStart(null); }}>Cancel</button>
-                  </div>
-                )}
-
-                <div className="mb-3">
-                  <span className="text-[9px] text-gray-400 font-medium">Place Markers</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(Object.entries(SCAR_TYPES) as [ScarType, typeof SCAR_TYPES[ScarType]][]).map(([type, info]) => (
-                      <Button
-                        key={type}
-                        variant="secondary"
-                        size="sm"
-                        className={`h-6 text-[9px] ${scarPlacementMode === type ? 'bg-pink-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
-                        onClick={() => setScarPlacementMode(scarPlacementMode === type ? null : type)}
-                      >
-                        {info.label}
-                      </Button>
-                    ))}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className={`h-6 text-[9px] ${adhesionPlacementStep !== 'idle' ? 'bg-red-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
-                      onClick={() => {
-                        if (adhesionPlacementStep !== 'idle') {
-                          setAdhesionPlacementStep('idle');
-                          setPendingAdhesionStart(null);
-                        } else {
-                          setAdhesionPlacementStep('start');
-                          setScarPlacementMode(null);
-                        }
-                      }}
-                    >
-                      Adhesion Band
-                    </Button>
-                  </div>
-                </div>
-
-                {scarMarkers.length > 0 && (
-                  <div className="mb-3">
-                    <span className="text-[9px] text-gray-400 font-medium">Scars ({scarMarkers.length})</span>
-                    <div className="space-y-1 mt-1">
-                      {scarMarkers.map(scar => (
-                        <div key={scar.id} className={`p-1.5 rounded border transition-colors cursor-pointer ${editingScar === scar.id ? 'border-pink-500/50 bg-pink-500/10' : 'border-gray-700/50 bg-white/5 hover:bg-white/10'}`}>
-                          <div className="flex items-center justify-between" onClick={() => setEditingScar(editingScar === scar.id ? null : scar.id)}>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: SCAR_TYPES[scar.type].color }} />
-                              <span className="text-[9px] text-gray-200">{SCAR_TYPES[scar.type].label}</span>
-                              <span className="text-[8px] text-gray-500">{scar.anatomicalLabel}</span>
-                            </div>
-                            <button className="text-gray-500 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setScarMarkers(prev => prev.filter(s => s.id !== scar.id)); if (editingScar === scar.id) setEditingScar(null); }}>
-                              <Trash2 className="h-2.5 w-2.5" />
-                            </button>
-                          </div>
-                          {editingScar === scar.id && (
-                            <div className="mt-2 space-y-2 border-t border-gray-700/50 pt-2">
-                              <div>
-                                <label className="text-[8px] text-gray-400">Severity</label>
-                                <Slider value={[scar.severity]} min={1} max={5} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, severity: v } : s))} className="mt-0.5" />
-                                <span className="text-[8px] text-gray-500">{SCAR_SEVERITY_LABELS[scar.severity as keyof typeof SCAR_SEVERITY_LABELS]?.label}</span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-1">
-                                <div>
-                                  <label className="text-[8px] text-gray-400">Age</label>
-                                  <select value={scar.age} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, age: e.target.value as ScarAge } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
-                                    <option value="acute">Acute</option>
-                                    <option value="subacute">Subacute</option>
-                                    <option value="chronic">Chronic</option>
-                                    <option value="mature">Mature</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="text-[8px] text-gray-400">Mobility</label>
-                                  <select value={scar.mobility} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, mobility: e.target.value as ScarMobility } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
-                                    <option value="mobile">Mobile</option>
-                                    <option value="tethered">Tethered</option>
-                                    <option value="fixed">Fixed</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-[8px] text-gray-400">Affected Layers</label>
-                                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                                  {(Object.keys(TISSUE_LAYERS) as TissueLayer[]).map(layer => (
-                                    <button key={layer} className={`text-[7px] px-1 py-0.5 rounded ${scar.affectedLayers.includes(layer) ? 'bg-pink-500/30 text-pink-300' : 'bg-white/5 text-gray-500'}`} onClick={() => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, affectedLayers: s.affectedLayers.includes(layer) ? s.affectedLayers.filter(l => l !== layer) : [...s.affectedLayers, layer] } : s))}>
-                                      {TISSUE_LAYERS[layer].label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-[8px] text-gray-400">Pain on Palpation (0-10)</label>
-                                <Slider value={[scar.painOnPalpation]} min={0} max={10} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, painOnPalpation: v } : s))} className="mt-0.5" />
-                                <span className="text-[8px] text-gray-500">{scar.painOnPalpation}/10</span>
-                              </div>
-                              {(() => {
-                                const impact = getScarImpact(scar);
-                                return impact.affectedChains.length > 0 || impact.restrictedMovements.length > 0 ? (
-                                  <div className="p-1.5 rounded bg-yellow-500/10 border border-yellow-500/30">
-                                    <span className="text-[8px] font-medium text-yellow-400">Clinical Impact</span>
-                                    {impact.affectedChains.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Chains: {impact.affectedChains.map(c => c.chain.name).join(', ')}</p>}
-                                    {impact.restrictedMovements.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Restrictions: {impact.restrictedMovements.join(', ')}</p>}
-                                  </div>
-                                ) : null;
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adhesionBands.length > 0 && (
-                  <div>
-                    <span className="text-[9px] text-gray-400 font-medium">Adhesion Bands ({adhesionBands.length})</span>
-                    <div className="space-y-1 mt-1">
-                      {adhesionBands.map(band => (
-                        <div key={band.id} className="p-1.5 rounded border border-gray-700/50 bg-white/5 flex items-center justify-between">
-                          <div>
-                            <span className="text-[9px] text-gray-200">{band.startBone} → {band.endBone}</span>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-[8px] text-gray-500">Tension: {band.tensionLevel}%</span>
-                              <span className="text-[8px] text-gray-500">Depth: {band.depth}</span>
-                            </div>
-                          </div>
-                          <button className="text-gray-500 hover:text-red-400" onClick={() => setAdhesionBands(prev => prev.filter(b => b.id !== band.id))}>
-                            <Trash2 className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {tissueViewMode && (
               <div className="absolute top-2 right-2 z-30 w-[280px] animate-in slide-in-from-right-2 duration-200">
@@ -8654,7 +15113,7 @@ ${ddxList}`;
                   <TissueViewSelector
                     activeMode={tissueViewMode}
                     onModeChange={(mode) => { setTissueViewMode(mode); if (mode) tissueViewManualRef.current = true; }}
-                    compromisedTissues={mergedCompromisedTissues}
+                    compromisedTissues={hubCompromisedTissues}
                     slingTissueRisks={slingTissueRisks}
                     selectedEntryId={selectedTissueEntry}
                     onEntrySelect={(id) => { setSelectedTissueEntry(id); setTissueDisambiguationEntries([]); }}
@@ -8667,6 +15126,8 @@ ${ddxList}`;
                     }))}
                     musclePathologyData={compensatedOverrides}
                     clinicallyAffectedNerves={clinicallyAffectedNerves}
+                    tissueIntelligenceMap={inflammationIntelligenceMap}
+                    onSelectCausalChain={handleTissueCausalChainSelect}
                   />
                   {tissueDisambiguationEntries.length > 1 && (
                     <div className="rounded-lg border bg-background/95 backdrop-blur-sm shadow-lg p-2 space-y-1">
@@ -8774,7 +15235,22 @@ ${ddxList}`;
                       className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'electroRx' ? 'bg-teal-500/30 text-teal-300 border border-teal-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
                     >
                       <Zap className="h-3 w-3" />
-                      Electro Rx
+                      Electrophysical Agents
+                    </button>
+                    <button
+                      onClick={() => { setMechanismActiveTab('adjunctRx'); setManualTherapyAnnotations(null); }}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'adjunctRx' ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                    >
+                      <Leaf className="h-3 w-3" />
+                      Adjunct Rx
+                    </button>
+                    <button
+                      onClick={() => { setMechanismActiveTab('lifestyleRx'); setManualTherapyAnnotations(null); }}
+                      className={`flex-1 text-[10px] py-1 rounded transition-colors flex items-center justify-center gap-1 ${mechanismActiveTab === 'lifestyleRx' ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' : 'bg-gray-700/40 text-gray-400 border border-gray-600/30 hover:text-gray-200'}`}
+                      data-testid="tab-lifestyle-rx"
+                    >
+                      <Activity className="h-3 w-3" />
+                      Lifestyle
                     </button>
                     <button
                       onClick={() => { setMechanismActiveTab('patientEd'); setManualTherapyAnnotations(null); }}
@@ -8783,6 +15259,10 @@ ${ddxList}`;
                       <GraduationCap className="h-3 w-3" />
                       Patient Ed
                     </button>
+                    <MyPlanTabButton
+                      active={mechanismActiveTab === 'myPlan'}
+                      onClick={() => { setMechanismActiveTab('myPlan'); setManualTherapyAnnotations(null); }}
+                    />
                   </div>
                   {mechanismActiveTab === 'mechanism' && (
                     <InjuryMechanismPanel
@@ -8814,6 +15294,14 @@ ${ddxList}`;
                       onRemoveScenario={handleRemoveWhatIfScenario}
                       onClearAll={handleClearWhatIfScenarios}
                       onApplyToSkeleton={handleApplyWhatIfToSkeleton}
+                      selectedFlareUpId={whatIfFlareUpId}
+                      onApplyFlareUp={handleApplyFlareUp}
+                      onClearFlareUp={handleClearFlareUp}
+                      painfulTissue={whatIfPainfulTissue}
+                      onSelectPainfulTissue={setWhatIfPainfulTissue}
+                      onSaveHypothesis={(label) => saveHypothesisMutation.mutate(label)}
+                      isSavingHypothesis={saveHypothesisMutation.isPending}
+                      savedHypothesesCount={Array.isArray(savedHypothesesQuery.data) ? savedHypothesesQuery.data.length : 0}
                       treatmentDecisionData={treatmentDecisionData ? {
                         primary: treatmentDecisionData.primary.map(i => ({
                           id: i.id, name: i.name, category: i.category,
@@ -8831,7 +15319,7 @@ ${ddxList}`;
                       painMarkers={painMarkers.map(pm => ({
                         id: pm.id,
                         label: pm.anatomicalLabel || pm.nearestBone,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                       }))}
                     />
                     </Suspense>
@@ -8842,9 +15330,10 @@ ${ddxList}`;
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({
                         label: pm.anatomicalLabel || pm.nearestBone,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
                       onCustomExerciseResult={setCustomExerciseResult}
                       goalProfile={activeGoalProfile}
                       clinicalState={exerciseMtClinicalState}
@@ -8854,6 +15343,62 @@ ${ddxList}`;
                       pendingGenerate={pendingExerciseGenerate}
                       onGenerateStarted={handleExerciseGenerateStarted}
                       onGenerateComplete={handleExerciseGenerateComplete}
+                      conditionName={extractionResult?.mainComplaint ?? undefined}
+                      loadingPatientFactors={(() => {
+                        // Derive a richer loadingPatientFactors object from
+                        // the clinical extraction by keyword-scanning the
+                        // free-text history fields. Lets the engine personalise
+                        // for medications, comorbidities, hormonal status,
+                        // prior injury and training history without forcing
+                        // the clinician to re-enter data.
+                        const er = extractionResult;
+                        if (!er) return undefined;
+                        const corpus = [er.priorTreatment ?? '', ...(er.relevantHistory ?? [])].join(' \n ').toLowerCase();
+                        const has = (re: RegExp) => re.test(corpus);
+                        const sexRaw = (er.patientSex ?? '').toLowerCase();
+                        const sex: 'male' | 'female' | 'other' | undefined =
+                          sexRaw.startsWith('m') ? 'male' :
+                          sexRaw.startsWith('f') ? 'female' :
+                          sexRaw ? 'other' : undefined;
+                        const phaseFromDuration: 'reactive' | 'disrepair' | 'remodelling' | 'return_to_sport' | undefined =
+                          er.duration === 'acute' ? 'reactive' :
+                          er.duration === 'subacute' ? 'disrepair' :
+                          er.duration === 'chronic' ? 'remodelling' :
+                          er.duration === 'recurrent' ? 'remodelling' : undefined;
+                        return {
+                          age: er.patientAge ? Number(er.patientAge) : undefined,
+                          irritability: (er.irritability as 'low' | 'moderate' | 'high' | undefined) ?? undefined,
+                          recoveryPhase: phaseFromDuration,
+                          history: {
+                            medicationFlags: {
+                              statins: has(/\bstatin|atorvastatin|simvastatin|rosuvastatin|pravastatin/),
+                              fluoroquinolones: has(/\bfluoroquinolone|ciprofloxacin|levofloxacin|moxifloxacin|ofloxacin/),
+                              corticosteroids: has(/\bcorticosteroid|prednisolone|prednisone|dexamethasone|methylprednisolone|cortisone|hydrocortisone/),
+                              aromataseInhibitors: has(/\baromatase inhibitor|anastrozole|letrozole|exemestane/),
+                            },
+                            metabolicConditions: {
+                              diabetes: has(/\bdiabetes|t1dm|t2dm|hba1c|insulin\b/),
+                              thyroid: has(/\bhypothyroid|hyperthyroid|thyroid\b/),
+                              hypercholesterolaemia: has(/\bcholesterol|hypercholesterol|hyperlipid|dyslipid/),
+                              obesity: has(/\bobese|obesity|bmi\s*[34][0-9]/),
+                            },
+                            hormonalStatus: sex ? {
+                              sex,
+                              menopauseStatus: has(/\bpostmenopaus|post-menopaus/) ? 'postmenopausal' :
+                                               has(/\bperimenopaus|peri-menopaus/) ? 'perimenopausal' :
+                                               has(/\bpremenopaus|pre-menopaus/) ? 'premenopausal' :
+                                               (sex === 'female' && er.patientAge && er.patientAge >= 50) ? 'postmenopausal' :
+                                               (sex === 'female' && er.patientAge && er.patientAge < 45) ? 'premenopausal' : undefined,
+                              onHrt: has(/\bhrt\b|hormone replacement|oestrogen|estrogen replac/),
+                            } : undefined,
+                            priorInjurySameSite: has(/\bprior\b|previous|recurr|reinjur|history of/),
+                            trainingHistory: {
+                              deconditioned: has(/\bdecondition|sedentary|inactive|bed rest/),
+                              recentLoadSpikePct: has(/\bspike|sudden increase|ramped up|load spike/) ? 30 : undefined,
+                            },
+                          },
+                        };
+                      })()}
                     />
                   )}
                   {mechanismActiveTab === 'manualRx' && (
@@ -8862,9 +15407,10 @@ ${ddxList}`;
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({
                         label: pm.anatomicalLabel || pm.nearestBone,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
                       scarMarkers={scarMarkers}
                       adhesionBands={adhesionBands}
                       musclePathologies={Object.entries(compensatedOverrides)
@@ -8895,10 +15441,47 @@ ${ddxList}`;
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({
                         label: pm.anatomicalLabel || pm.nearestBone,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
+                      slingDrivenRecommendations={slingDrivenRecommendations}
+                      onPlanChange={setElectroPlan}
+                      initialCondition={electroPrefill?.condition}
+                      initialStage={electroPrefill?.stage}
+                      autoGenerateNonce={electroPrefill?.nonce}
+                      autoGenerate={!!electroPrefill}
+                      onAutoGenerateConsumed={() => setElectroPrefill(null)}
+                      patientId={selectedConversationId ?? null}
                     />
+                  )}
+                  {mechanismActiveTab === 'adjunctRx' && (
+                    <AdjunctTherapiesEngineTab
+                      mechanismAnalysis={mechanismAnalysisResult}
+                      painMarkers={painMarkers.map(pm => ({
+                        label: pm.anatomicalLabel || pm.nearestBone,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                        type: pm.type,
+                      }))}
+                      diagnosis={extractionResult?.mainComplaint || undefined}
+                      recoveryPhase={extractionResult?.duration || undefined}
+                      irritability={extractionResult?.irritability || undefined}
+                    />
+                  )}
+                  {mechanismActiveTab === 'lifestyleRx' && (
+                    <Suspense fallback={<LazyPanelFallback />}>
+                      <LifestyleAdjunctEngineTab
+                        mechanismAnalysis={mechanismAnalysisResult}
+                        painMarkers={painMarkers.map(pm => ({
+                          label: pm.anatomicalLabel || pm.nearestBone,
+                          severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                          type: pm.type,
+                        }))}
+                        diagnosis={extractionResult?.mainComplaint || undefined}
+                        recoveryPhase={extractionResult?.duration || undefined}
+                        irritability={extractionResult?.irritability || undefined}
+                        slingDrivenRecommendations={slingDrivenRecommendations}
+                      />
+                    </Suspense>
                   )}
                   {mechanismActiveTab === 'patientEd' && (
                     <PatientEducationEngineTab
@@ -8906,10 +15489,19 @@ ${ddxList}`;
                       slingAnalysis={slingAnalysis}
                       painMarkers={painMarkers.map(pm => ({
                         label: pm.anatomicalLabel || pm.nearestBone,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         type: pm.type,
                       }))}
                     />
+                  )}
+                  {mechanismActiveTab === 'myPlan' && (
+                    <Suspense fallback={<div className="flex items-center justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-cyan-400" /></div>}>
+                      {/* Clinical context + orchestrate state are now owned
+                          by the OrchestratePlanProvider wrapping the whole
+                          page, so MyPlanPanel reads them via the shared
+                          context instead of taking them as props. */}
+                      <MyPlanPanel />
+                    </Suspense>
                   )}
                 </div>
               </div>
@@ -8940,7 +15532,7 @@ ${ddxList}`;
                         position: pm.position,
                         label: pm.anatomicalLabel || pm.nearestBone,
                         type: pm.type,
-                        severity: (pm as Record<string, unknown>).severity as number | undefined,
+                        severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
                         description: pm.description,
                       }))}
                       bodyWeightKg={bodyWeightKg}
@@ -8966,10 +15558,400 @@ ${ddxList}`;
                       clinicalPlan={clinicalPlan}
                       playbackRef={timelinePlaybackRef}
                       onPlaybackStateChange={setTimelinePlaybackState}
+                      onConditionPhasesChange={setConditionPhases}
                     />
                   </Suspense>
                 </div>
               </div>
+            )}
+
+            {showRecoverySim && (() => {
+              /** Build the shared engine payload once per call from
+               *  PhysioGPT's clinical state (mechanism / sling / pain
+               *  markers / scar / adhesion / muscle pathology), then
+               *  override the recoveryGoalContext per phase so the AI
+               *  knows the dosage / MT-grade ceiling and gap focus for
+               *  THIS phase rather than the patient's current phase. */
+              const buildEnginePayload = (req: PhaseRxRequest, kind: 'exercise' | 'manual'): Record<string, unknown> => {
+                const ma = mechanismAnalysisResult;
+                const payload: Record<string, unknown> = {
+                  mechanismSummary: ma?.overallMechanismSummary ?? '',
+                  causalChains: (ma?.causalChains ?? []).map(chain =>
+                    chain.map(s => ({
+                      step: s.step,
+                      structure: s.structure,
+                      finding: s.finding,
+                      mechanism: s.mechanism ?? '',
+                      category: s.category ?? '',
+                      severity: s.severity ?? '',
+                    })),
+                  ),
+                  compensationCards: (ma?.compensationCards ?? []).map(c => ({
+                    title: c.title,
+                    description: c.clinicalSignificance ?? '',
+                    severity: c.severity ?? '',
+                    primaryRegion: c.primaryDysfunction ?? '',
+                    compensatingRegion: c.compensatingStructures?.join(', ') ?? '',
+                  })),
+                  loadRedistribution: (ma?.loadRedistribution ?? []).map(l => ({
+                    joint: l.joint,
+                    change: `${l.changePct > 0 ? '+' : ''}${l.changePct}%`,
+                    clinical: l.status,
+                  })),
+                  topContributors: ma?.topContributors ?? [],
+                  kineticChainDysfunctions: (ma?.kineticChainDysfunctions ?? []).map(k => ({
+                    chain: k.chainLabel ?? '',
+                    dysfunction: k.dysfunction ?? '',
+                    clinical: k.relevance ?? '',
+                  })),
+                  painMarkers: painMarkers.map(pm => ({
+                    label: pm.anatomicalLabel || pm.nearestBone,
+                    severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                    type: pm.type,
+                  })),
+                };
+                if (slingAnalysis) {
+                  payload.slingData = {
+                    systemSummary: slingAnalysis.systemSummary,
+                    overallForceTransferScore: slingAnalysis.overallForceTransferScore,
+                    slings: slingAnalysis.slings.map(s => ({
+                      label: s.label,
+                      status: s.status,
+                      activationScore: s.activationScore,
+                      forceTransferQuality: s.forceTransferQuality,
+                      weakLinks: s.weakLinks.map(w => ({ muscle: w.muscle, activationPct: w.activationPct, reason: w.reason })),
+                      forceReroutes: s.forceReroutes.map(r => ({ fromMuscle: r.fromMuscle, toMuscle: r.toMuscle, reroutePct: r.reroutePct, clinical: r.clinical })),
+                      treatmentTargets: s.treatmentTargets.map(t => ({ muscle: t.muscle, intervention: t.intervention, rationale: t.rationale })),
+                      narrative: s.narrative,
+                    })),
+                  };
+                }
+                if (kind === 'manual') {
+                  if (scarMarkers.length > 0) {
+                    payload.scarMarkers = scarMarkers.map(s => ({
+                      anatomicalLabel: s.anatomicalLabel,
+                      type: s.type,
+                      severity: s.severity,
+                      age: s.age,
+                      mobility: s.mobility,
+                      affectedLayers: s.affectedLayers,
+                      painOnPalpation: s.painOnPalpation,
+                      nearestBone: s.nearestBone,
+                    }));
+                  }
+                  if (adhesionBands.length > 0) {
+                    payload.adhesionBands = adhesionBands.map(b => ({
+                      startBone: b.startBone,
+                      endBone: b.endBone,
+                      tensionLevel: b.tensionLevel,
+                      depth: b.depth,
+                      restrictedMovements: b.restrictedMovements,
+                    }));
+                  }
+                  const musclePathologies = Object.entries(compensatedOverrides)
+                    .filter(([, ov]) => ov?.pathology && ov.pathology !== 'none')
+                    .map(([muscleId, ov]) => ({
+                      muscleId,
+                      label: muscleId.replace(/_/g, ' '),
+                      pathology: ov!.pathology as string,
+                      severity: (ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild'),
+                    }));
+                  if (musclePathologies.length > 0) payload.musclePathologies = musclePathologies;
+                }
+
+                // Build a phase-specific PrescriptionContext by overriding
+                // clinicalState.activePhaseIndex with the requested phase
+                // so dosage scaling + MT-grade guidance reflect THIS
+                // phase rather than the patient's current phase.
+                if (activeGoalProfile) {
+                  const phaseClinicalState = {
+                    ...exerciseMtClinicalState,
+                    activePhaseIndex: req.phaseStageIndex,
+                    painMarkers: (exerciseMtClinicalState.painMarkers ?? []).map(pm => ({
+                      ...pm,
+                      // Use the projected pain at the start of this phase
+                      // so the AI gets phase-appropriate irritability.
+                      intensity: req.predictedPainAtPhase,
+                    })),
+                  };
+                  // Pass the live goal-gap snapshot so ctx.goalGaps
+                  // reflects the actual ROM / strength / functional
+                  // shortfalls at this phase start (not an empty list).
+                  const ctx = buildPrescriptionContext(activeGoalProfile, phaseClinicalState, activeGoalGap ?? null, null);
+                  const goalCtx: Record<string, unknown> = {
+                    condition: ctx.conditionName,
+                    phaseLabel: req.phaseLabel,
+                    // Engine prompts use phaseStartWeek to anchor
+                    // dosage / progression language temporally
+                    // (e.g. "by wk 4") rather than just by phase.
+                    phaseStartWeek: req.phaseStartWeek,
+                    goalAchievementPct: req.predictedGoalAchievementPct,
+                    painCurrent: Math.round(req.predictedPainAtPhase),
+                    painTarget: ctx.painTarget,
+                    dosageIntensity: ctx.dosageScaling.intensityLabel,
+                    dosageRationale: ctx.dosageScaling.rationale,
+                    painCeiling: ctx.dosageScaling.painCeiling,
+                    priorityBodyParts: ctx.priorityBodyParts,
+                    contraindications: ctx.contraindications,
+                    topGaps: ctx.goalGaps.slice(0, 5).map(g => ({
+                      label: g.label,
+                      gapPercent: Math.round(g.gapPercent),
+                      priority: g.priority,
+                      categories: g.recommendedCategories,
+                    })),
+                  };
+                  if (kind === 'manual') {
+                    // Manual-therapy generator needs the phase's
+                    // Maitland/Mulligan grade ceiling so it doesn't
+                    // prescribe Grade IV mobs in an inflammatory phase
+                    // or stay at Grade I when the patient can tolerate
+                    // end-range loading.
+                    goalCtx.mtGradeRange = {
+                      min: ctx.mtGradeGuidance.minGrade,
+                      max: ctx.mtGradeGuidance.maxGrade,
+                    };
+                    goalCtx.mtGradeRationale = ctx.mtGradeGuidance.rationale;
+                    goalCtx.mtPreferSustained = ctx.mtGradeGuidance.preferSustained;
+                  }
+                  payload.recoveryGoalContext = goalCtx;
+                }
+                return payload;
+              };
+
+              const handleGeneratePhaseExerciseRx = async (req: PhaseRxRequest): Promise<CustomExerciseInput[]> => {
+                const payload = buildEnginePayload(req, 'exercise');
+                const result = await apiRequest('/api/exercise-engine/design-custom', 'POST', payload) as { customExercises?: CustomExerciseInput[] };
+                return result.customExercises ?? [];
+              };
+              const handleGeneratePhaseManualRx = async (req: PhaseRxRequest): Promise<CustomManualTechniqueInput[]> => {
+                const payload = buildEnginePayload(req, 'manual');
+                const result = await apiRequest('/api/manual-therapy-engine/design-custom', 'POST', payload) as { customTechniques?: CustomManualTechniqueInput[] };
+                return result.customTechniques ?? [];
+              };
+              const handleAddCustomExercises = (items: CustomExerciseInput[]) => {
+                setCustomExerciseResult(prev => {
+                  const existing = prev?.customExercises ?? [];
+                  // De-dupe by stableId only when present so that
+                  // user-authored items with the same name remain
+                  // distinct (each gets its own backing profile and
+                  // can be scheduled independently).
+                  const existingStableIds = new Set(existing.map(e => e.stableId).filter(Boolean) as string[]);
+                  const merged = [...existing, ...items.filter(i => !i.stableId || !existingStableIds.has(i.stableId))];
+                  return {
+                    customExercises: merged as typeof existing,
+                    designRationale: prev?.designRationale ?? '',
+                    safetyNotes: prev?.safetyNotes ?? '',
+                  };
+                });
+              };
+              const handleAddCustomTechniques = (items: CustomManualTechniqueInput[]) => {
+                setCustomManualTherapyResult(prev => {
+                  const existing = prev?.customTechniques ?? [];
+                  const existingStableIds = new Set(existing.map(t => t.stableId).filter(Boolean) as string[]);
+                  const merged = [...existing, ...items.filter(i => !i.stableId || !existingStableIds.has(i.stableId))];
+                  return {
+                    customTechniques: merged as typeof existing,
+                    designRationale: prev?.designRationale ?? '',
+                    safetyNotes: prev?.safetyNotes ?? '',
+                  };
+                });
+              };
+              const handleRemoveCustomItem = (treatmentId: string) => {
+                setCustomExerciseResult(prev => {
+                  if (!prev?.customExercises?.length) return prev;
+                  const next = prev.customExercises.filter((ex, idx) => buildCustomExerciseId(ex, idx) !== treatmentId);
+                  if (next.length === prev.customExercises.length) return prev;
+                  return { ...prev, customExercises: next as typeof prev.customExercises };
+                });
+                setCustomManualTherapyResult(prev => {
+                  if (!prev?.customTechniques?.length) return prev;
+                  const next = prev.customTechniques.filter((tech, idx) => buildCustomTechniqueId(tech, idx) !== treatmentId);
+                  if (next.length === prev.customTechniques.length) return prev;
+                  return { ...prev, customTechniques: next as typeof prev.customTechniques };
+                });
+              };
+
+              return (
+              <Suspense fallback={<LazyPanelFallback />}>
+                <RecoverySimulatorDashboard
+                  conditionLabel={extractionResult?.mainComplaint || undefined}
+                  conditionContext={recoverySimConditionContext}
+                  patientName={'Patient'}
+                  patientMeta={[extractionResult?.patientAge ? `Age ${extractionResult.patientAge}` : null, extractionResult?.duration].filter(Boolean).join(' · ') || undefined}
+                  goalLabel={extractionResult?.mainComplaint || 'Return to function'}
+                  onClose={() => setShowRecoverySim(false)}
+                  onApplyState={handleApplyRecoverySimState}
+                  hasClinicalInput={recoverySimHasClinicalInput}
+                  customExercises={customExerciseResult?.customExercises ?? null}
+                  customTechniques={customManualTherapyResult?.customTechniques ?? null}
+                  onSkeletonSlotMount={setRecoverySimSlot}
+                  onGeneratePhaseExerciseRx={handleGeneratePhaseExerciseRx}
+                  onGeneratePhaseManualRx={handleGeneratePhaseManualRx}
+                  onAddCustomExercises={handleAddCustomExercises}
+                  onAddCustomTechniques={handleAddCustomTechniques}
+                  onRemoveCustomItem={handleRemoveCustomItem}
+                  aiNaturalTimeline={naturalTimeline.result ?? null}
+                  naturalTimelineLoading={naturalTimeline.loading}
+                  caseSpecificPlan={caseSpecificPlan.result ?? null}
+                  caseSpecificPlanLoading={caseSpecificPlan.loading}
+                  caseSpecificPlanError={caseSpecificPlan.error ?? null}
+                  onRetryCaseSpecificPlan={caseSpecificPlan.refresh}
+                  patientContextBadge={lastClinicalParseResult ? (
+                    <PatientContextStatusBadge
+                      status={recoverySimPcStatus}
+                      answeredCount={patientContextAnsweredCount}
+                      surfaceLabel="Recovery simulation"
+                      promptsStale={patientContextPromptsStale}
+                      onAddContextClick={() => {
+                        setShowRecoverySim(false);
+                        setTimeout(() => {
+                          patientContextSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                      }}
+                      size="sm"
+                    />
+                  ) : null}
+                  electrophysicalPlan={electroPlan}
+                  onOpenElectroTab={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
+                  onGenerateElectroPlanForPhase={(req) => {
+                    setElectroPrefill({
+                      condition: req.condition || extractionResult?.mainComplaint || '',
+                      stage: req.stage,
+                      nonce: Date.now(),
+                    });
+                    setShowInjuryMechanism(true);
+                    setMechanismActiveTab('electroRx');
+                  }}
+                  skeletonBiasInputs={{
+                    spine: {
+                      lordosis: modelConfig?.spine?.lumbarLordosis,
+                      kyphosis: modelConfig?.spine?.thoracicKyphosis,
+                      scoliosis: modelConfig?.spine?.scoliosis,
+                      forwardHead: modelConfig?.spine?.forwardHead,
+                      cervicalFlexion: modelConfig?.spine?.cervicalLateralFlexion,
+                    },
+                    pelvis: {
+                      tilt: modelConfig?.pelvis?.tilt,
+                      obliquity: modelConfig?.pelvis?.obliquity,
+                      rotation: modelConfig?.pelvis?.rotation,
+                    },
+                    leftHip: {
+                      flexion: modelConfig?.leftHip?.flexion,
+                      internalRotation: modelConfig?.leftHip?.internalRotation,
+                      anteversion: modelConfig?.leftHip?.anteversion,
+                    },
+                    rightHip: {
+                      flexion: modelConfig?.rightHip?.flexion,
+                      internalRotation: modelConfig?.rightHip?.internalRotation,
+                      anteversion: modelConfig?.rightHip?.anteversion,
+                    },
+                    leftKnee: {
+                      valgus: -(modelConfig?.leftKnee?.varus ?? 0),
+                      recurvatum: modelConfig?.leftKnee?.recurvatum,
+                    },
+                    rightKnee: {
+                      valgus: -(modelConfig?.rightKnee?.varus ?? 0),
+                      recurvatum: modelConfig?.rightKnee?.recurvatum,
+                    },
+                    leftAnkle: {
+                      dorsiflexion: modelConfig?.leftAnkle?.dorsiflexion,
+                      eversion: modelConfig?.leftAnkle?.eversion,
+                      archHeight: modelConfig?.leftAnkle?.archHeight,
+                    },
+                    rightAnkle: {
+                      dorsiflexion: modelConfig?.rightAnkle?.dorsiflexion,
+                      eversion: modelConfig?.rightAnkle?.eversion,
+                      archHeight: modelConfig?.rightAnkle?.archHeight,
+                    },
+                    leftShoulder: {
+                      flexion: modelConfig?.leftShoulder?.flexion,
+                      abduction: modelConfig?.leftShoulder?.abduction,
+                    },
+                    rightShoulder: {
+                      flexion: modelConfig?.rightShoulder?.flexion,
+                      abduction: modelConfig?.rightShoulder?.abduction,
+                    },
+                    // Live derived signals — flow through to driver model
+                    // so compensations / overloaded joints / ROM deficit
+                    // bend irritability, capacity & chronicity even when
+                    // the joint angles themselves look benign.
+                    compensationCount: mechanismAnalysisResult?.compensationCards?.length ?? 0,
+                    jointForceOverloadCount: (hudForceAnalysis?.joints ?? []).filter(
+                      (j: { status?: string }) => j.status === 'high' || j.status === 'very_high'
+                    ).length,
+                    // Task #239 — full per-joint load vectors (compression /
+                    // shear / tension × magnitude) drive the vector-aware
+                    // compensation_burden bias, so two skeletons with the
+                    // same overload count but different load directions
+                    // produce different recovery curves.
+                    jointLoadVectors: extractJointLoadVectors(hudForceAnalysis ?? null, { topN: 6 }),
+                  }}
+                  naturalTimelineSlot={
+                    <Suspense fallback={null}>
+                      <NaturalTimelinePanel
+                        result={naturalTimeline.result}
+                        qaHistory={naturalTimeline.qaHistory}
+                        loading={naturalTimeline.loading}
+                        error={naturalTimeline.error}
+                        hasContext={!!naturalTimelineRequestContext}
+                        onAnswer={naturalTimeline.answerQuestion}
+                        patientContextBadge={lastClinicalParseResult ? (
+                          <PatientContextStatusBadge
+                            status={naturalTimelinePcStatus}
+                            answeredCount={patientContextAnsweredCount}
+                            surfaceLabel="Natural timeline"
+                            promptsStale={patientContextPromptsStale}
+                            onAddContextClick={() => {
+                              setShowRecoverySim(false);
+                              setTimeout(() => {
+                                patientContextSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 200);
+                            }}
+                          />
+                        ) : null}
+                      />
+                    </Suspense>
+                  }
+                  initialInput={{
+                    conditionSeverity: painMarkers.length > 0
+                      ? Math.round(((painMarkers.reduce((s, p) => s + ((p as unknown as Record<string, unknown>).severity as number ?? 5), 0) / Math.max(1, painMarkers.length)) / 10) * 100)
+                      : 50,
+                    irritability: extractionResult?.irritability === 'high' ? 75 : extractionResult?.irritability === 'low' ? 25 : 50,
+                    acuity: extractionResult?.duration === 'acute' ? 'acute' : extractionResult?.duration === 'chronic' ? 'chronic' : 'subacute',
+                    patientAdherence: 0.8,
+                    // Task #240 — derived from the structured Patient
+                    // Factors form (occupational specifics) when set;
+                    // otherwise the dashboard's own default takes over.
+                    ...(derivedDrivers.workDemand !== null ? { workDemand: derivedDrivers.workDemand } : {}),
+                    ...(derivedDrivers.fearAvoidance !== null ? { initialState: { fearAvoidance: derivedDrivers.fearAvoidance } } : {}),
+                  }}
+                  patientModifiers={effectivePatientModifiers}
+                  patientFactorsOverrideCount={patientFactorsOverrideCount}
+                  patientFactorsFilledCount={patientFactorsFilledCount}
+                  derivedDrivers={derivedDrivers}
+                />
+              </Suspense>
+              );
+            })()}
+
+            {showMechanicsAnalyser && (
+              <Suspense fallback={<LazyPanelFallback />}>
+                <MechanicsAnalyserDashboard
+                  onClose={() => setShowMechanicsAnalyser(false)}
+                  onSkeletonSlotMount={setMechanicsAnalyserSlot}
+                  onOverlayChange={setMechanicsOverlay}
+                  modelConfig={finalModelConfig as Record<string, Record<string, number | undefined> | undefined>}
+                  bodyWeightKg={bodyWeightKg}
+                  forceAnalysis={hudForceAnalysis ?? null}
+                  animationState={animationState}
+                  setAnimationState={setAnimationState}
+                  patientMeta={[
+                    extractionResult?.patientAge ? `Age ${extractionResult.patientAge}` : null,
+                    extractionResult?.duration,
+                  ].filter(Boolean).join(' · ') || undefined}
+                  conditionLabel={extractionResult?.mainComplaint || undefined}
+                />
+              </Suspense>
             )}
 
             {showShoulderAssessment && (
@@ -9000,9 +15982,37 @@ ${ddxList}`;
               onOpenForceOverlay={() => { setForceMode(true); }}
               onOpenMuscleOverlay={() => { setMuscleMode(true); }}
               onOpenChainExplorer={() => { setShowUnifiedChainPanel(true); }}
-              onOpenSlings={() => { setRightPanelTab('slings'); }}
-              onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); }}
+              onOpenSlings={() => { setRightPanelTab('slings'); setChatPanelOpen(true); }}
+              slingsOverlayPinned={skeletonMode === 'movement' ? slingsOverlayPinned : false}
+              onToggleSlingsOverlay={skeletonMode === 'movement' ? () => { setSlingsOverlayPinned(prev => !prev); } : undefined}
+              showSlings={skeletonMode === 'movement'}
+              onOpenBiomechanics={() => { setRightPanelTab('biomechanics'); setChatPanelOpen(true); }}
               onToggleTissueView={() => { setTissueViewMode(prev => prev ? null : 'tendon'); }}
+              timeMetrics={forceTimeMetrics}
+              onOpenForceTime={() => setShowForceTimePanel(true)}
+              patientForceState={patientForceState}
+              bodyWeightKg={bodyWeightKg}
+              externalLoadKg={externalLoadKg}
+              externalLoadHand={externalLoadHand}
+              onChangeExternalLoad={(kg, hand) => { setExternalLoadKg(kg); setExternalLoadHand(hand); }}
+            />
+
+            {showForceTimePanel && (
+              <ForceTimePanel
+                patientState={patientForceState}
+                onPatientStateChange={setPatientForceState}
+                onClose={() => setShowForceTimePanel(false)}
+                onScrub={() => {/* scrub-back is local to the buffer */}}
+                bodyWeightKg={bodyWeightKg}
+              />
+            )}
+
+            <GRFOverlay
+              positions={boneScreenPositionsRef.current}
+              bodyWeightKg={bodyWeightKg}
+              width={skeletonContainerSize.width}
+              height={skeletonContainerSize.height}
+              visible={grfOverlayEnabled && (forceMode || cameraPoseActive || animationState.isPlaying)}
             />
 
             {(liveTreatmentPriorities.targets.length > 0 || predictedPainSpots.length > 0) && (
@@ -9770,6 +16780,31 @@ ${ddxList}`;
                 selectedSling={selectedSlingId}
                 overlayVisible={slingOverlayVisible}
                 onToggleOverlay={() => setSlingOverlayVisible(v => !v)}
+                slingActivation={slingActivationOverrides}
+                onSlingActivationChange={(slingId, val) => {
+                  setSlingActivationOverrides(prev => ({ ...prev, [slingId]: val }));
+                }}
+                onResetSling={(slingId) => {
+                  setSlingActivationOverrides(prev => {
+                    const { [slingId]: _omit, ...rest } = prev;
+                    return rest;
+                  });
+                }}
+                onResetAllSlings={() => setSlingActivationOverrides({})}
+                painMarkers={painMarkers.map(pm => ({
+                  id: pm.id,
+                  nearestBone: pm.nearestBone,
+                  anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+                  severity: pm.severity,
+                  type: pm.type,
+                }))}
+                driverAnalysis={slingDriverAnalysisResult}
+                selectedMarkerId={clinicalBubbleMarker?.id ?? null}
+                onSelectMarker={(id) => {
+                  if (!id) { setClinicalBubbleMarker(null); return; }
+                  const m = painMarkers.find(pm => pm.id === id);
+                  if (m) setClinicalBubbleMarker(m);
+                }}
               />
               </Suspense>
             </div>
@@ -10233,6 +17268,56 @@ ${ddxList}`;
             History
           </button>
           <button
+            onClick={() => void saveCurrentCase()}
+            disabled={isSavingCase || !isCaseDirty}
+            data-testid="button-save-case"
+            title={isCaseDirty ? "Save Case (Ctrl/Cmd+S)" : "Nothing to save"}
+            className="relative flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+          >
+            {isSavingCase ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            {isSavingCase ? "Saving…" : "Save Case"}
+            {isCaseDirty && !isSavingCase && (
+              <span
+                aria-label="Unsaved changes"
+                data-testid="indicator-case-dirty"
+                className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 ring-1 ring-black/40"
+              />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              if (isCaseDirty) {
+                const ok = window.confirm("Start a new case? Unsaved changes will be lost.");
+                if (!ok) return;
+              }
+              handleNewConversation();
+            }}
+            data-testid="button-new-case"
+            title="New Case"
+            className="flex items-center gap-1.5 px-3 py-2 bg-black/70 hover:bg-black/80 text-white rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur"
+          >
+            <FilePlus2 className="h-3.5 w-3.5" />
+            New Case
+          </button>
+          <button
+            onClick={() => setClinicalNotesOpen(prev => !prev)}
+            data-testid="button-toggle-clinical-notes"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-lg transition-colors text-xs font-medium backdrop-blur ${clinicalNotesOpen ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : 'bg-black/70 hover:bg-black/80 text-white'}`}
+          >
+            <ScrollText className="h-3.5 w-3.5" />
+            {clinicalNotesOpen ? 'Hide Notes' : 'Clinical Notes'}
+            {clinicalNotes && !clinicalNotesOpen && (
+              <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+            )}
+            {isGeneratingClinicalNotes && !clinicalNotesOpen && (
+              <Loader2 className="h-3 w-3 animate-spin text-indigo-300" />
+            )}
+          </button>
+          <button
             onClick={() => {
               if (isRecording) {
                 stopRecording();
@@ -10283,12 +17368,17 @@ ${ddxList}`;
       <div className={`absolute top-14 z-30 transition-all duration-300 ${sidebarOpen ? 'left-[270px]' : 'left-3'}`}>
         <Suspense fallback={<LazyPanelFallback />}>
         <ClinicalTextInput
+          key={`clinical-text-input-${caseInstanceId}`}
           ref={clinicalTextInputRef}
           onParseResult={handleClinicalTextParse}
+          onParseError={() => {
+            // Clear any staged voice trigger metadata so the next
+            // successful parse isn't misattributed to a failed one.
+            pendingVoiceTriggerRef.current = null;
+          }}
           onClearFindings={handleClinicalTextClear}
-          voiceText={isRecording ? (liveTranscript + (interimTranscript ? ` ${interimTranscript}` : '')).trim() : undefined}
-          isVoiceActive={isRecording}
           onFollowUpQuestionsChange={handleVoiceFollowUpQuestionsChange}
+          patientContext={patientContextPayload}
           chainIntegrityScores={(() => {
             const integrity = hudChainIntegrity;
             if (!integrity || integrity.size === 0) return undefined;
@@ -10303,26 +17393,345 @@ ${ddxList}`;
           })()}
         />
         </Suspense>
-        {hasClinicalTextData && (
-          <div className="flex gap-1.5 mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('exercise'); }}
-            >
-              <Dumbbell className="h-3 w-3 mr-1" />
-              Exercise Rx
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
-              onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('manualRx'); }}
-            >
-              <Hand className="h-3 w-3 mr-1" />
-              Manual Therapy
-            </Button>
+        {/* AI-driven Patient Context — appears under the Clinical
+            Prediction box once a prediction has been generated, asks
+            condition-specific questions, and pipes the merged answers
+            into the prediction re-run, the natural-history timeline,
+            the case-specific treatment plan and the recovery sim. */}
+        {lastClinicalParseResult && (
+          <div ref={patientContextSectionRef} className="mt-2 animate-in fade-in slide-in-from-top-1 duration-300 space-y-2">
+            {skeletonMode !== 'movement' && (
+            <PatientContextPanel
+              parseResult={lastClinicalParseResult}
+              state={patientContextState}
+              onChange={setPatientContextState}
+              onApply={() => {
+                // Re-run the prediction with the latest patient
+                // context. The natural-timeline and case-specific
+                // plan hooks pick up patient-context changes via
+                // their own signature so they refresh automatically.
+                // (A debounced auto-apply also fires whenever the PC
+                // payload changes, so this manual button is only an
+                // "apply now" shortcut.)
+                clinicalTextInputRef.current?.triggerIncrementalParse();
+              }}
+            />
+            )}
+            {/* Task #240 — Structured Patient Factors form. Lives next
+                to the AI Q&A panel; edits flow into the recovery sim's
+                multipliers via `effectivePatientFactors`. */}
+            {skeletonMode !== 'movement' && (
+            <Suspense fallback={<LazyPanelFallback />}>
+              <PatientFactorsForm
+                factors={effectivePatientFactors}
+                autoDetected={autoDetectedPatientFactors}
+                overriddenCount={patientFactorsOverrideCount}
+                onChange={handlePatientFactorsChange}
+              />
+            </Suspense>
+            )}
+            {/* Task #281 — Case-Aware Research Engine v1. Mounted next to
+                Patient Context so the synthesis is anchored to the same
+                inputs the clinician has just curated. caseId is a stable
+                hash of the original description (so "the same case"
+                across edits stays addressable), while contentHash mixes
+                description + patient context sig so any meaningful
+                change marks the cached synthesis stale. */}
+            {(() => {
+              const desc = (lastClinicalParseResult?.original_description || '').replace(/\s+/g, ' ').trim();
+              const summary = (lastClinicalParseResult?.clinical_summary || '').replace(/\s+/g, ' ').trim();
+              if (!desc) return null;
+              // Tiny, deterministic FNV-1a 32-bit hash → 8-char hex.
+              const fnv32 = (s: string) => {
+                let h = 0x811c9dc5;
+                for (let i = 0; i < s.length; i++) {
+                  h ^= s.charCodeAt(i);
+                  h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+                }
+                return h.toString(16).padStart(8, '0');
+              };
+              const caseId = `case-${fnv32(desc)}`;
+              // Condition seed: prefer the AI's clinical_summary (short
+              // clinician-style framing, typically containing a working
+              // diagnosis) over the raw clinician description (which can
+              // be a paragraph). Either way we cap at 160 chars and pass
+              // it UNQUOTED so the engine can use it as a free-text seed.
+              const conditionSeed = (summary && summary.length <= 240 ? summary : desc).trim();
+              const condition = conditionSeed.length > 160 ? conditionSeed.slice(0, 160).trim() : conditionSeed;
+              const caseSummary = [
+                `Description: ${desc}`,
+                summary && summary !== desc ? `Clinical summary: ${summary}` : '',
+                patientContextSig ? `Patient context: ${patientContextSig}` : '',
+              ].filter(Boolean).join('\n\n');
+              // Case-aware research context — built inline from the same
+              // inputs Patient Context + Clinical Reasoning use; folded
+              // into the cache hash so synthesis invalidates when the
+              // top hypothesis or chronicity shifts.
+              const topHypoForCtx = (clinicalReasoningData?.hypotheses || [])
+                .find(h => h.status !== 'ruled_out') ?? clinicalReasoningData?.hypotheses?.[0];
+              const painRegionsForCtx = Array.from(new Set(
+                (lastClinicalParseResult?.pain_markers || [])
+                  .map(m => (m.anatomical_label || '').trim())
+                  .filter(Boolean)
+              )).slice(0, 12);
+              const lateralityCounts = (lastClinicalParseResult?.pain_markers || []).reduce(
+                (acc: { left: number; right: number }, m) => {
+                  const lbl = (m.anatomical_label || '').toLowerCase();
+                  if (/\bleft\b|_l_|_l$/.test(lbl)) acc.left += 1;
+                  if (/\bright\b|_r_|_r$/.test(lbl)) acc.right += 1;
+                  return acc;
+                },
+                { left: 0, right: 0 }
+              );
+              const lateralityForCtx: 'left' | 'right' | 'bilateral' | 'unspecified' =
+                lateralityCounts.left > 0 && lateralityCounts.right > 0 ? 'bilateral'
+                : lateralityCounts.left > 0 ? 'left'
+                : lateralityCounts.right > 0 ? 'right'
+                : 'unspecified';
+              const patientFactorsForCtx = [
+                effectivePatientFactors?.age != null ? `age:${effectivePatientFactors.age}` : null,
+                effectivePatientFactors?.activityLevel ? `activity:${effectivePatientFactors.activityLevel}` : null,
+                effectivePatientFactors?.bmi ? `bmi:${effectivePatientFactors.bmi}` : null,
+              ]
+                .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+                .map(s => s.slice(0, 80))
+                .slice(0, 12);
+              const mechanismForCtx = (extractionResult?.mechanism || '').trim().slice(0, 200);
+              const severityForCtx = (() => {
+                const symptoms = extractionResult?.symptoms || [];
+                let max = -Infinity;
+                for (const s of symptoms) {
+                  if (typeof s?.severity === 'number' && Number.isFinite(s.severity) && s.severity > max) {
+                    max = s.severity;
+                  }
+                }
+                return Number.isFinite(max) ? Math.max(0, Math.min(10, max)) : null;
+              })();
+              const irritabilityForCtx: 'low' | 'moderate' | 'high' | null = (() => {
+                const v = extractionResult?.irritability ?? effectivePatientFactors?.irritability;
+                return v === 'low' || v === 'moderate' || v === 'high' ? v : null;
+              })();
+              const comorbiditiesForCtx = (() => {
+                const out: Array<'diabetes' | 'smoking' | 'pregnancy' | 'osteoporosis' | 'cardiovascular' | 'autoimmune' | 'obesity' | 'previousEpisodes'> = [];
+                const dm = effectivePatientFactors?.diabetes;
+                if (dm === 'type1' || dm === 'type2' || dm === 'prediabetic') out.push('diabetes');
+                if (effectivePatientFactors?.smoking === 'current') out.push('smoking');
+                const notes = (effectivePatientFactors?.comorbiditiesNotes || '').toLowerCase();
+                if (/\bpregnan(t|cy)\b/.test(notes)) out.push('pregnancy');
+                if (/\bosteoporo/.test(notes)) out.push('osteoporosis');
+                if (/\b(cad|cardiac|cardiovascular|chf|hypertension|htn)\b/.test(notes)) out.push('cardiovascular');
+                if (/\b(autoimmune|ra\b|rheumatoid|lupus|psoriatic)\b/.test(notes)) out.push('autoimmune');
+                if (effectivePatientFactors?.bmi === 'obese' && !out.includes('obesity')) out.push('obesity');
+                if ((effectivePatientFactors?.previousEpisodes ?? 0) >= 2 && !out.includes('previousEpisodes')) out.push('previousEpisodes');
+                return out.slice(0, 8);
+              })();
+              const caseContext: CaseResearchContext = {
+                ...(topHypoForCtx?.condition && typeof topHypoForCtx.confidence === 'number'
+                  ? { topHypothesis: { label: topHypoForCtx.condition.slice(0, 200), confidence: Math.max(0, Math.min(1, topHypoForCtx.confidence)) } }
+                  : {}),
+                ...(summary ? { mainComplaint: summary.slice(0, 200) } : (desc ? { mainComplaint: desc.slice(0, 200) } : {})),
+                ...(painRegionsForCtx.length > 0 ? { region: painRegionsForCtx[0].slice(0, 80) } : {}),
+                ...(lateralityForCtx !== 'unspecified' ? { laterality: lateralityForCtx } : {}),
+                ...(effectivePatientFactors?.chronicityStage
+                  ? { chronicity: String(effectivePatientFactors.chronicityStage).slice(0, 40) }
+                  : {}),
+                ...(irritabilityForCtx ? { irritability: irritabilityForCtx } : {}),
+                ...(mechanismForCtx ? { mechanism: mechanismForCtx } : {}),
+                ...(severityForCtx != null ? { severity: severityForCtx } : {}),
+                ...(painRegionsForCtx.length > 0 ? { painRegions: painRegionsForCtx } : {}),
+                ...(patientFactorsForCtx.length > 0 ? { patientFactors: patientFactorsForCtx } : {}),
+                ...(comorbiditiesForCtx.length > 0 ? { comorbidities: comorbiditiesForCtx } : {}),
+              };
+              const ctxSig = JSON.stringify(caseContext);
+              const contentHash = fnv32(`${desc}\u241F${summary}\u241F${patientContextSig}\u241F${ctxSig}`);
+              return (
+                <CaseResearchPanel
+                  ref={caseResearchPanelRef}
+                  caseId={caseId}
+                  condition={condition}
+                  caseSummary={caseSummary}
+                  contentHash={contentHash}
+                  caseContext={caseContext}
+                  visible={skeletonMode !== 'movement'}
+                  className="w-full"
+                />
+              );
+            })()}
+            {/* Movement Mode side panel. The Active
+                Capacities table lives in the case-research column.
+                The Findings stream is rendered as a right-rail (mirror
+                of ClinicalReasoningPanel) below so it occupies the same
+                visual slot as the static-posture reasoning panel it
+                replaces. */}
+            {skeletonMode === 'movement' && activeCaseId && (
+              <div className="mt-3 space-y-3 w-[340px] max-w-full" data-testid="movement-mode-panels">
+                <ActiveCapacitiesPanel caseId={activeCaseId} className="w-full" />
+              </div>
+            )}
+          </div>
+        )}
+        {hasClinicalTextData && skeletonMode !== 'movement' && (
+          <div ref={masterPlanContainerRef} className="relative mt-2 animate-in fade-in slide-in-from-top-1 duration-300">
+            <div className="flex gap-1.5">
+              <Button
+                ref={masterPlanPillRefs.exercise}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-violet-600/90 text-white hover:bg-violet-500 border border-violet-400/30 shadow-lg shadow-violet-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('exercise'); }}
+              >
+                <Dumbbell className="h-3 w-3 mr-1" />
+                Exercise Rx
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.manual}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-rose-600/90 text-white hover:bg-rose-500 border border-rose-400/30 shadow-lg shadow-rose-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('manualRx'); }}
+              >
+                <Hand className="h-3 w-3 mr-1" />
+                Manual Therapy
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.electro}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-amber-600/90 text-white hover:bg-amber-500 border border-amber-400/30 shadow-lg shadow-amber-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('electroRx'); }}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                Electrophysical Agents
+              </Button>
+              <Button
+                ref={masterPlanPillRefs.adjunct}
+                variant="secondary"
+                size="sm"
+                className="h-7 text-[11px] bg-emerald-600/90 text-white hover:bg-emerald-500 border border-emerald-400/30 shadow-lg shadow-emerald-900/30"
+                onClick={() => { setShowInjuryMechanism(true); setMechanismActiveTab('adjunctRx'); }}
+                data-testid="button-adjunct-rx-quick"
+              >
+                <Leaf className="h-3 w-3 mr-1" />
+                Adjunct Rx
+              </Button>
+            </div>
+            <MasterPlanCard
+              diagnosis={extractionResult?.mainComplaint ?? null}
+              pillRefs={masterPlanPillRefs}
+              containerRef={masterPlanContainerRef}
+              onOpenSidePanel={() => {
+                // Optional escape hatch — let users still pop the right-side
+                // tab open if they prefer. The card no longer auto-navigates
+                // when "Build full plan" finishes; the inline section
+                // surfaces the result in place (Task #270).
+                setShowInjuryMechanism(true);
+                setMechanismActiveTab('myPlan');
+              }}
+              onAutoBuild={handleAutoBuildClick}
+              autoBuildPending={autoBuildState !== 'idle'}
+              autoBuildDisabled={!hasClinicalTextData}
+              expandSignal={masterPlanExpandSignal}
+              clinicalContext={rationaleClinicalContext}
+            />
+            {/* Phantom engines (Task #267): hidden, mount only during auto-build
+                so each engine's autoAddOnGenerate cascade fires without forcing
+                the user to leave their current tab. Each engine adds its
+                generated items to the shared plan cart, which drives the
+                MasterPlanCard's per-modality flash + line-draw animations.
+                Mounted during 'generating' AND 'organizing' so the final
+                paint tick still owns the same React tree. */}
+            {autoBuildState !== 'idle' && (
+              <div className="hidden" aria-hidden="true" data-testid="master-plan-auto-build-phantoms">
+                <Suspense fallback={null}>
+                  <ExerciseEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    onCustomExerciseResult={() => { /* phantom: ignore */ }}
+                    pendingGenerate={autoBuildTriggerExercise}
+                    onGenerateStarted={handleAutoBuildStartExercise}
+                    onGenerateComplete={handleAutoBuildCompleteExercise}
+                    autoAddOnGenerate
+                    conditionName={extractionResult?.mainComplaint ?? undefined}
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <ManualTherapyEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    scarMarkers={scarMarkers}
+                    adhesionBands={adhesionBands}
+                    musclePathologies={Object.entries(compensatedOverrides)
+                      .filter(([, ov]) => ov?.pathology && ov.pathology !== 'none')
+                      .map(([muscleId, ov]) => ({
+                        muscleId,
+                        label: muscleId.replace(/_/g, ' '),
+                        pathology: ov!.pathology as string,
+                        severity: ov!.tensionOffset > 20 ? 'severe' : ov!.tensionOffset > 10 ? 'moderate' : 'mild',
+                      }))}
+                    onHighlightMuscles={() => { /* phantom: ignore */ }}
+                    onSetMuscleHighlightColors={() => { /* phantom: ignore */ }}
+                    onSetManualTherapyAnnotations={() => { /* phantom: ignore */ }}
+                    onCustomManualTherapyResult={() => { /* phantom: ignore */ }}
+                    pendingGenerate={autoBuildTriggerMT}
+                    onGenerateStarted={handleAutoBuildStartMT}
+                    onGenerateComplete={handleAutoBuildCompleteMT}
+                    autoAddOnGenerate
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <ElectrophysicalEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    slingAnalysis={slingAnalysis}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    slingDrivenRecommendations={slingDrivenRecommendations}
+                    onPlanChange={() => { /* phantom: ignore */ }}
+                    initialCondition={extractionResult?.mainComplaint ?? ''}
+                    initialStage={(extractionResult?.duration === 'acute' ? 'acute'
+                      : extractionResult?.duration === 'subacute' ? 'subacute'
+                      : extractionResult?.duration === 'chronic' || extractionResult?.duration === 'recurrent' ? 'chronic'
+                      : 'subacute') as 'acute' | 'subacute' | 'chronic'}
+                    autoGenerateNonce={autoBuildElectroNonce}
+                    autoGenerate
+                    autoAddOnGenerate
+                    onGenerateComplete={handleAutoBuildCompleteEPA}
+                    patientId={selectedConversationId ?? null}
+                  />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <AdjunctTherapiesEngineTab
+                    mechanismAnalysis={mechanismAnalysisResult}
+                    painMarkers={painMarkers.map(pm => ({
+                      label: pm.anatomicalLabel || pm.nearestBone,
+                      severity: (pm as unknown as Record<string, unknown>).severity as number | undefined,
+                      type: pm.type,
+                    }))}
+                    diagnosis={extractionResult?.mainComplaint || undefined}
+                    recoveryPhase={extractionResult?.duration || undefined}
+                    irritability={extractionResult?.irritability || undefined}
+                    pendingGenerate={autoBuildTriggerAdjunct}
+                    onGenerateStarted={handleAutoBuildStartAdjunct}
+                    onGenerateComplete={handleAutoBuildCompleteAdjunct}
+                    autoAddOnGenerate
+                  />
+                </Suspense>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -10343,7 +17752,58 @@ ${ddxList}`;
         </div>
       )}
 
+      {/* In Active Movement Mode the static-posture
+          clinical reasoning AI pipeline is gated off; the per-movement
+          Findings stream renders into the same right-rail slot the
+          ClinicalReasoningPanel normally occupies. */}
+      {skeletonMode === 'movement' && (
+        <div
+          className={`absolute top-0 right-0 w-[340px] z-30 animate-in slide-in-from-right-2 duration-300 p-2 space-y-2 ${sidebarOpen ? 'invisible pointer-events-none' : 'pointer-events-auto'}`}
+          aria-hidden={sidebarOpen ? 'true' : undefined}
+          data-testid="movement-findings-rail"
+        >
+          <MovementAiSimulatorPanel
+            key={`mvsim:${activeCaseId ?? 'none'}:${skeletonMode}`}
+            context={movementSimContext}
+            onResult={handleMovementSimResult}
+            onReset={handleMovementSimReset}
+            expandSignal={movementSimExpandSignal}
+          />
+        </div>
+      )}
+
+      {skeletonMode === 'movement' && !sidebarOpen && movementSimTissueOverlay.length > 0 && (
+        <div
+          className="absolute top-24 left-3 z-30 w-[200px] pointer-events-none animate-in fade-in duration-200"
+          data-testid="movement-sim-tissue-overlay"
+        >
+          <div className="rounded-md bg-black/70 backdrop-blur border border-white/10 p-2 space-y-1">
+            <div className="text-[9px] uppercase tracking-wider text-white/70 mb-1">
+              Tissue impact
+            </div>
+            {movementSimTissueOverlay.map((t, i) => (
+              <div
+                key={i}
+                className={`text-[10px] rounded border px-1.5 py-0.5 flex items-center gap-1 ${
+                  t.tone === 'green'
+                    ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
+                    : 'bg-amber-500/15 border-amber-400/40 text-amber-200'
+                }`}
+                data-tissue={t.tissue}
+                data-tone={t.tone}
+              >
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${t.tone === 'green' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                />
+                <span className="truncate">{t.tissue}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {skeletonMode !== 'movement' && (
       <ClinicalReasoningPanel
+        key={`clinical-reasoning-panel-${caseInstanceId}`}
         data={clinicalReasoningData}
         isProcessing={clinicalReasoningProcessing}
         isOpen={clinicalReasoningOpen}
@@ -10373,15 +17833,20 @@ ${ddxList}`;
         onVisualizationRequest={handleVisualizationRequest}
         activeVisualizationId={activeVisualizationId}
         onHypothesisClick={handleHypothesisClick}
+        onTestHypothesisClick={handleTestHypothesisClick}
         structuredData={structuredReasoningData}
         structuredLoading={structuredReasoningLoading}
         onStructuredHypothesisClick={handleStructuredHypothesisClick}
+        onTestStructuredHypothesisClick={handleTestStructuredHypothesisClick}
         decisionData={treatmentDecisionData}
         decisionLoading={treatmentDecisionLoading}
         onDecisionTargetClick={handleDecisionTargetClick}
         planData={treatmentPlanData}
         planLoading={treatmentPlanLoading}
         onPlanTargetClick={handleDecisionTargetClick}
+        onPlanLoadingRecalculate={handlePlanLoadingRecalculate}
+        onPlanLoadingOverride={handlePlanLoadingOverride}
+        onPlanLoadingClearOverride={handlePlanLoadingClearOverride}
         evidenceData={evidenceEngineResult}
         evidenceLoading={evidenceLoading}
         onEvidenceQuery={handleEvidenceQuery}
@@ -10389,13 +17854,198 @@ ${ddxList}`;
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
         onActiveTabChange={setReasoningActiveTab}
+        showEvidenceTab={false}
+        externalClinicalNotes={clinicalNotes}
+        onExternalClinicalNotesChange={(notes) => {
+          setClinicalNotes(notes);
+          if (notes) lastClinicalNotesKeyRef.current = clinicalNotesReasoningKey;
+        }}
+        externalIsGeneratingNotes={isGeneratingClinicalNotes}
+        onExternalIsGeneratingNotesChange={setIsGeneratingClinicalNotes}
+        onExternalGenerateClinicalNotes={generateClinicalNotesFromToolbar}
       />
+      )}
+
+      {clinicalNotesOpen && !sidebarOpen && (
+        <div
+          className="absolute top-16 left-3 z-40 w-[360px] max-h-[calc(100%-5rem)] flex flex-col bg-black/90 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl animate-in slide-in-from-left-2 duration-200"
+          data-testid="panel-clinical-notes"
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-gradient-to-br from-indigo-500 to-purple-600 rounded">
+                <ScrollText className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="font-semibold text-white text-xs">Clinical Notes (SOAP)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {hasReasoningContentForNotes && clinicalNotes && (
+                <button
+                  onClick={copyAllClinicalNotes}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/15 hover:bg-indigo-500/25 rounded text-[10px] text-indigo-200 transition-colors"
+                  data-testid="button-copy-all-clinical-notes"
+                >
+                  {copiedNotesSection === 'all' ? <ClipboardCheck className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                  {copiedNotesSection === 'all' ? 'Copied' : 'Copy all'}
+                </button>
+              )}
+              {hasReasoningContentForNotes && clinicalNotes && !isGeneratingClinicalNotes && (
+                <button
+                  onClick={generateClinicalNotesFromToolbar}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 hover:bg-white/10 rounded text-[10px] text-gray-300 transition-colors"
+                  data-testid="button-regenerate-clinical-notes"
+                >
+                  <ScrollText className="h-2.5 w-2.5" />
+                  Regenerate
+                </button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10"
+                onClick={() => setClinicalNotesOpen(false)}
+                data-testid="button-close-clinical-notes"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {!hasReasoningContentForNotes && (
+              <div className="bg-indigo-500/5 rounded-lg p-4 border border-indigo-500/10 text-center">
+                <ScrollText className="h-6 w-6 text-indigo-400/50 mx-auto mb-2" />
+                <p className="text-[11px] text-gray-300 font-medium">No reasoning yet</p>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Add subjective findings or pain markers to generate notes.
+                </p>
+              </div>
+            )}
+
+            {hasReasoningContentForNotes && isGeneratingClinicalNotes && !clinicalNotes && (
+              <div className="space-y-2">
+                {['Subjective', 'Objective', 'Assessment', 'Plan'].map(label => (
+                  <div key={label} className="bg-white/[0.03] rounded-lg border border-white/5 p-3 animate-pulse">
+                    <div className="h-2.5 w-20 bg-white/10 rounded mb-2" />
+                    <div className="h-2 w-full bg-white/5 rounded mb-1" />
+                    <div className="h-2 w-3/4 bg-white/5 rounded" />
+                  </div>
+                ))}
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-indigo-300 mt-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generating SOAP notes…
+                </div>
+              </div>
+            )}
+
+            {clinicalNotesError && !isGeneratingClinicalNotes && (
+              <div className="bg-red-500/5 rounded-lg p-3 border border-red-500/15">
+                <p className="text-[11px] text-red-300 font-medium mb-2">{clinicalNotesError}</p>
+                <button
+                  onClick={generateClinicalNotesFromToolbar}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/15 hover:bg-red-500/25 rounded text-[10px] text-red-200 transition-colors"
+                >
+                  <ScrollText className="h-2.5 w-2.5" />
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {hasReasoningContentForNotes && clinicalNotes && (() => {
+              type NotesKey = keyof import("@/components/skeleton/ClinicalReasoningPanel").ClinicalNotes;
+              const sections: { key: NotesKey; label: string; text: string; bgClass: string; borderClass: string; textClass: string }[] = [
+                { key: 'subjective', label: 'Subjective', text: clinicalNotes.subjective, bgClass: 'bg-blue-500/5', borderClass: 'border-blue-500/15', textClass: 'text-blue-300' },
+                { key: 'objective', label: 'Objective', text: clinicalNotes.objective, bgClass: 'bg-green-500/5', borderClass: 'border-green-500/15', textClass: 'text-green-300' },
+                { key: 'assessment', label: 'Assessment', text: clinicalNotes.assessment, bgClass: 'bg-amber-500/5', borderClass: 'border-amber-500/15', textClass: 'text-amber-300' },
+                { key: 'plan', label: 'Plan', text: clinicalNotes.plan, bgClass: 'bg-purple-500/5', borderClass: 'border-purple-500/15', textClass: 'text-purple-300' },
+              ];
+              if (clinicalNotes.additionalNotes) {
+                sections.push({ key: 'additionalNotes', label: 'Additional Notes', text: clinicalNotes.additionalNotes, bgClass: 'bg-rose-500/5', borderClass: 'border-rose-500/15', textClass: 'text-rose-300' });
+              }
+              return (
+                <>
+                  <p className="text-[9px] text-gray-500 px-1">
+                    Generated {new Date(clinicalNotes.generatedAt).toLocaleTimeString()}
+                  </p>
+                  {sections.map(({ key, label, text, bgClass, borderClass, textClass }) => (
+                    <div key={key} className={`${bgClass} rounded-lg border ${borderClass} overflow-hidden`} data-testid={`clinical-notes-section-${key}`}>
+                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-white/[0.02]">
+                        <span className={`text-[10px] font-semibold ${textClass} uppercase tracking-wider`}>{label}</span>
+                        <button
+                          onClick={() => copyClinicalNotesSection(key, text)}
+                          className="p-0.5 rounded hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors"
+                          title={`Copy ${label}`}
+                          data-testid={`button-copy-clinical-notes-${key}`}
+                        >
+                          {copiedNotesSection === key ? <ClipboardCheck className="h-2.5 w-2.5 text-green-400" /> : <Copy className="h-2.5 w-2.5" />}
+                        </button>
+                      </div>
+                      <div className="px-2.5 py-2">
+                        <p className="text-[10.5px] text-gray-300 leading-relaxed whitespace-pre-wrap">{text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      <HypothesisTestBench
+        isOpen={testBenchOpen}
+        hypothesis={testBenchHypothesis}
+        context={{
+          subjectiveHistory: subjectiveHistoryInput,
+          painMarkers: painMarkers.map(pm => ({
+            anatomicalLabel: pm.anatomicalLabel || pm.nearestBone,
+            type: pm.type,
+            severity: pm.severity ?? 5,
+          })),
+          posture: modelConfig as unknown as Record<string, Record<string, number>>,
+        }}
+        candidatesForCompare={[
+          ...((clinicalReasoningData?.hypotheses || []).filter(h => h.status !== 'ruled_out').map(h => ({
+            id: h.id, condition: h.condition, confidence: h.confidence,
+          }))),
+          ...((structuredReasoningData?.hypotheses || []).map(h => ({
+            id: h.id, condition: h.condition, confidence: h.confidence,
+          }))),
+        ]}
+        onClose={() => { handleBenchApplyOverlay(null); setTestBenchOpen(false); }}
+        onApplyOverlay={handleBenchApplyOverlay}
+        onCommit={handleBenchCommit}
+      />
+
+      {stalePoseHint && (
+        <div className="fixed top-4 right-[440px] z-50 max-w-xs bg-amber-950/90 border border-amber-500/40 rounded-lg px-3 py-2 shadow-2xl backdrop-blur-md">
+          <div className="text-[11px] text-amber-200 font-semibold mb-1">Skeleton may be stale</div>
+          <div className="text-[11px] text-amber-100/90 mb-2">
+            You replaced the hypothesis the skeleton was posed to. Re-pose to <span className="font-semibold">{stalePoseHint.condition}</span>?
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              className="text-[11px] px-2 py-1 bg-amber-500 hover:bg-amber-400 text-gray-900 rounded font-medium"
+              onClick={handleRePoseToRefined}
+            >
+              Re-pose
+            </button>
+            <button
+              className="text-[11px] px-2 py-1 text-amber-200/80 hover:text-amber-100"
+              onClick={() => setStalePoseHint(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <HypothesisChatPanel
         hypothesis={selectedHypothesisForChat}
         isOpen={hypothesisChatOpen}
         onClose={() => setHypothesisChatOpen(false)}
         onPoseCommand={applyPoseCommand}
+        onRefinedHypothesisCommit={handleRefinedHypothesisCommit}
         subjectiveHistory={subjectiveHistoryInput}
         skeletonData={{
           posture: modelConfig,
@@ -10422,15 +18072,46 @@ ${ddxList}`;
       />
     </div>
 
-    {showSimTimeline && timelinePlaybackState && (
+    {showSimTimeline && (
       <Suspense fallback={null}>
         <TimelineBottomBar
           playbackState={timelinePlaybackState}
           playbackRef={timelinePlaybackRef}
+          conditionPhases={conditionPhases}
         />
       </Suspense>
     )}
+    <Suspense fallback={null}>
+      <VoiceActivityDock
+        key={voiceDockSessionKey}
+        entries={voiceActivityEntries}
+        isRecording={isRecording}
+        visible={voiceDockVisible}
+        onUndo={handleVoiceActivityUndo}
+        monitorStages={monitorStages}
+        monitorStability={monitorStability}
+        autopilotEnabled={autopilotEnabled}
+        // Snapshot eligibility gate — autopilot only fires for
+        // conversations the user has explicitly opted into snapshot
+        // (the same gate used by the periodic snapshot effects). This
+        // prevents the dock from auto-running case workups on legacy
+        // conversations that pre-date the autopilot feature.
+        autopilotEligible={
+          (isRecording || hasClinicalTextData) &&
+          !!selectedConversationId &&
+          snapshotEligibleRef.current.has(selectedConversationId)
+        }
+        paused={autopilotPaused}
+        onAutopilotToggle={handleAutopilotToggle}
+        onPauseToggle={handleAutopilotPauseToggle}
+        onRerunFromStage={handleAutopilotRerunFromStage}
+      />
+    </Suspense>
     </div>
+    </TreatmentRationaleProvider>
+    </OrchestratePlanProvider>
+    </TreatmentSimulationProvider>
+    </PlanCartProvider>
     </Suspense>
   );
 }

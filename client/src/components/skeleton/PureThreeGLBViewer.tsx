@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { AlertCircle, Loader2, RotateCcw, ExternalLink } from 'lucide-react';
+import { AlertCircle, Loader2, RotateCcw, ExternalLink, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMovementById, interpolateKeyframes, applyJointConstraints, JointLimits } from '@/lib/movementSequences';
 import { initializeLegIK, applySquatIK, applyLegIK, LEG_IK_CONFIG, LegIKState } from '@/lib/legIKSolver';
@@ -10,12 +10,16 @@ import { ForceVisualizationManager, BiomechanicsVisualizationData, HoverData } f
 import { MuscleVisualizationManager, MuscleActivationLevels } from '@/lib/muscleVisualization';
 import { MuscleLayerManager, MuscleLayerConfig } from '@/lib/muscleLayerManager';
 import { classifyMuscleMeshes, setMuscleGroupVisibility, setAllMuscleGroupsVisibility, disposeMuscleGroups, MUSCLE_GROUPS, type SplitMuscleGroup } from '@/lib/muscleGroupSplitter';
-import { type MuscleStatesMap, getMuscleColor } from '@/lib/muscleBiomechanicsEngine';
+import { type MuscleStatesMap, type MuscleStatus, type IndividualMuscle, getMuscleColor, computeAllMuscleStates, computeFullMuscleAnalysis } from '@/lib/muscleBiomechanicsEngine';
 import { getEnvironmentPreset, type EnvironmentPreset } from '@/lib/environmentPresets';
 import { MUSCLE_BONE_POSITIONS, type MyofascialChain } from '@/lib/myofascialChains';
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES } from '@/lib/scarTissueMapping';
+import { TISSUE_ANCHOR_CATALOGUE, paletteForState, SUPERFICIAL_MUSCLE_PATTERNS } from '@/lib/tissueOverlayCatalogue';
 import { Skeleton3DPose, SmoothedPoseOutput, HandBoneRotations } from '@/utils/mediapipeTo3D';
 import { poseToControllerValues, ControllerValues } from '@/utils/poseToControllerMap';
+import { DOF_SPECS } from '@/components/skeleton/JointAngleEditor';
+import { COMPENSATION_CHAINS } from '@/lib/jointConstraints';
+import MovementJointSliderHUD, { type SliderDof } from '@/components/skeleton/MovementJointSliderHUD';
 
 interface JointConfig {
   flexion?: number;
@@ -701,6 +705,23 @@ export interface PainMarker {
   painMechanism?: PainMechanismType;
   nerveRoot?: string;
   severity?: number;
+  /** Origin of the marker. 'clinician' = clinician-placed (default), 'prediction' =
+   *  AI-seeded from the active diagnosis prediction (renders with a dashed ring +
+   *  AI badge and is auto-managed by the seed effect), 'transient' = short-lived
+   *  flash markers tied to an active provocation movement. */
+  source?: 'clinician' | 'prediction' | 'transient';
+  /** Attribution metadata for prediction-seeded markers. Persists even after the
+   *  clinician edits a seed (which flips `source` to 'clinician') so a Re-seed
+   *  affordance can restore the original placement. */
+  sourceKind?: 'provocation' | 'tissue';
+  sourceHypothesisId?: string;
+  sourceHypothesisCondition?: string;
+  sourceProvocationMovement?: string;
+  sourceProvocationLabel?: string;
+  sourceTissueType?: string;
+  sourceTissueId?: string;
+  sourceTissueLabel?: string;
+  sourceTissueSeverity?: number;
 }
 
 export interface RomMovement {
@@ -1631,6 +1652,15 @@ interface PureThreeGLBViewerProps {
     intensity: number;
     glowSize?: number;
   }>;
+  /** When true, pain marker meshes whose nearestBone is in failureBoneSet
+   *  pulse (oscillating scale) — used by the Sling Failure Movement
+   *  Visualizer to flash symptom markers in lockstep with the failure
+   *  frame. */
+  pulseAtFailureBeat?: boolean;
+  /** Bones the active sling failure scenario considers part of the
+   *  weak-link / reroute neighbourhood. Empty/undefined => pulse all
+   *  pain markers when pulseAtFailureBeat is true. */
+  failureBoneSet?: Set<string>;
   painMarkers?: PainMarker[];
   onPainMarkerAdd?: (marker: PainMarker) => void;
   onPainMarkerMove?: (id: string, position: { x: number; y: number; z: number }, nearestBone: string, anatomicalLabel: string) => void;
@@ -1642,8 +1672,85 @@ interface PureThreeGLBViewerProps {
   enableRomMode?: boolean;
   onRomJointSelect?: (jointDef: RomJointDefinition) => void;
   selectedRomJointId?: string | null;
+  /** Task #391 — Joint Zoom Mode (hip v1). When true, the viewer renders
+   *  click-target spheres on Hip_L and Hip_R only and emits the side via
+   *  `onJointZoomSelect`. Independent of ROM mode so it can be combined
+   *  with Movement Mode without disrupting the ROM picker. */
+  enableJointZoomMode?: boolean;
+  onJointZoomSelect?: (side: 'left' | 'right') => void;
   enablePoseMode?: boolean;
   onModelConfigChange?: (path: string, value: number) => void;
+  /** Top-level skeleton interaction mode. 'treatment' is the manual-therapy
+   *  simulation surface (Task #376) — viewers may render an amber frame /
+   *  contact dot / line-of-drive arrow and gate posture/movement input. */
+  skeletonMode?: 'posture' | 'movement' | 'treatment';
+  /** Task #376 — 3D treatment marker. When `active` and `boneName` resolves
+   *  to a bone in the loaded GLB, the viewer renders an amber contact dot,
+   *  a translucent capsule-shell ellipsoid (sized to capsular saturation),
+   *  a ghost bone-glide sphere offset by the live mechanical translation,
+   *  and a line-of-drive ArrowHelper that oscillates at the technique's
+   *  frequency. Arrow length scales with grade (1..5 / 1..3). */
+  treatmentMarker?: {
+    active: boolean;
+    boneName: string;
+    axis: { x: number; y: number; z: number };
+    grade: number;
+    gradeSystem?: 'maitland' | 'kaltenborn';
+    /** Mechanical translation in metres (engine outputs mm, caller converts). */
+    translationM?: { x: number; y: number; z: number };
+    /** 0..1 normalised capsular saturation — drives capsule-shell size + tint. */
+    capsularSaturation?: number;
+    /** Oscillation frequency in Hz (drives the live pulse animation). */
+    frequencyHz?: number;
+    /** Oscillation amplitude in metres (drives the live pulse animation). */
+    amplitudeM?: number;
+    label?: string;
+  };
+  activeCapacities?: Record<string, {
+    activeRomMin?: number;
+    activeRomMax: number;
+    passiveRomMin?: number;
+    passiveRomMax: number;
+    painfulArc?: {
+      start: number;
+      end: number;
+      intensity?: number;
+      direction?: 'ascending' | 'descending' | 'either';
+      loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+      label?: string;
+    } | null;
+    strengthGrade?: string;
+    inhibitionLevel?: number;
+    notes?: string;
+  }> | null;
+  /** Fired on mouseUp at the end of a movement-mode drag, so the
+   *  page can stream the attempt into the Movement Findings AI. */
+  onActiveMovementAttempt?: (attempt: {
+    joint: string;
+    movement: string;
+    achievedAngle: number;
+    activeRomMax: number;
+    passiveRomMax: number;
+    inPainfulArc: boolean;
+    exceededActiveLimit: boolean;
+    compensationsTriggered: string[];
+  }) => void;
+  /** Fired only on Movement Mode pose drag start (true) and end (false). */
+  onPoseDragChange?: (active: boolean) => void;
+  /** Fired the moment a movement-mode drag enters a painful arc, so
+   *  the predicted-pain layer can register a transient flare on the
+   *  affected joint/movement. Fires once per arc entry (not per frame). */
+  onPainfulArcFlare?: (flare: {
+    joint: string;
+    movement: string;
+    angle: number;
+    intensity: number;
+    arcStart: number;
+    arcEnd: number;
+  }) => void;
+  /** Externally controlled bone-segment selection (Task #212). When provided, the viewer mirrors this selection and emits changes via onSelectedBoneSegmentChange. */
+  selectedBoneSegmentId?: BoneSegmentId | null;
+  onSelectedBoneSegmentChange?: (id: BoneSegmentId | null) => void;
   enableZoomTool?: boolean;
   onLandmarkSelect?: (landmark: { label: string; boneName: string; position: { x: number; y: number; z: number } }) => void;
   forceOverlay?: { id: string; label: string; boneName: string; compression: number; tension: number; shear: number; totalForce: number; status: 'low' | 'moderate' | 'high' | 'very_high'; clinical: string }[] | null;
@@ -1689,6 +1796,31 @@ interface PureThreeGLBViewerProps {
     color: number;
     intensity: number;
     label: string;
+  }>;
+  tissueIntelligenceHighlights?: Array<{
+    tissueId: string;
+    tissueType: 'tendon' | 'joint' | 'nerve' | 'fascia';
+    label: string;
+    bones: string[];
+    severity: number;
+    healingStage: 'acute' | 'subacute' | 'chronic' | 'degenerative' | 'baseline';
+    irritability: 'low' | 'moderate' | 'high';
+    isDeep: boolean;
+    colorOverride?: number;
+    aggravators?: Array<{
+      kind: 'position' | 'movement' | 'load' | 'environment';
+      label: string;
+      boneAnchor?: string;
+      predicate?:
+        | { kind: 'shoulderAbductionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'kneeFlexionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'kneeFlexionBelow'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'hipFlexionAbove'; side: 'L' | 'R'; threshold: number }
+        | { kind: 'spineFlexionAbove'; threshold: number }
+        | { kind: 'spineExtensionAbove'; threshold: number }
+        | { kind: 'forwardHeadAbove'; threshold: number }
+        | { kind: 'always' };
+    }>;
   }>;
   slingPathwayVisualization?: {
     enabled: boolean;
@@ -2209,6 +2341,481 @@ const POSE_BONE_MAP: Record<string, PoseBoneConfig> = {
   'Scapula_R': { configKey: 'rightShoulder.abduction', label: 'R Shoulder Abduction', axis: 'z', scale: 1, minValue: 0, maxValue: 180, sensitivity: 0.5 },
 };
 
+// Per-joint movement (DOF) arrows shown around the selected joint dot.
+// `direction` is the world-space vector along which the distal segment moves
+// when the underlying configKey value increases (assuming the model is in an
+// upright T-pose facing +Z, with +X to the model's left, +Y up).
+// `scale: -1` flips that — used when one DOF spec covers both directions
+// of motion (e.g. signed abduction range from -45..45).
+//
+// Limits/labels are NOT defined here — they are sourced at runtime from the
+// canonical DOF_SPECS registry exported by JointAngleEditor, and arrows whose
+// `configKey` is not present in the registry are filtered out. This guarantees
+// arrow ranges, sidebar editor ranges, and engine constraints can never drift.
+interface MovementArrowDef {
+  configKey: string;
+  label: string;
+  direction: [number, number, number];
+  sensitivity: number;
+  scale?: number;
+}
+
+// Index DOF_SPECS by id for O(1) lookup of canonical limits/labels.
+const DOF_LIMIT_INDEX: Map<string, { min: number; max: number; label: string }> = (() => {
+  const m = new Map<string, { min: number; max: number; label: string }>();
+  for (const spec of DOF_SPECS) {
+    m.set(spec.id, { min: spec.min, max: spec.max, label: spec.label });
+  }
+  return m;
+})();
+
+const COMPENSATION_CHAIN_BY_KEY: Map<string, typeof COMPENSATION_CHAINS[number]['compensators']> = (() => {
+  const m = new Map<string, typeof COMPENSATION_CHAINS[number]['compensators']>();
+  for (const chain of COMPENSATION_CHAINS) m.set(`${chain.source.joint}:${chain.source.movement}`, chain.compensators);
+  return m;
+})();
+function camelToSnake(s: string): string { return s.replace(/[A-Z]/g, c => '_' + c.toLowerCase()); }
+function snakeToCamel(s: string): string { return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase()); }
+
+type ActivationKey = keyof MuscleActivationLevels;
+// Task #323 — review-3 fix: expanded mapping covers every Movement Mode
+// DOF that has a corresponding muscle in MuscleActivationLevels (currently
+// hip / knee / ankle — the only regions modeled by muscleVisualization).
+// Upper-body DOFs (shoulder/elbow/wrist/spine/neck/scapula) return null
+// from computeMovementMuscleActivation and the highlight state is then
+// explicitly cleared at the call site so no stale overlay persists.
+const MOVEMENT_MUSCLE_AGONISTS: Record<string, { agonists: ActivationKey[]; antagonists: ActivationKey[] }> = {
+  // Hip flexion (signed): + flexes, − extends
+  'leftHip.flexion+':   { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  'rightHip.flexion+':  { agonists: ['rectusFemoris', 'sartorius', 'tensorFasciaeLatae'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  'leftHip.flexion-':   { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  'rightHip.flexion-':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  // Hip extension (separate unsigned DOF in DOF_SPECS)
+  'leftHip.extension+':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  'rightHip.extension+': { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'sartorius'] },
+  // Hip abduction (signed): + abducts, − adducts
+  'leftHip.abduction+': { agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
+  'rightHip.abduction+':{ agonists: ['tensorFasciaeLatae'], antagonists: ['adductorMagnus', 'adductorLongus'] },
+  'leftHip.abduction-': { agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
+  'rightHip.abduction-':{ agonists: ['adductorMagnus', 'adductorLongus'], antagonists: ['tensorFasciaeLatae'] },
+  // Hip rotation (signed) — IR uses TFL co-activation; ER is reciprocal
+  'leftHip.internalRotation+':  { agonists: ['tensorFasciaeLatae', 'adductorLongus'], antagonists: ['sartorius'] },
+  'rightHip.internalRotation+': { agonists: ['tensorFasciaeLatae', 'adductorLongus'], antagonists: ['sartorius'] },
+  'leftHip.internalRotation-':  { agonists: ['sartorius'], antagonists: ['tensorFasciaeLatae', 'adductorLongus'] },
+  'rightHip.internalRotation-': { agonists: ['sartorius'], antagonists: ['tensorFasciaeLatae', 'adductorLongus'] },
+  // Knee flexion (signed): + flexes, − extends (recurvatum direction)
+  'leftKnee.flexion+':  { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
+  'rightKnee.flexion+': { agonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'], antagonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'] },
+  'leftKnee.flexion-':  { agonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  'rightKnee.flexion-': { agonists: ['rectusFemoris', 'vastusLateralis', 'vastusMedialis', 'vastusIntermedius'], antagonists: ['bicepsFemoris', 'semimembranosus', 'semitendinosus'] },
+  // Ankle dorsiflexion (signed) — already separate from plantarflexion DOF
+  'leftAnkle.dorsiflexion+':  { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
+  'rightAnkle.dorsiflexion+': { agonists: ['tibialisAnterior', 'extensorDigitorumLongus', 'extensorHallucisLongus'], antagonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus'] },
+  'leftAnkle.dorsiflexion-':  { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  'rightAnkle.dorsiflexion-': { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  // Ankle plantarflexion (separate unsigned DOF)
+  'leftAnkle.plantarflexion+':  { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  'rightAnkle.plantarflexion+': { agonists: ['gastrocnemiusMedial', 'gastrocnemiusLateral', 'soleus', 'plantaris'], antagonists: ['tibialisAnterior'] },
+  // Ankle inversion / eversion (each separate unsigned DOF)
+  'leftAnkle.inversion+':  { agonists: ['tibialisAnterior'], antagonists: ['peroneusLongus', 'peroneusBrevis'] },
+  'rightAnkle.inversion+': { agonists: ['tibialisAnterior'], antagonists: ['peroneusLongus', 'peroneusBrevis'] },
+  'leftAnkle.eversion+':   { agonists: ['peroneusLongus', 'peroneusBrevis'], antagonists: ['tibialisAnterior'] },
+  'rightAnkle.eversion+':  { agonists: ['peroneusLongus', 'peroneusBrevis'], antagonists: ['tibialisAnterior'] },
+};
+
+// Task #323: Anthropometric segment-mass fractions (Winter / de Leva 1996,
+// % of total body mass). Used by the live joint reaction force estimator
+// in Movement Mode. Single-leg loading model assumes ipsilateral segments
+// distal to the joint contribute (gravity + dynamic muscle multiplier).
+const SEGMENT_MASS_FRACTIONS = {
+  foot: 0.0145,    // each foot
+  shank: 0.0465,   // each lower leg
+  thigh: 0.10,     // each upper leg
+  pelvis: 0.142,   // pelvis + lower trunk (HAT minus arms/head/upper trunk)
+  hatUpper: 0.40,  // head + arms + upper trunk (carried by hip in stance)
+  hand: 0.006,     // each hand
+  forearm: 0.016,  // each forearm
+  upperArm: 0.028, // each upper arm
+  head: 0.081,     // head + neck (carried by spine/neck)
+  upperTrunk: 0.158, // upper trunk only (above T12)
+} as const;
+
+const GRAVITY_MS2 = 9.81;
+
+// Task #323 — review-2 fix: every Movement Mode DOF must surface a live
+// joint-reaction-force readout. We classify the configKey into a joint
+// category and apply per-joint distal-mass + BW-multiplier curves
+// derived from instrumented-implant + EMG literature (Bergmann hip,
+// Kutzner knee, Maganaris Achilles, Westerhoff shoulder). Numbers are
+// intentionally illustrative — Task #324 follow-up tracks calibration.
+type JointForceCategory =
+  | 'hip' | 'knee' | 'ankle'
+  | 'shoulder' | 'elbow' | 'wrist'
+  | 'spine' | 'neck' | 'pelvis' | 'scapula';
+
+const JOINT_FORCE_CONFIG: Record<JointForceCategory, {
+  /** Sum of distal-segment mass fractions crossing the joint. */
+  distalMassFraction: number;
+  /** Resting-pose BW multiple at zero drag progress. */
+  baselineBwMult: number;
+  /** Peak BW multiple at full drag progress (matches in-vivo literature ranges). */
+  peakBwMult: number;
+}> = {
+  hip:      { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank
+                                  + SEGMENT_MASS_FRACTIONS.thigh + SEGMENT_MASS_FRACTIONS.pelvis
+                                  + SEGMENT_MASS_FRACTIONS.hatUpper,
+              baselineBwMult: 0.5, peakBwMult: 4.0 }, // Bergmann 2010
+  knee:     { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank,
+              baselineBwMult: 0.3, peakBwMult: 2.5 }, // Kutzner 2010
+  ankle:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot,
+              baselineBwMult: 0.4, peakBwMult: 3.0 }, // Maganaris 2002
+  shoulder: { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.05, peakBwMult: 1.5 }, // Westerhoff 2009
+  elbow:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.02, peakBwMult: 0.8 },
+  wrist:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.01, peakBwMult: 0.4 },
+  spine:    { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperTrunk + SEGMENT_MASS_FRACTIONS.head
+                                  + 2 * (SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand),
+              baselineBwMult: 0.5, peakBwMult: 3.5 }, // Wilke 1999 lumbar
+  neck:     { distalMassFraction: SEGMENT_MASS_FRACTIONS.head,
+              baselineBwMult: 0.1, peakBwMult: 0.6 },
+  pelvis:   { distalMassFraction: SEGMENT_MASS_FRACTIONS.foot + SEGMENT_MASS_FRACTIONS.shank
+                                  + SEGMENT_MASS_FRACTIONS.thigh + SEGMENT_MASS_FRACTIONS.pelvis
+                                  + SEGMENT_MASS_FRACTIONS.hatUpper,
+              baselineBwMult: 0.4, peakBwMult: 3.0 },
+  scapula:  { distalMassFraction: SEGMENT_MASS_FRACTIONS.upperArm + SEGMENT_MASS_FRACTIONS.forearm + SEGMENT_MASS_FRACTIONS.hand,
+              baselineBwMult: 0.05, peakBwMult: 1.2 },
+};
+
+/** Infer a force-category from a configKey of the form `joint.dof`, where
+ * `joint` may be camelCase (`leftHip`, `rightShoulder`) or lowercase
+ * (`spine`, `neck`, `pelvis`). Review-3 fix: previous regex required a
+ * capital letter after the optional `left|right` prefix, which made
+ * `spine.*`, `neck.*`, `pelvis.*` slip through and produce no force chip. */
+function inferJointForceCategory(configKey: string): JointForceCategory | null {
+  const dot = configKey.indexOf('.');
+  if (dot < 1) return null;
+  let j = configKey.slice(0, dot).toLowerCase();
+  if (j.startsWith('left')) j = j.slice(4);
+  else if (j.startsWith('right')) j = j.slice(5);
+  if (j === 'hip') return 'hip';
+  if (j === 'knee') return 'knee';
+  if (j === 'ankle') return 'ankle';
+  if (j === 'shoulder') return 'shoulder';
+  if (j === 'elbow') return 'elbow';
+  if (j === 'wrist') return 'wrist';
+  if (j === 'neck') return 'neck';
+  if (j === 'pelvis') return 'pelvis';
+  if (j === 'scapula') return 'scapula';
+  if (j === 'spine' || j.startsWith('spine')) return 'spine';
+  return null;
+}
+
+/** Estimate the live joint reaction force (Newtons) at the principal joint
+ * for a Movement Mode drag. Returns null only if the configKey can't be
+ * classified at all (defensive — every DOF in DOF_SPECS maps to a joint).
+ *
+ * Model (intentionally simple — clinician-readable, not a full inverse
+ * dynamics solve; calibration tracked as Task #324 follow-up):
+ *   F_joint  =  m_distal · g  +  k_muscle(progress, painInhibition) · BW · g
+ *
+ * Where:
+ *   - m_distal is the sum of distal-segment masses crossing the joint.
+ *   - k_muscle is a per-joint baseline–peak multiplier ramped by drag
+ *     progress (Δ from neutral baseline / room to ROM limit) and
+ *     attenuated by pain-driven inhibition.
+ */
+function estimateMovementJointReactionForce(
+  configKey: string,
+  baselineValue: number,
+  currentValue: number,
+  activeRomMin: number,
+  activeRomMax: number,
+  bodyWeightKg: number,
+  painInhibitionFactor: number,
+): { joint: JointForceCategory; newtons: number; bwMultiple: number; progress: number } | null {
+  const joint = inferJointForceCategory(configKey);
+  if (!joint) return null;
+  const cfg = JOINT_FORCE_CONFIG[joint];
+  const bw = Math.max(20, bodyWeightKg);
+  const direction: '+' | '-' = currentValue >= baselineValue ? '+' : '-';
+  const targetLimit = direction === '+' ? activeRomMax : activeRomMin;
+  const denom = Math.max(1, Math.abs(targetLimit - baselineValue));
+  const progress = Math.min(1, Math.abs(currentValue - baselineValue) / denom);
+  const inhib = Math.max(0, Math.min(1, painInhibitionFactor));
+  const m_distal_kg = bw * cfg.distalMassFraction;
+  const gravityN = m_distal_kg * GRAVITY_MS2;
+  const k = (cfg.baselineBwMult + (cfg.peakBwMult - cfg.baselineBwMult) * progress) * (1 - 0.5 * inhib);
+  const muscleN = k * bw * GRAVITY_MS2;
+  const newtons = gravityN + muscleN;
+  const bwMultiple = newtons / (bw * GRAVITY_MS2);
+  return { joint, newtons, bwMultiple, progress };
+}
+
+/** Compute live agonist/antagonist activation deltas off the Movement-Mode
+ * neutral baseline (Task #323 — review-2 fix). The baseline is captured
+ * the moment the clinician enters Movement Mode (and refreshed on patient
+ * / archetype change), so activation reflects deviation from neutral
+ * rather than from wherever the user happened to grab the gizmo. */
+function computeMovementMuscleActivation(
+  configKey: string,
+  baselineValue: number,
+  currentValue: number,
+  activeRomMin: number,
+  activeRomMax: number,
+  painInhibitionFactor: number,
+): MuscleActivationLevels | null {
+  // Task #323 — review-3 fix: when the joint hasn't meaningfully moved off
+  // its Movement-Mode entry baseline (delta < ~0.5°), return null so neither
+  // agonist nor antagonist receives any highlight. Without this, the
+  // antagonist co-contraction floor (0.15) painted muscles even at progress
+  // = 0, contradicting the "unchanged stays un-highlighted" requirement.
+  const delta = Math.abs(currentValue - baselineValue);
+  if (delta < 0.5) return null;
+  const direction: '+' | '-' = currentValue >= baselineValue ? '+' : '-';
+  const lookupKey = `${configKey}${direction}`;
+  const map = MOVEMENT_MUSCLE_AGONISTS[lookupKey];
+  if (!map) return null;
+  const side: 'left' | 'right' = configKey.startsWith('left') ? 'left' : 'right';
+  const targetLimit = direction === '+' ? activeRomMax : activeRomMin;
+  const denom = Math.max(1, Math.abs(targetLimit - baselineValue));
+  const progress = Math.min(1, delta / denom);
+  const agonistLevel = Math.max(0, progress * (1 - 0.6 * painInhibitionFactor));
+  // Antagonist co-contraction scales from 0 with progress (no floor at
+  // baseline) so muscles that haven't been recruited stay un-highlighted.
+  const antagonistLevel = Math.min(0.6, 0.55 * progress + 0.3 * painInhibitionFactor * progress);
+  const out: MuscleActivationLevels = {};
+  for (const m of map.agonists) {
+    out[m] = { ...(out[m] ?? { left: 0, right: 0 }), [side]: agonistLevel } as { left: number; right: number };
+  }
+  for (const m of map.antagonists) {
+    out[m] = { ...(out[m] ?? { left: 0, right: 0 }), [side]: antagonistLevel } as { left: number; right: number };
+  }
+  return out;
+}
+
+const JOINT_MOVEMENT_DEFS: Record<string, MovementArrowDef[]> = {
+  // Hip: signed abduction (-45..45) and signed internalRotation (-45..45) are
+  // each a single DOF — the second arrow uses scale: -1 to drive the same key
+  // in the opposite direction. flexion and extension are SEPARATE DOFs.
+  leftHip: [
+    { configKey: 'leftHip.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.5 },
+    { configKey: 'leftHip.extension',        label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.5 },
+    { configKey: 'leftHip.abduction',        label: 'Abd',  direction: [-1, 0, 0],        sensitivity: 0.5 },
+    { configKey: 'leftHip.abduction',        label: 'Add',  direction: [1, 0, 0],         sensitivity: 0.5, scale: -1 },
+    { configKey: 'leftHip.internalRotation', label: 'IR',   direction: [0.7, -0.5, 0.3],  sensitivity: 0.5 },
+    { configKey: 'leftHip.internalRotation', label: 'ER',   direction: [-0.7, -0.5, 0.3], sensitivity: 0.5, scale: -1 },
+  ],
+  rightHip: [
+    { configKey: 'rightHip.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.5 },
+    { configKey: 'rightHip.extension',        label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.5 },
+    { configKey: 'rightHip.abduction',        label: 'Abd',  direction: [1, 0, 0],         sensitivity: 0.5 },
+    { configKey: 'rightHip.abduction',        label: 'Add',  direction: [-1, 0, 0],        sensitivity: 0.5, scale: -1 },
+    { configKey: 'rightHip.internalRotation', label: 'IR',   direction: [-0.7, -0.5, 0.3], sensitivity: 0.5 },
+    { configKey: 'rightHip.internalRotation', label: 'ER',   direction: [0.7, -0.5, 0.3],  sensitivity: 0.5, scale: -1 },
+  ],
+  // Knee: only 'flexion' DOF in the registry (range -10..140 covers
+  // recurvatum). The Ext arrow simply drags the same DOF in reverse.
+  leftKnee: [
+    { configKey: 'leftKnee.flexion', label: 'Flex', direction: [0, 0, -1], sensitivity: 0.6 },
+    { configKey: 'leftKnee.flexion', label: 'Ext',  direction: [0, 0, 1],  sensitivity: 0.6, scale: -1 },
+  ],
+  rightKnee: [
+    { configKey: 'rightKnee.flexion', label: 'Flex', direction: [0, 0, -1], sensitivity: 0.6 },
+    { configKey: 'rightKnee.flexion', label: 'Ext',  direction: [0, 0, 1],  sensitivity: 0.6, scale: -1 },
+  ],
+  // Ankle: dorsi/plantar and inversion/eversion are SEPARATE DOFs in the
+  // registry (each unsigned 0..max).
+  leftAnkle: [
+    { configKey: 'leftAnkle.dorsiflexion',   label: 'DF',  direction: [0, 0.5, 1],  sensitivity: 0.4 },
+    { configKey: 'leftAnkle.plantarflexion', label: 'PF',  direction: [0, -0.5, 1], sensitivity: 0.4 },
+    { configKey: 'leftAnkle.inversion',      label: 'Inv', direction: [1, 0, 0],    sensitivity: 0.4 },
+    { configKey: 'leftAnkle.eversion',       label: 'Ev',  direction: [-1, 0, 0],   sensitivity: 0.4 },
+  ],
+  rightAnkle: [
+    { configKey: 'rightAnkle.dorsiflexion',   label: 'DF',  direction: [0, 0.5, 1],  sensitivity: 0.4 },
+    { configKey: 'rightAnkle.plantarflexion', label: 'PF',  direction: [0, -0.5, 1], sensitivity: 0.4 },
+    { configKey: 'rightAnkle.inversion',      label: 'Inv', direction: [-1, 0, 0],   sensitivity: 0.4 },
+    { configKey: 'rightAnkle.eversion',       label: 'Ev',  direction: [1, 0, 0],    sensitivity: 0.4 },
+  ],
+  // Shoulder: flexion (-180..180) and abduction (-180..180) are each signed
+  // single DOFs. IR and ER are SEPARATE DOFs. The DOF model has no horizontal
+  // ab/adduction key, so no H.Abd/H.Add arrows are exposed.
+  leftShoulder: [
+    { configKey: 'leftShoulder.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.7 },
+    { configKey: 'leftShoulder.flexion',          label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'leftShoulder.abduction',        label: 'Abd',  direction: [-1, 0, 0],        sensitivity: 0.7 },
+    { configKey: 'leftShoulder.abduction',        label: 'Add',  direction: [1, 0, 0],         sensitivity: 0.7, scale: -1 },
+    { configKey: 'leftShoulder.internalRotation', label: 'IR',   direction: [0.6, -0.5, 0.6],  sensitivity: 0.5 },
+    { configKey: 'leftShoulder.externalRotation', label: 'ER',   direction: [-0.6, -0.5, 0.6], sensitivity: 0.5 },
+  ],
+  rightShoulder: [
+    { configKey: 'rightShoulder.flexion',          label: 'Flex', direction: [0, 0, 1],         sensitivity: 0.7 },
+    { configKey: 'rightShoulder.flexion',          label: 'Ext',  direction: [0, 0, -1],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'rightShoulder.abduction',        label: 'Abd',  direction: [1, 0, 0],         sensitivity: 0.7 },
+    { configKey: 'rightShoulder.abduction',        label: 'Add',  direction: [-1, 0, 0],        sensitivity: 0.7, scale: -1 },
+    { configKey: 'rightShoulder.internalRotation', label: 'IR',   direction: [-0.6, -0.5, 0.6], sensitivity: 0.5 },
+    { configKey: 'rightShoulder.externalRotation', label: 'ER',   direction: [0.6, -0.5, 0.6],  sensitivity: 0.5 },
+  ],
+  // Elbow: only flexion (0..145) and signed pronation (-90..90) DOFs.
+  leftElbow: [
+    { configKey: 'leftElbow.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.5 },
+    { configKey: 'leftElbow.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.5, scale: -1 },
+    { configKey: 'leftElbow.pronation', label: 'Pro',  direction: [1, 0, 0],  sensitivity: 0.4 },
+    { configKey: 'leftElbow.pronation', label: 'Sup',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+  ],
+  rightElbow: [
+    { configKey: 'rightElbow.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.5 },
+    { configKey: 'rightElbow.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.5, scale: -1 },
+    { configKey: 'rightElbow.pronation', label: 'Pro',  direction: [-1, 0, 0], sensitivity: 0.4 },
+    { configKey: 'rightElbow.pronation', label: 'Sup',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+  ],
+  leftWrist: [
+    { configKey: 'leftWrist.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.4 },
+    { configKey: 'leftWrist.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+    { configKey: 'leftWrist.deviation', label: 'Rad',  direction: [-1, 0, 0], sensitivity: 0.3 },
+    { configKey: 'leftWrist.deviation', label: 'Uln',  direction: [1, 0, 0],  sensitivity: 0.3, scale: -1 },
+  ],
+  rightWrist: [
+    { configKey: 'rightWrist.flexion',   label: 'Flex', direction: [0, 0, 1],  sensitivity: 0.4 },
+    { configKey: 'rightWrist.flexion',   label: 'Ext',  direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+    { configKey: 'rightWrist.deviation', label: 'Rad',  direction: [1, 0, 0],  sensitivity: 0.3 },
+    { configKey: 'rightWrist.deviation', label: 'Uln',  direction: [-1, 0, 0], sensitivity: 0.3, scale: -1 },
+  ],
+  pelvis: [
+    { configKey: 'pelvis.tilt',      label: 'AntTilt',  direction: [0, 0, 1],      sensitivity: 0.3 },
+    { configKey: 'pelvis.tilt',      label: 'PostTilt', direction: [0, 0, -1],     sensitivity: 0.3, scale: -1 },
+    { configKey: 'pelvis.obliquity', label: 'Obl L',    direction: [-1, 0, 0],     sensitivity: 0.3 },
+    { configKey: 'pelvis.obliquity', label: 'Obl R',    direction: [1, 0, 0],      sensitivity: 0.3, scale: -1 },
+    { configKey: 'pelvis.rotation',  label: 'Rot L',    direction: [-0.7, 0, 0.7], sensitivity: 0.3 },
+    { configKey: 'pelvis.rotation',  label: 'Rot R',    direction: [0.7, 0, 0.7],  sensitivity: 0.3, scale: -1 },
+  ],
+  // Spine: only DOFs that exist in the canonical registry are exposed.
+  // (No spine.lateralFlexion key — see DOF_SPECS — so no LatFx arrows.)
+  spine: [
+    { configKey: 'spine.lumbarLordosis',   label: 'Flex',  direction: [0, 0, 1],  sensitivity: 0.3, scale: -1 },
+    { configKey: 'spine.lumbarLordosis',   label: 'Ext',   direction: [0, 0, -1], sensitivity: 0.3 },
+    { configKey: 'spine.thoracicRotation', label: 'Rot L', direction: [-1, 0, 0], sensitivity: 0.4 },
+    { configKey: 'spine.thoracicRotation', label: 'Rot R', direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+  ],
+  neck: [
+    { configKey: 'neck.flexion',        label: 'Flex',    direction: [0, 0, 1],      sensitivity: 0.3 },
+    { configKey: 'neck.extension',      label: 'Ext',     direction: [0, 0, -1],     sensitivity: 0.3 },
+    { configKey: 'neck.rotation',       label: 'Rot L',   direction: [-1, 0, 0],     sensitivity: 0.4 },
+    { configKey: 'neck.rotation',       label: 'Rot R',   direction: [1, 0, 0],      sensitivity: 0.4, scale: -1 },
+    { configKey: 'neck.lateralFlexion', label: 'LatFx L', direction: [-0.6, 0.6, 0], sensitivity: 0.3 },
+    { configKey: 'neck.lateralFlexion', label: 'LatFx R', direction: [0.6, 0.6, 0],  sensitivity: 0.3, scale: -1 },
+  ],
+};
+
+// Bone-segment morphology controls (Task #212).
+// Anchored to the midpoint of the long bone, these arrows drive the
+// "structural" DOFs that describe bone shape (anteversion / torsion)
+// or limb alignment (genu varum/valgum, coxa vara/valga). They live in
+// a separate registry from JOINT_MOVEMENT_DEFS so bone-morphology arrows
+// never collide with joint-movement arrows for the adjacent joint.
+export type BoneSegmentId =
+  | 'leftFemur'  | 'rightFemur'
+  | 'leftTibia'  | 'rightTibia'
+  | 'leftHumerus' | 'rightHumerus';
+
+export interface BoneSegmentSpec {
+  id: BoneSegmentId;
+  label: string;
+  side: 'L' | 'R';
+  proximalBone: string;
+  distalBone: string;
+  /** GLB bone names that resolve to this segment when the user clicks. */
+  pickBones: string[];
+  morphology: MovementArrowDef[];
+}
+
+export const BONE_SEGMENT_SPECS: BoneSegmentSpec[] = [
+  {
+    id: 'leftFemur', label: 'L Femur', side: 'L',
+    proximalBone: 'Hip_L', distalBone: 'Knee_L',
+    pickBones: ['Hip_L', 'HipPart1_L'],
+    morphology: [
+      { configKey: 'leftHip.anteversion',    label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'leftHip.anteversion',    label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'leftHip.neckShaftAngle', label: 'Valga', direction: [-1, 0, 0], sensitivity: 0.4 },
+      { configKey: 'leftHip.neckShaftAngle', label: 'Vara',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightFemur', label: 'R Femur', side: 'R',
+    proximalBone: 'Hip_R', distalBone: 'Knee_R',
+    pickBones: ['Hip_R', 'HipPart1_R'],
+    morphology: [
+      { configKey: 'rightHip.anteversion',    label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'rightHip.anteversion',    label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'rightHip.neckShaftAngle', label: 'Valga', direction: [1, 0, 0],  sensitivity: 0.4 },
+      { configKey: 'rightHip.neckShaftAngle', label: 'Vara',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'leftTibia', label: 'L Tibia', side: 'L',
+    proximalBone: 'Knee_L', distalBone: 'Ankle_L',
+    pickBones: ['Knee_L'],
+    morphology: [
+      { configKey: 'leftKnee.tibialTorsion', label: 'ExtTor', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'leftKnee.tibialTorsion', label: 'IntTor', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'leftKnee.varus',         label: 'Valgus', direction: [-1, 0, 0], sensitivity: 0.4 },
+      { configKey: 'leftKnee.varus',         label: 'Varus',  direction: [1, 0, 0],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightTibia', label: 'R Tibia', side: 'R',
+    proximalBone: 'Knee_R', distalBone: 'Ankle_R',
+    pickBones: ['Knee_R'],
+    morphology: [
+      { configKey: 'rightKnee.tibialTorsion', label: 'ExtTor', direction: [0, 0, 1],  sensitivity: 0.4 },
+      { configKey: 'rightKnee.tibialTorsion', label: 'IntTor', direction: [0, 0, -1], sensitivity: 0.4, scale: -1 },
+      { configKey: 'rightKnee.varus',         label: 'Valgus', direction: [1, 0, 0],  sensitivity: 0.4 },
+      { configKey: 'rightKnee.varus',         label: 'Varus',  direction: [-1, 0, 0], sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'leftHumerus', label: 'L Humerus', side: 'L',
+    proximalBone: 'Shoulder_L', distalBone: 'Elbow_L',
+    pickBones: ['Shoulder_L', 'ShoulderPart1_L'],
+    morphology: [
+      { configKey: 'leftShoulder.retroversion', label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4 },
+      { configKey: 'leftShoulder.retroversion', label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+  {
+    id: 'rightHumerus', label: 'R Humerus', side: 'R',
+    proximalBone: 'Shoulder_R', distalBone: 'Elbow_R',
+    pickBones: ['Shoulder_R', 'ShoulderPart1_R'],
+    morphology: [
+      { configKey: 'rightShoulder.retroversion', label: 'Retro', direction: [0, 0, -1], sensitivity: 0.4 },
+      { configKey: 'rightShoulder.retroversion', label: 'Antev', direction: [0, 0, 1],  sensitivity: 0.4, scale: -1 },
+    ],
+  },
+];
+
+const BONE_SEGMENT_BY_PICK_BONE: Record<string, BoneSegmentSpec> = (() => {
+  const m: Record<string, BoneSegmentSpec> = {};
+  for (const spec of BONE_SEGMENT_SPECS) {
+    for (const b of spec.pickBones) m[b] = spec;
+  }
+  return m;
+})();
+
+const BONE_SEGMENT_BY_ID: Record<BoneSegmentId, BoneSegmentSpec> = (() => {
+  const m = {} as Record<BoneSegmentId, BoneSegmentSpec>;
+  for (const spec of BONE_SEGMENT_SPECS) m[spec.id] = spec;
+  return m;
+})();
+
+function getJointKeyFromBone(boneName: string): string | null {
+  const cfg = POSE_BONE_MAP[boneName];
+  if (!cfg) return null;
+  return cfg.configKey.split('.')[0];
+}
+
 export default function PureThreeGLBViewer({ 
   modelPath = '/models/rigged-skeleton.glb',
   modelConfig,
@@ -2240,6 +2847,8 @@ export default function PureThreeGLBViewer({
   muscleStates,
   highlightRegions,
   highlightBoneNames,
+  pulseAtFailureBeat,
+  failureBoneSet,
   painMarkers = [],
   onPainMarkerAdd,
   onPainMarkerMove,
@@ -2251,8 +2860,17 @@ export default function PureThreeGLBViewer({
   enableRomMode = false,
   onRomJointSelect,
   selectedRomJointId = null,
+  enableJointZoomMode = false,
+  onJointZoomSelect,
   enablePoseMode = false,
   onModelConfigChange,
+  skeletonMode = 'posture',
+  activeCapacities = null,
+  onActiveMovementAttempt,
+  onPainfulArcFlare,
+  onPoseDragChange,
+  selectedBoneSegmentId: selectedBoneSegmentIdProp,
+  onSelectedBoneSegmentChange,
   enableZoomTool = false,
   onLandmarkSelect,
   forceOverlay = null,
@@ -2279,15 +2897,21 @@ export default function PureThreeGLBViewer({
   tissueViewOverlay,
   onTissueBoneClick,
   biomechanicsFaultHighlights,
+  tissueIntelligenceHighlights,
   slingPathwayVisualization,
   onSlingLabelClick,
   onModelLoadProgress,
   onModelReady,
   onModelLoadError,
   goalStateOverlay = null,
+  treatmentMarker,
 }: PureThreeGLBViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'checking' | 'loading' | 'ready' | 'error'>('checking');
+  // Bumps when the GLB model finishes loading so dependent effects (e.g. tissue overlays)
+  // re-run once bones become available — guarantees first-load rendering when highlights
+  // were already provided before the model was ready.
+  const [modelReadyTick, setModelReadyTick] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [loadProgress, setLoadProgress] = useState(0);
   const [hoverData, setHoverData] = useState<HoverData | null>(null);
@@ -2327,6 +2951,10 @@ export default function PureThreeGLBViewer({
   const biomechanicalHighlightRef = useRef<{ mesh: THREE.Mesh; origMaterial: THREE.Material; wasVisible: boolean }[]>([]);
   const highlightOverlaysRef = useRef<THREE.Mesh[]>([]);
   const chainHighlightOverlaysRef = useRef<THREE.Mesh[]>([]);
+  const tissueOverlayGroupRef = useRef<THREE.Group | null>(null);
+  const tissueFadedMaterialsRef = useRef<Array<{ mesh: THREE.Mesh; origMaterial: THREE.Material | THREE.Material[] }>>([]);
+  const tissueOverlayUpdatersRef = useRef<Array<() => void>>([]);
+  const tissueOverlayRafRef = useRef<number | null>(null);
   const fascialChainGroupRef = useRef<THREE.Group | null>(null);
   const slingPathwayGroupRef = useRef<THREE.Group | null>(null);
   const slingLabelSpritesRef = useRef<THREE.Sprite[]>([]);
@@ -2348,7 +2976,13 @@ export default function PureThreeGLBViewer({
   const treatmentBoneNamesRef = useRef(treatmentBoneNames);
   treatmentBoneNamesRef.current = treatmentBoneNames;
   const treatmentFrameCounter = useRef(0);
-  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[] }>>(new Map());
+  // Task #382 — `cleanRing` is a thin camera-facing ring sprite shown in
+  // Clean mode in place of the bulky translucent `outer` sphere, so multiple
+  // head/neck/shoulder pain markers don't stack into an opaque blob.
+  const painMarkerMeshesRef = useRef<Map<string, { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number }; cleanRing?: THREE.Sprite }>>(new Map());
+  // Task #382 — always-current mirror of the Clean/Detailed preference, read
+  // by mesh-creation code that runs independently of the React render cycle.
+  const painMarkerVizModeRef = useRef<'clean' | 'detailed'>('clean');
   const draggingMarkerRef = useRef<{ id: string; mesh: THREE.Mesh; outerMesh: THREE.Mesh; hasMoved: boolean } | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
@@ -2391,25 +3025,198 @@ export default function PureThreeGLBViewer({
   enableRomModeRef.current = enableRomMode;
   const onRomJointSelectRef = useRef(onRomJointSelect);
   onRomJointSelectRef.current = onRomJointSelect;
+  const enableJointZoomModeRef = useRef(enableJointZoomMode);
+  enableJointZoomModeRef.current = enableJointZoomMode;
+  const onJointZoomSelectRef = useRef(onJointZoomSelect);
+  onJointZoomSelectRef.current = onJointZoomSelect;
+  const jointZoomMeshesRef = useRef<THREE.Mesh[]>([]);
+  const hipPickWarnedRef = useRef<Set<string>>(new Set());
   const romHighlightMeshesRef = useRef<THREE.Mesh[]>([]);
   const enablePoseModeRef = useRef(enablePoseMode);
   enablePoseModeRef.current = enablePoseMode;
   const onModelConfigChangeRef = useRef(onModelConfigChange);
   onModelConfigChangeRef.current = onModelConfigChange;
+  // External bone-segment selection wiring (Task #212). The pose-mode
+  // useEffect reads from selectedBoneSegmentExternalRef each frame so the
+  // 3D selection tracks an externally-controlled value (e.g. from
+  // JointAngleEditor's bone chips), and reports back via the change ref.
+  const selectedBoneSegmentExternalRef = useRef<BoneSegmentId | null | undefined>(selectedBoneSegmentIdProp);
+  selectedBoneSegmentExternalRef.current = selectedBoneSegmentIdProp;
+  const onSelectedBoneSegmentChangeRef = useRef(onSelectedBoneSegmentChange);
+  onSelectedBoneSegmentChangeRef.current = onSelectedBoneSegmentChange;
+  // Set inside the pose-mode useEffect so a prop-driven effect can call it
+  // without re-mounting the whole pose-mode setup.
+  const applyExternalBoneSelectionRef = useRef<((next: BoneSegmentId | null | undefined) => void) | null>(null);
   const modelConfigRef = useRef(modelConfig);
   modelConfigRef.current = modelConfig;
   const [poseModeTooltip, setPoseModeTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null);
+  const [movementSelectedJoint, setMovementSelectedJoint] = useState<{ key: string; x: number; y: number } | null>(null);
+  /** Live painful-arc state — driven by the per-tick gated flag, cleared
+   *  the moment the clinician leaves the painful combination. */
+  const [livePainfulArc, setLivePainfulArc] = useState<{
+    angle: number;
+    intensity: number;
+    movement: string;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null>(null);
+  const lastPainfulArcStateRef = useRef<boolean>(false);
+  /** Cached dominant-agonist length state from the throttled top-movers
+   *  compute, used by the painful-arc loading-mode gate. */
+  const lastDominantLengthStateRef = useRef<'concentric' | 'eccentric' | 'isometric' | null>(null);
+  const [movementMuscleActivation, setMovementMuscleActivation] = useState<MuscleActivationLevels | null>(null);
+  // Task #323: live joint reaction force readout while a Movement Mode drag
+  // is active. Cleared on drag-release / mode-leave so the chip disappears.
+  const [movementJointReactionForce, setMovementJointReactionForce] = useState<{
+    configKey: string;
+    joint: JointForceCategory;
+    newtons: number;
+    bwMultiple: number;
+  } | null>(null);
+  // Task #329: live "Top movers" HUD readout while a Movement Mode drag is
+  // active. Lists the 3-5 muscles whose activation has shifted the most
+  // from the Movement-Mode entry baseline, each carrying its current
+  // activation %, signed delta, length state (concentric / eccentric /
+  // isometric), and a capacity-relative load pill that compares the
+  // muscle's activation against the patient's tested strength % for the
+  // dragged joint movement.
+  const [movementTopMovers, setMovementTopMovers] = useState<{
+    configKey: string;
+    joint: string;
+    movement: string;
+    movers: Array<{
+      id: string;
+      label: string;
+      activation: number;
+      delta: number;
+      lengthPct: number;
+      lengthState: 'concentric' | 'eccentric' | 'isometric';
+      capacityLoadPct: number;
+      capacityStatus: 'safe' | 'near' | 'over';
+    }>;
+  } | null>(null);
+  // Task #323: timestamp of the last muscle/force overlay state push so we
+  // throttle the per-frame compute to ~30Hz (33ms) regardless of mouse-move
+  // event rate. Re-using a ref avoids a re-render every cap check.
+  const lastMovementOverlayPushRef = useRef<number>(0);
+  const lastMovementActivationPushRef = useRef<number>(0);
+  const bodyWeightKgRef = useRef<number>(70);
+  // Task #323 — review-2 fix: snapshot of every DOF value taken when the
+  // clinician enters Movement Mode. Both the muscle-activation legend and
+  // the joint-reaction-force chip diff `currentValue` against this
+  // baseline (rather than the drag-start value) so readings reflect
+  // deviation from neutral, not from wherever the gizmo was grabbed.
+  const movementBaselineMapRef = useRef<Map<string, number>>(new Map());
+  // Task #323 — review-5 fix: full-body baseline activation map captured
+  // from `computeAllMuscleStates(modelConfig)` on Movement Mode entry.
+  // The drag pipeline recomputes the live map and diffs activationPercent
+  // per muscle, producing a delta MuscleStatesMap for the visualization
+  // pipeline — so EVERY Movement Mode DOF (shoulder, spine, neck, etc.)
+  // can light up muscles, not just the hip/knee/ankle subset previously
+  // hard-coded by the heuristic AGONIST table.
+  // Task #323 — review-7 fix: switched from group-averaged baseline
+  // (MuscleStatesMap) to per-muscle baseline (IndividualMuscle keyed by
+  // muscle id) so the live overlay can find the dominant-delta muscle
+  // per meshGroup and surface ITS state, instead of an average that
+  // cancels antagonists (e.g. biceps + triceps in `bicep_l`) and a
+  // dilution from off-joint muscles (e.g. wrist flex/ext also in
+  // `bicep_l`) — which is why elbow flexion didn't light up biceps.
+  const movementBaselineMuscleStatesRef = useRef<MuscleStatesMap | null>(null);
+  const movementBaselineMusclesRef = useRef<Record<string, IndividualMuscle> | null>(null);
+  // Task #323 — review-7 fix: bone-positioned glow markers for muscle
+  // groups that have NO matching split mesh in the loaded GLB (e.g.
+  // bicep_l/bicep_r — the model has no biceps mesh, only torso/leg
+  // muscles, so the mesh-paint pipeline can't surface elbow→biceps
+  // activation). For each such group we drop a colored sphere at the
+  // averaged world position of its bones so the clinician still sees
+  // the muscle "light up" on the skeleton itself.
+  const movementMuscleGlowsRef = useRef<THREE.Mesh[]>([]);
+  // Live overlay produced from baseline-vs-current activation diffs while
+  // a Movement Mode drag is in progress. Cleared on drag-release / mode
+  // exit. Drives the muscle visualization useEffect below.
+  const [movementMuscleStatesOverlay, setMovementMuscleStatesOverlay] = useState<MuscleStatesMap | null>(null);
   const poseDragRef = useRef<{
-    boneName: string;
     configKey: string;
     startX: number;
     startY: number;
     startValue: number;
-    axis: 'x' | 'y' | 'z';
+    screenDirX: number;
+    screenDirY: number;
     scale: number;
     sensitivity: number;
     label: string;
+    min: number;
+    max: number;
+    activeRow?: {
+      activeRomMin: number;
+      activeRomMax: number;
+      passiveRomMax: number;
+      painfulArc?: {
+        start: number;
+        end: number;
+        intensity: number;
+        direction?: 'ascending' | 'descending' | 'either';
+        loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+        label?: string;
+      } | null;
+      painInhibitionFactor?: number;
+      activeStrengthPct?: number;
+    } | null;
+    lastValue?: number;
+    attemptedExceeded?: boolean;
+    lastPainfulArc?: boolean;
+    compensationsTriggered?: string[];
+    /** Pre-drag values for primary configKey + compensation targets —
+     *  used for Movement-Mode spring-back on mouseUp. `undefined` means
+     *  no spring-back (Posture Mode, or double-click-locked joint). */
+    springBackValues?: Record<string, number>;
   } | null>(null);
+  // Movement Mode hold-to-test (Task #319): joints whose primary configKey
+  // is in this set are exempt from spring-back when the user releases the
+  // mouse — the value persists like Posture Mode. Toggle via double-click.
+  const [lockedMovementConfigKeys, setLockedMovementConfigKeys] = useState<Set<string>>(() => new Set());
+  const lockedMovementConfigKeysRef = useRef(lockedMovementConfigKeys);
+  lockedMovementConfigKeysRef.current = lockedMovementConfigKeys;
+  const skeletonModeRef = useRef(skeletonMode);
+  skeletonModeRef.current = skeletonMode;
+  // Keep the body weight ref in sync so the THREE useEffect closure (which
+  // owns the drag pipeline) can read the latest patient weight without
+  // re-mounting the entire pose-mode setup on weight changes (Task #323).
+  bodyWeightKgRef.current = bodyWeightKg ?? 70;
+  const activeCapacitiesRef = useRef(activeCapacities);
+  activeCapacitiesRef.current = activeCapacities;
+  const onActiveMovementAttemptRef = useRef(onActiveMovementAttempt);
+  onActiveMovementAttemptRef.current = onActiveMovementAttempt;
+  const onPainfulArcFlareRef = useRef(onPainfulArcFlare);
+  onPainfulArcFlareRef.current = onPainfulArcFlare;
+  const onPoseDragChangeRef = useRef(onPoseDragChange);
+  onPoseDragChangeRef.current = onPoseDragChange;
+  const movementSettleTimerRef = useRef<number | null>(null);
+  const pendingMovementAttemptRef = useRef<Parameters<NonNullable<typeof onActiveMovementAttempt>>[0] | null>(null);
+  // Task #321: per-frame screen-projected anchor for the currently-selected
+  // Movement Mode joint, so the slider HUD chip follows the camera without
+  // forcing the whole viewer to re-render on every frame. Updated inside
+  // animateGlows; nulled when no joint is selected or mode != 'movement'.
+  const selectedJointAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  // Task #321: imperative API exposed by the THREE setup so the slider HUD
+  // can drive the same poseDragRef pipeline as the 3D arrow drag (constraint,
+  // friction, painful arc, exceeded-limit, compensation chain, spring-back,
+  // movement-attempt settle).
+  const sliderHudApiRef = useRef<{
+    getCurrentValue: (configKey: string) => number;
+    beginDrag: (configKey: string) => void;
+    applyValue: (configKey: string, targetRaw: number) => void;
+    endDrag: () => void;
+    /** Task #322: imperative dismiss for the slider HUD. */
+    deselect: () => void;
+  } | null>(null);
+  // Task #322: stable handle to the THREE renderer's canvas element so
+  // the slider HUD's click-outside listener can recognize clicks that
+  // landed on the 3D canvas (and defer to the canvas's own mousedown
+  // handler, which already does the right thing — pick a new joint,
+  // start an arrow drag, or background-deselect).
+  const canvasElRef = useRef<HTMLCanvasElement | null>(null);
   const poseSelectedBoneRef = useRef<string | null>(null);
   const poseHighlightMeshRef = useRef<THREE.Mesh | null>(null);
   const [muscleHoverInfo, setMuscleHoverInfo] = useState<{ groupId: string; label: string; screenX: number; screenY: number } | null>(null);
@@ -2963,6 +3770,188 @@ export default function PureThreeGLBViewer({
     }
   }, [highlightBoneNames, biomechanicsFaultHighlights]);
 
+  // Task #376 — Treatment Mode 3D primitives: contact dot at the targeted
+  // bone + capsule shell (sized to capsular saturation) + ghost bone-glide
+  // sphere offset by live mechanical translation + line-of-drive
+  // ArrowHelper that oscillates at the technique frequency.
+  const treatmentOverlayRef = useRef<{
+    objects: THREE.Object3D[];
+    rafId: number | null;
+    contactDot: THREE.Mesh | null;
+    arrow: THREE.ArrowHelper | null;
+    glideGhost: THREE.Mesh | null;
+    capsuleShell: THREE.Mesh | null;
+    basePos: THREE.Vector3;
+    axisVec: THREE.Vector3;
+    arrowLen: number;
+    frequencyHz: number;
+    amplitudeM: number;
+    glideOffset: THREE.Vector3;
+  }>({
+    objects: [], rafId: null, contactDot: null, arrow: null, glideGhost: null,
+    capsuleShell: null, basePos: new THREE.Vector3(), axisVec: new THREE.Vector3(0, 0, 1),
+    arrowLen: 0, frequencyHz: 0, amplitudeM: 0, glideOffset: new THREE.Vector3(),
+  });
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+    const ref = treatmentOverlayRef.current;
+    if (ref.rafId != null) {
+      cancelAnimationFrame(ref.rafId);
+      ref.rafId = null;
+    }
+    for (const obj of ref.objects) {
+      scene.remove(obj);
+      const m = obj as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose?.();
+      const mat = m.material;
+      if (mat instanceof THREE.Material) mat.dispose();
+    }
+    ref.objects = [];
+    ref.contactDot = null; ref.arrow = null; ref.glideGhost = null; ref.capsuleShell = null;
+    if (!treatmentMarker || !treatmentMarker.active || !model) return;
+
+    const bones = bonesRef.current;
+    const bone = bones[treatmentMarker.boneName];
+    if (!bone) return;
+    model.updateMatrixWorld(true);
+
+    const worldPos = new THREE.Vector3();
+    bone.getWorldPosition(worldPos);
+    ref.basePos.copy(worldPos);
+
+    const axisVec = new THREE.Vector3(
+      treatmentMarker.axis.x || 0,
+      treatmentMarker.axis.y || 0,
+      treatmentMarker.axis.z || 0,
+    );
+    if (axisVec.lengthSq() < 1e-6) axisVec.set(0, 0, 1);
+    axisVec.normalize();
+    ref.axisVec.copy(axisVec);
+
+    const gradeMax = treatmentMarker.gradeSystem === 'kaltenborn' ? 3 : 5;
+    const gradeFrac = Math.max(1, Math.min(gradeMax, treatmentMarker.grade)) / gradeMax;
+    const arrowLen = 0.15 + gradeFrac * 0.25;
+    ref.arrowLen = arrowLen;
+    ref.frequencyHz = Math.max(0, treatmentMarker.frequencyHz ?? 0);
+    ref.amplitudeM = Math.max(0, treatmentMarker.amplitudeM ?? 0);
+    const t = treatmentMarker.translationM;
+    ref.glideOffset.set(t?.x ?? 0, t?.y ?? 0, t?.z ?? 0);
+    const sat = Math.max(0, Math.min(1, treatmentMarker.capsularSaturation ?? 0));
+
+    // Capsule shell — translucent ellipsoid that grows + shifts amber→red as
+    // the live capsular saturation climbs (>0.85 ≈ end-feel reached).
+    const shellRadius = 0.10 + sat * 0.06;
+    const shellColor = new THREE.Color().lerpColors(
+      new THREE.Color(0x60a5fa),
+      new THREE.Color(0xef4444),
+      sat,
+    ).getHex();
+    const shellGeo = new THREE.SphereGeometry(shellRadius, 24, 16);
+    const shellMat = new THREE.MeshBasicMaterial({
+      color: shellColor, transparent: true, opacity: 0.18,
+      depthWrite: false, depthTest: true, side: THREE.DoubleSide, wireframe: true,
+    });
+    const shell = new THREE.Mesh(shellGeo, shellMat);
+    shell.position.copy(worldPos);
+    shell.renderOrder = 996;
+    scene.add(shell);
+    ref.objects.push(shell);
+    ref.capsuleShell = shell;
+
+    // Bone-glide ghost — faded blue sphere offset by the live mechanical
+    // translation; visualises where the distal segment "wants" to go.
+    if (ref.glideOffset.lengthSq() > 1e-8) {
+      const ghostGeo = new THREE.SphereGeometry(0.05, 18, 14);
+      const ghostMat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa, transparent: true, opacity: 0.5,
+        depthWrite: false, depthTest: false,
+      });
+      const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+      ghost.position.copy(worldPos).add(ref.glideOffset);
+      ghost.renderOrder = 999;
+      scene.add(ghost);
+      ref.objects.push(ghost);
+      ref.glideGhost = ghost;
+    }
+
+    // Contact dot — small amber sphere at the contact point.
+    const dotGeo = new THREE.SphereGeometry(0.04, 16, 12);
+    const dotMat = new THREE.MeshBasicMaterial({
+      color: 0xffb020, transparent: true, opacity: 0.95,
+      depthTest: false, depthWrite: false,
+    });
+    const dot = new THREE.Mesh(dotGeo, dotMat);
+    dot.position.copy(worldPos);
+    dot.renderOrder = 1000;
+    scene.add(dot);
+    ref.objects.push(dot);
+    ref.contactDot = dot;
+
+    // Line-of-drive ArrowHelper — colour cools→warms with grade.
+    const arrowColor = new THREE.Color().lerpColors(
+      new THREE.Color(0x22c1a3),
+      new THREE.Color(0xef4444),
+      gradeFrac,
+    ).getHex();
+    const arrow = new THREE.ArrowHelper(
+      axisVec, worldPos, arrowLen, arrowColor,
+      arrowLen * 0.28, arrowLen * 0.18,
+    );
+    (arrow.line.material as THREE.LineBasicMaterial).depthTest = false;
+    (arrow.cone.material as THREE.MeshBasicMaterial).depthTest = false;
+    arrow.renderOrder = 1001;
+    arrow.traverse(o => { (o as any).renderOrder = 1001; });
+    scene.add(arrow);
+    ref.objects.push(arrow);
+    ref.arrow = arrow;
+
+    // Oscillation loop — pulses contact-dot scale + arrow length at the
+    // technique frequency. Stops if frequencyHz ≤ 0 (sustained hold).
+    if (ref.frequencyHz > 0) {
+      const tmp = new THREE.Vector3();
+      const animate = (now: number) => {
+        const t = now / 1000;
+        const phase = Math.sin(2 * Math.PI * ref.frequencyHz * t);
+        // Contact dot breathes 0.85..1.15 with the oscillation.
+        if (ref.contactDot) {
+          const s = 1 + 0.15 * phase;
+          ref.contactDot.scale.setScalar(s);
+        }
+        // Arrow head slides ±amplitude along axis to convey live oscillation.
+        if (ref.arrow) {
+          tmp.copy(ref.axisVec).multiplyScalar(ref.amplitudeM * 0.5 * phase);
+          ref.arrow.position.copy(ref.basePos).add(tmp);
+          const liveLen = ref.arrowLen * (1 + 0.2 * phase);
+          ref.arrow.setLength(liveLen, liveLen * 0.28, liveLen * 0.18);
+        }
+        ref.rafId = requestAnimationFrame(animate);
+      };
+      ref.rafId = requestAnimationFrame(animate);
+    }
+    return () => {
+      if (ref.rafId != null) {
+        cancelAnimationFrame(ref.rafId);
+        ref.rafId = null;
+      }
+    };
+  }, [
+    treatmentMarker?.active,
+    treatmentMarker?.boneName,
+    treatmentMarker?.axis.x,
+    treatmentMarker?.axis.y,
+    treatmentMarker?.axis.z,
+    treatmentMarker?.grade,
+    treatmentMarker?.gradeSystem,
+    treatmentMarker?.frequencyHz,
+    treatmentMarker?.amplitudeM,
+    treatmentMarker?.capsularSaturation,
+    treatmentMarker?.translationM?.x,
+    treatmentMarker?.translationM?.y,
+    treatmentMarker?.translationM?.z,
+    modelReadyTick,
+  ]);
+
   useEffect(() => {
     const overlays = chainHighlightOverlaysRef.current;
     const hasPulse = overlays.some(m => m.userData.isMechanismPulse);
@@ -2985,6 +3974,437 @@ export default function PureThreeGLBViewer({
     pulseFrameId = requestAnimationFrame(animatePulse);
     return () => cancelAnimationFrame(pulseFrameId);
   }, [highlightBoneNames, biomechanicsFaultHighlights]);
+
+  // Tissue-specific procedural overlays — replaces the generic "inflammation cloud".
+  // Renders tissue-anchored geometry (tubes for tendons/ligaments, polylines for nerves,
+  // rings for joints/labrum/menisci, spheres for focal points, sheets for fascia/retinacula)
+  // and fades superficial muscles when a deep tissue is highlighted.
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const { scene, model } = sceneRef.current;
+
+    const cleanupGroup = tissueOverlayGroupRef.current;
+    if (cleanupGroup) {
+      cleanupGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+          child.geometry?.dispose();
+          if (child.material instanceof THREE.Material) child.material.dispose();
+        }
+        if (child instanceof THREE.Sprite) {
+          child.material.map?.dispose();
+          child.material.dispose();
+        }
+      });
+      scene.remove(cleanupGroup);
+      tissueOverlayGroupRef.current = null;
+    }
+    for (const entry of tissueFadedMaterialsRef.current) {
+      const cur = entry.mesh.material;
+      entry.mesh.material = entry.origMaterial;
+      if (cur && cur !== entry.origMaterial) {
+        if (Array.isArray(cur)) cur.forEach(m => m.dispose());
+        else (cur as THREE.Material).dispose();
+      }
+    }
+    tissueFadedMaterialsRef.current = [];
+    tissueOverlayUpdatersRef.current = [];
+    if (tissueOverlayRafRef.current != null) {
+      cancelAnimationFrame(tissueOverlayRafRef.current);
+      tissueOverlayRafRef.current = null;
+    }
+
+    if (!tissueIntelligenceHighlights || tissueIntelligenceHighlights.length === 0 || !model) return;
+
+    model.updateMatrixWorld(true);
+    const bRef = bonesRef.current;
+    const overlayGroup = new THREE.Group();
+    overlayGroup.name = '__tissue_overlay_group';
+    overlayGroup.renderOrder = 990;
+    scene.add(overlayGroup);
+    tissueOverlayGroupRef.current = overlayGroup;
+
+    // Resolve a bone's world position, applying any offset in the bone's LOCAL frame
+    // (so offsets follow the bone's rotation as the skeleton animates rather than
+    // drifting along world axes).
+    const worldOf = (boneName: string, offset?: [number, number, number]): THREE.Vector3 | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      if (!offset) {
+        const v = new THREE.Vector3();
+        b.getWorldPosition(v);
+        return v;
+      }
+      const local = new THREE.Vector3(offset[0], offset[1], offset[2]);
+      return b.localToWorld(local);
+    };
+    const worldQuatOf = (boneName: string): THREE.Quaternion | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      const q = new THREE.Quaternion();
+      b.getWorldQuaternion(q);
+      return q;
+    };
+
+    const buildLabelSprite = (text: string, color: number): THREE.Sprite | null => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      const css = '#' + color.toString(16).padStart(6, '0');
+      ctx.fillStyle = 'rgba(15,15,25,0.85)';
+      ctx.beginPath(); ctx.roundRect(4, 4, 248, 56, 10); ctx.fill();
+      ctx.strokeStyle = css; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(4, 4, 248, 56, 10); ctx.stroke();
+      ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const short = text.length > 26 ? text.slice(0, 24) + '…' : text;
+      ctx.fillText(short, 128, 32);
+      const tex = new THREE.CanvasTexture(canvas); tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(0.14, 0.035, 1);
+      sp.renderOrder = 999;
+      return sp;
+    };
+
+    let anyDeep = false;
+
+    for (const h of tissueIntelligenceHighlights) {
+      if (h.isDeep) anyDeep = true;
+      const recipe = TISSUE_ANCHOR_CATALOGUE[h.tissueId];
+      const palette = paletteForState(h.healingStage, h.irritability, h.severity);
+      const color = h.colorOverride ?? palette.color;
+      const opacity = palette.opacity;
+      const emissive = palette.emissive;
+
+      const matFactory = () => new THREE.MeshStandardMaterial({
+        color, emissive: new THREE.Color(color), emissiveIntensity: emissive,
+        transparent: true, opacity, depthWrite: false, depthTest: true,
+        roughness: 0.4, metalness: 0.1,
+      });
+
+      let anchorPos: THREE.Vector3 | null = null;
+      const built: THREE.Object3D[] = [];
+
+      // Each primitive registers an updater so its transform tracks live bone positions
+      // every frame. Geometry is built once; only position/rotation/scale are updated.
+      const updaters = tissueOverlayUpdatersRef.current;
+      let labelAnchorFn: (() => THREE.Vector3 | null) | null = null;
+
+      const addTubeBetween = (from: string, to: string, radius: number, fromOff?: [number, number, number], toOff?: [number, number, number], asSheet?: number) => {
+        const a0 = worldOf(from, fromOff); const b0 = worldOf(to, toOff);
+        if (!a0 || !b0 || a0.distanceTo(b0) < 1e-4) return null;
+        const geo = asSheet
+          ? new THREE.PlaneGeometry(asSheet, 1)
+          : new THREE.CylinderGeometry(radius, radius, 1, 12, 1, true);
+        const mat = matFactory();
+        if (asSheet) mat.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(geo, mat);
+        const update = () => {
+          const a = worldOf(from, fromOff); const b = worldOf(to, toOff);
+          if (!a || !b) { mesh.visible = false; return; }
+          const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
+          if (len < 1e-4) { mesh.visible = false; return; }
+          mesh.visible = true;
+          mesh.position.copy(a).add(b).multiplyScalar(0.5);
+          mesh.scale.set(1, len, 1);
+          mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        };
+        update(); updaters.push(update);
+        built.push(mesh);
+        return new THREE.Vector3().addVectors(a0, b0).multiplyScalar(0.5);
+      };
+
+      // Single-bone primitives (rings/spheres). The mesh's local rotation (from axis hints)
+      // is captured once and re-applied on top of the bone's world quaternion every frame
+      // so the ring stays oriented relative to the moving bone.
+      const addAtBone = (bone: string, offset: [number, number, number] | undefined, mesh: THREE.Mesh) => {
+        const c0 = worldOf(bone, offset);
+        if (!c0) return null;
+        const localRot = mesh.quaternion.clone();
+        const update = () => {
+          const c = worldOf(bone, offset);
+          if (!c) { mesh.visible = false; return; }
+          mesh.visible = true;
+          mesh.position.copy(c);
+          const q = worldQuatOf(bone);
+          if (q) mesh.quaternion.copy(q).multiply(localRot);
+        };
+        update(); updaters.push(update);
+        built.push(mesh);
+        return c0;
+      };
+
+      if (recipe) {
+        const s = recipe.shape;
+        if (s.kind === 'tube_between') {
+          const mid = addTubeBetween(s.from, s.to, s.radius, s.fromOffset, s.toOffset);
+          if (mid) {
+            anchorPos = mid;
+            labelAnchorFn = () => {
+              const a = worldOf(s.from, s.fromOffset); const b = worldOf(s.to, s.toOffset);
+              return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null;
+            };
+          }
+        } else if (s.kind === 'polyline') {
+          for (let i = 0; i < s.bones.length - 1; i++) {
+            addTubeBetween(s.bones[i], s.bones[i + 1], s.thickness, s.offset, s.offset);
+          }
+          const midBone = s.bones[Math.floor(s.bones.length / 2)];
+          labelAnchorFn = () => worldOf(midBone, s.offset);
+          anchorPos = labelAnchorFn();
+        } else if (s.kind === 'sheet') {
+          const mid = addTubeBetween(s.from, s.to, 0, s.offset, s.offset, s.width);
+          if (mid) {
+            anchorPos = mid;
+            labelAnchorFn = () => {
+              const a = worldOf(s.from, s.offset); const b = worldOf(s.to, s.offset);
+              return (a && b) ? a.clone().add(b).multiplyScalar(0.5) : null;
+            };
+          }
+        } else if (s.kind === 'ring' || s.kind === 'crescent') {
+          const isCrescent = s.kind === 'crescent';
+          const arc = isCrescent ? (s.arc ?? Math.PI) : Math.PI * 2;
+          const ringOffset = s.kind === 'ring' ? s.offset : undefined;
+          const geo = new THREE.TorusGeometry(s.radius, s.thickness, 10, isCrescent ? 24 : 32, arc);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          if (s.axis === 'x') mesh.rotation.y = Math.PI / 2;
+          else if (s.axis === 'z') mesh.rotation.x = Math.PI / 2;
+          const c0 = addAtBone(s.at, ringOffset, mesh);
+          if (c0) { anchorPos = c0; labelAnchorFn = () => worldOf(s.at, ringOffset); }
+        } else if (s.kind === 'sphere_at') {
+          const geo = new THREE.SphereGeometry(s.radius, 16, 12);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          const c0 = addAtBone(s.at, s.offset, mesh);
+          if (c0) { anchorPos = c0; labelAnchorFn = () => worldOf(s.at, s.offset); }
+        }
+      }
+
+      // Fallback: no catalogue recipe (or none built). Drop a labelled generic ring on the
+      // first available bone. PhysioGPT additionally emits a bone-glow entry through the
+      // highlightBoneNames pipeline so visibility never regresses for catalogue gaps.
+      if (built.length === 0) {
+        for (const bn of h.bones) {
+          const c0 = worldOf(bn);
+          if (!c0) continue;
+          const geo = new THREE.TorusGeometry(0.045, 0.006, 8, 24);
+          const mesh = new THREE.Mesh(geo, matFactory());
+          built.push(mesh);
+          const update = () => {
+            const c = worldOf(bn);
+            if (!c) { mesh.visible = false; return; }
+            mesh.visible = true; mesh.position.copy(c);
+          };
+          update(); updaters.push(update);
+          labelAnchorFn = () => worldOf(bn);
+          anchorPos = c0;
+          break;
+        }
+      }
+
+      for (const obj of built) {
+        obj.userData.tissueId = h.tissueId;
+        obj.renderOrder = 990;
+        overlayGroup.add(obj);
+      }
+
+      if (anchorPos && labelAnchorFn) {
+        const sprite = buildLabelSprite(`${h.label} · ${palette.stageLabel}`, color);
+        if (sprite) {
+          sprite.position.copy(anchorPos).add(new THREE.Vector3(0, 0.06, 0));
+          overlayGroup.add(sprite);
+          const lf = labelAnchorFn;
+          const upd = () => { const p = lf(); if (p) sprite.position.copy(p).add(new THREE.Vector3(0, 0.06, 0)); };
+          updaters.push(upd);
+        }
+      }
+    }
+
+    // Trigger pips — small flashing spheres that appear on bones whose current pose
+    // matches an aggravator predicate, so the user can SEE which scenarios the
+    // highlighted tissue would dislike.
+    type PipEntry = {
+      mesh: THREE.Mesh;
+      mat: THREE.MeshBasicMaterial;
+      anchor: string;
+      evaluate: () => boolean;
+    };
+    const pipEntries: PipEntry[] = [];
+
+    const worldPos = (boneName: string): THREE.Vector3 | null => {
+      const b = bRef[boneName];
+      if (!b) return null;
+      const v = new THREE.Vector3();
+      b.getWorldPosition(v);
+      return v;
+    };
+    const angleAtVertex = (a: string, b: string, c: string): number | null => {
+      const A = worldPos(a); const B = worldPos(b); const C = worldPos(c);
+      if (!A || !B || !C) return null;
+      const v1 = A.clone().sub(B); const v2 = C.clone().sub(B);
+      if (v1.lengthSq() < 1e-6 || v2.lengthSq() < 1e-6) return null;
+      return THREE.MathUtils.radToDeg(v1.angleTo(v2));
+    };
+    // Deviation (in degrees) of the from->to bone vector from world up.
+    // For an upright skeleton, Root_M->Spine1_M and Neck_M->Head_M point up, so
+    // neutral posture returns ~0° and any tilt/lean grows the value.
+    const verticalDeviation = (from: string, to: string): number | null => {
+      const A = worldPos(from); const B = worldPos(to);
+      if (!A || !B) return null;
+      const dir = B.clone().sub(A);
+      if (dir.lengthSq() < 1e-6) return null;
+      return THREE.MathUtils.radToDeg(dir.angleTo(new THREE.Vector3(0, 1, 0)));
+    };
+
+    const evalPredicate = (
+      p: NonNullable<NonNullable<typeof tissueIntelligenceHighlights>[number]['aggravators']>[number]['predicate']
+    ): boolean => {
+      if (!p) return false;
+      switch (p.kind) {
+        case 'always': return true;
+        case 'shoulderAbductionAbove': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Shoulder_${p.side}`, `Elbow_${p.side}`);
+          return a != null && a > p.threshold;
+        }
+        case 'kneeFlexionAbove': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Knee_${p.side}`, `Ankle_${p.side}`);
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'kneeFlexionBelow': {
+          const a = angleAtVertex(`Hip_${p.side}`, `Knee_${p.side}`, `Ankle_${p.side}`);
+          return a != null && (180 - a) < p.threshold;
+        }
+        case 'hipFlexionAbove': {
+          const a = angleAtVertex('Spine1_M', `Hip_${p.side}`, `Knee_${p.side}`);
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'spineFlexionAbove': {
+          const a = angleAtVertex('Root_M', 'Spine1_M', 'Neck_M');
+          // At rest a ≈ 180; flexion forward decreases it.
+          return a != null && (180 - a) > p.threshold;
+        }
+        case 'spineExtensionAbove': {
+          // Trunk deviation from upright (lumbar facet load grows with extension/lean)
+          const tilt = verticalDeviation('Root_M', 'Spine1_M');
+          return tilt != null && tilt > p.threshold;
+        }
+        case 'forwardHeadAbove': {
+          // Head-vector deviation from upright; neutral ≈ 0, forward-head grows
+          const a = verticalDeviation('Neck_M', 'Head_M');
+          return a != null && a > p.threshold;
+        }
+      }
+    };
+
+    for (const h of tissueIntelligenceHighlights) {
+      if (!h.aggravators) continue;
+      const palette = paletteForState(h.healingStage, h.irritability, h.severity);
+      // Scale pip size + max-opacity by irritability so high-irritability tissues
+      // produce more visually obvious triggers.
+      const irrScale = h.irritability === 'high' ? 1.6 : h.irritability === 'moderate' ? 1.2 : 1.0;
+      const pipRadius = 0.018 * irrScale;
+      const opacityCap = Math.min(1, 0.55 + (h.irritability === 'high' ? 0.4 : h.irritability === 'moderate' ? 0.25 : 0.1));
+      for (const ag of h.aggravators) {
+        if (!ag.predicate || !ag.boneAnchor) continue;
+        const anchorPos0 = worldPos(ag.boneAnchor);
+        if (!anchorPos0) continue;
+        const geo = new THREE.SphereGeometry(pipRadius, 12, 10);
+        const mat = new THREE.MeshBasicMaterial({
+          color: palette.color,
+          transparent: true,
+          opacity: 0,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const pip = new THREE.Mesh(geo, mat);
+        pip.renderOrder = 998;
+        pip.position.copy(anchorPos0).add(new THREE.Vector3(0, 0.04, 0));
+        pip.userData.tissueId = h.tissueId;
+        pip.userData.aggravator = ag.label;
+        pip.userData.opacityCap = opacityCap;
+        overlayGroup.add(pip);
+        const anchorBone = ag.boneAnchor;
+        const predicate = ag.predicate;
+        pipEntries.push({
+          mesh: pip,
+          mat,
+          anchor: anchorBone,
+          evaluate: () => evalPredicate(predicate),
+        });
+      }
+    }
+
+    // Per-frame transform updater — keeps every primitive glued to its bone(s) as the
+    // skeleton animates, and flashes trigger pips whose predicate currently matches.
+    const tick = () => {
+      const updaters = tissueOverlayUpdatersRef.current;
+      for (let i = 0; i < updaters.length; i++) updaters[i]();
+      const tNow = performance.now();
+      const flash = 0.55 + 0.45 * Math.sin(tNow * 0.012);
+      for (const e of pipEntries) {
+        const pos = worldPos(e.anchor);
+        if (pos) e.mesh.position.copy(pos).add(new THREE.Vector3(0, 0.04, 0));
+        const active = e.evaluate();
+        const cap = (e.mesh.userData.opacityCap as number | undefined) ?? 1;
+        e.mat.opacity = active ? flash * cap : 0;
+        e.mesh.visible = active;
+      }
+      tissueOverlayRafRef.current = requestAnimationFrame(tick);
+    };
+    tissueOverlayRafRef.current = requestAnimationFrame(tick);
+
+    // Auto deep-tissue fade — when any highlighted tissue is deep, drop superficial muscle
+    // groups to ~0.25 opacity so the deep structures aren't occluded.
+    if (anyDeep && splitMuscleGroupsRef.current.size > 0) {
+      for (const [groupId, group] of Array.from(splitMuscleGroupsRef.current.entries())) {
+        const isSuperficial = SUPERFICIAL_MUSCLE_PATTERNS.some(p => groupId.toLowerCase().includes(p));
+        if (!isSuperficial) continue;
+        for (const mesh of group.meshes) {
+          if (!(mesh instanceof THREE.Mesh)) continue;
+          const orig = mesh.material;
+          if (Array.isArray(orig)) continue;
+          const cloned = (orig as THREE.MeshStandardMaterial).clone();
+          cloned.transparent = true;
+          cloned.opacity = 0.25;
+          cloned.depthWrite = false;
+          cloned.needsUpdate = true;
+          tissueFadedMaterialsRef.current.push({ mesh, origMaterial: orig });
+          mesh.material = cloned;
+        }
+      }
+    }
+    return () => {
+      if (tissueOverlayRafRef.current != null) {
+        cancelAnimationFrame(tissueOverlayRafRef.current);
+        tissueOverlayRafRef.current = null;
+      }
+      tissueOverlayUpdatersRef.current = [];
+      const grp = tissueOverlayGroupRef.current;
+      if (grp) {
+        grp.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+            child.geometry?.dispose();
+            if (child.material instanceof THREE.Material) child.material.dispose();
+          }
+          if (child instanceof THREE.Sprite) {
+            child.material.map?.dispose();
+            child.material.dispose();
+          }
+        });
+        scene.remove(grp);
+        tissueOverlayGroupRef.current = null;
+      }
+      for (const entry of tissueFadedMaterialsRef.current) {
+        const cur = entry.mesh.material;
+        entry.mesh.material = entry.origMaterial;
+        if (cur && cur !== entry.origMaterial) {
+          if (Array.isArray(cur)) cur.forEach(m => m.dispose());
+          else (cur as THREE.Material).dispose();
+        }
+      }
+      tissueFadedMaterialsRef.current = [];
+    };
+  }, [tissueIntelligenceHighlights, modelReadyTick]);
 
   useEffect(() => {
     if (!sceneRef.current) return;
@@ -3091,13 +4511,13 @@ export default function PureThreeGLBViewer({
       for (let i = 0; i < positions.length; i++) {
         const tension = tensionValues[i];
         const deviation = Math.abs(tension - 50) / 50;
-        const nodeSize = 0.025 + deviation * 0.04;
+        const nodeSize = 0.012 + deviation * 0.02;
         const nodeGeo = new THREE.SphereGeometry(nodeSize, 10, 8);
         const nodeColor = isPainChain ? new THREE.Color('#ff4444') : chainColor;
         const nodeMat = new THREE.MeshBasicMaterial({
           color: nodeColor,
           transparent: true,
-          opacity: 0.4 + deviation * 0.5,
+          opacity: 0.25 + deviation * 0.35,
           depthWrite: false,
         });
         const node = new THREE.Mesh(nodeGeo, nodeMat);
@@ -3130,20 +4550,15 @@ export default function PureThreeGLBViewer({
           }
         }
 
-        if (deviation > 0.3) {
-          const glowGeo = new THREE.SphereGeometry(nodeSize * 2.5, 8, 6);
-          const glowMat = new THREE.MeshBasicMaterial({
-            color: isPainChain ? new THREE.Color('#ff0000') : chainColor,
-            transparent: true,
-            opacity: deviation * 0.2,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-          });
-          const glow = new THREE.Mesh(glowGeo, glowMat);
-          glow.position.copy(positions[i]);
-          glow.renderOrder = 989;
-          group.add(glow);
-        }
+        // Task #399 — the per-node "glow halo" sphere (nodeSize * 2.5
+        // translucent ball at every high-deviation muscle bone) was the
+        // primary source of the cloud overlay reported by clinicians on
+        // chain selection. The chain's muscles are now painted on the
+        // body via the existing muscle-mesh highlight pipeline
+        // (chainMuscleHighlights → mergedMuscleHighlightColors), which
+        // colour-paints the actual muscle GLB groups instead of stacking
+        // translucent spheres. The chain pathway line, node dots,
+        // propagation rings, tubes and flow dots remain.
       }
 
       for (let i = 0; i < positions.length - 1; i++) {
@@ -3152,14 +4567,14 @@ export default function PureThreeGLBViewer({
         if (segDeviation > 0.25 || isPainChain) {
           const effDeviation = isPainChain ? Math.max(segDeviation, 0.3) : segDeviation;
           const mid = new THREE.Vector3().lerpVectors(positions[i], positions[i + 1], 0.5);
-          const tubeRadius = 0.008 + effDeviation * 0.015;
+          const tubeRadius = 0.004 + effDeviation * 0.008;
           const dir = new THREE.Vector3().subVectors(positions[i + 1], positions[i]);
           const segLen = dir.length();
           const tubeGeo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, segLen, 6, 1);
           const tubeMat = new THREE.MeshBasicMaterial({
             color: isPainChain ? new THREE.Color('#ff4444') : chainColor,
             transparent: true,
-            opacity: 0.15 + effDeviation * 0.3,
+            opacity: 0.08 + effDeviation * 0.18,
             depthWrite: false,
           });
           const tube = new THREE.Mesh(tubeGeo, tubeMat);
@@ -3312,6 +4727,26 @@ export default function PureThreeGLBViewer({
         return heatColor;
       };
 
+      // Status-driven sling style. The sling's overall status takes
+      // precedence over the per-segment activation gradient when a clinician is
+      // looking for "is this sling functional?" answers. Mapping:
+      //  - normal       → solid emerald  (#10b981)
+      //  - compensating → solid amber    (#f59e0b)
+      //  - underperforming → dashed orange (#f97316)
+      //  - overloaded   → thick (tube) red (#ef4444)
+      // Weak-link segments still render dashed regardless of overall status.
+      const STATUS_HEX = {
+        normal: 0x10b981,
+        compensating: 0xf59e0b,
+        underperforming: 0xf97316,
+        overloaded: 0xef4444,
+      } as const;
+      const slingStatusColor = STATUS_HEX[sling.status as keyof typeof STATUS_HEX] ?? colorHex;
+      const slingStatusThree = new THREE.Color(slingStatusColor);
+      const isUnderperforming = sling.status === 'underperforming';
+      const isOverloaded = sling.status === 'overloaded';
+      const isCompensating = sling.status === 'compensating';
+
       for (let seg = 0; seg < positions.length - 1; seg++) {
         const segStart = positions[seg];
         const segEnd = positions[seg + 1];
@@ -3322,9 +4757,22 @@ export default function PureThreeGLBViewer({
         const seg0Data = getSegmentActivation(seg);
         const seg1Data = getSegmentActivation(seg + 1);
 
-        if (isWeakSeg && !isDimmed) {
-          const dashCount = 6;
-          const weakOpacity = isActive ? 0.7 : 0.4;
+        // Main ribbon path is strictly status-coloured so the sling's overall
+        // state reads at a glance. Activation heat is preserved only on weak
+        // segments (where it actually pinpoints the weakness) and as a very
+        // subtle tint on overloaded ribbons.
+        const segColorFor = (interpAct: number, interpFound: boolean): THREE.Color => {
+          if (isWeakSeg) {
+            return activationToColor(interpAct, interpFound).lerp(slingStatusThree, 0.5);
+          }
+          return slingStatusThree.clone();
+        };
+
+        const renderAsDashed = isWeakSeg || isUnderperforming;
+
+        if (renderAsDashed && !isDimmed) {
+          const dashCount = isUnderperforming ? 8 : 6;
+          const weakOpacity = isActive ? 0.85 : 0.55;
           for (let d = 0; d < dashCount; d++) {
             const t0 = (d * 2) / (dashCount * 2);
             const t1 = (d * 2 + 1) / (dashCount * 2);
@@ -3334,7 +4782,7 @@ export default function PureThreeGLBViewer({
             const interpAct = seg0Data.activation + (seg1Data.activation - seg0Data.activation) * segT;
             const interpFound = segT < 0.5 ? seg0Data.found : seg1Data.found;
             const dashMat = new THREE.LineBasicMaterial({
-              color: activationToColor(interpAct, interpFound),
+              color: segColorFor(interpAct, interpFound),
               opacity: weakOpacity,
               transparent: true,
               depthTest: false,
@@ -3343,6 +4791,23 @@ export default function PureThreeGLBViewer({
             dashLine.renderOrder = 997;
             group.add(dashLine);
           }
+        } else if (isOverloaded && !isDimmed) {
+          // Render overloaded segments as a thick tube so the visual weight
+          // matches the clinical urgency. Three.js LineBasicMaterial.linewidth
+          // is capped at 1 on most GL implementations, so we use TubeGeometry.
+          const tubePath = new THREE.CatmullRomCurve3([segStart, segEnd], false, 'catmullrom', 0.5);
+          const tubeRadius = isActive ? 0.012 : 0.009;
+          const tubeGeom = new THREE.TubeGeometry(tubePath, 12, tubeRadius, 8, false);
+          const tubeMat = new THREE.MeshBasicMaterial({
+            color: slingStatusColor,
+            opacity: isActive ? 0.85 : 0.6,
+            transparent: true,
+            depthTest: false,
+            side: THREE.DoubleSide,
+          });
+          const tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
+          tubeMesh.renderOrder = 997;
+          group.add(tubeMesh);
         } else {
           const subSegCount = 6;
           for (let ss = 0; ss < subSegCount; ss++) {
@@ -3355,8 +4820,8 @@ export default function PureThreeGLBViewer({
             const interpAct = seg0Data.activation + (seg1Data.activation - seg0Data.activation) * segT;
             const interpFound = segT < 0.5 ? seg0Data.found : seg1Data.found;
             const ssMat = new THREE.LineBasicMaterial({
-              color: activationToColor(interpAct, interpFound),
-              opacity: isDimmed ? 0.15 : isActive ? 0.9 : 0.5,
+              color: segColorFor(interpAct, interpFound),
+              opacity: isDimmed ? 0.15 : isActive ? 0.9 : (isCompensating ? 0.7 : 0.5),
               transparent: true,
               depthTest: false,
             });
@@ -3422,16 +4887,21 @@ export default function PureThreeGLBViewer({
           midPt.z += 0.03;
 
           const arrowCurve = new THREE.QuadraticBezierCurve3(fromPos, midPt, toPos);
-          const arrowPts = arrowCurve.getPoints(16);
+          const arrowPts = arrowCurve.getPoints(24);
           const arrowGeom = new THREE.BufferGeometry().setFromPoints(arrowPts);
-          const arrowOpacity = isDimmed ? 0.12 : isActive ? 0.85 : 0.5;
-          const arrowMat = new THREE.LineBasicMaterial({
+          const arrowOpacity = isDimmed ? 0.12 : isActive ? 0.9 : 0.55;
+          // Reroute arrows render dashed to differentiate "force is
+          // being detoured" from a normal flow line.
+          const arrowMat = new THREE.LineDashedMaterial({
             color: 0xff8800,
+            dashSize: 0.022,
+            gapSize: 0.014,
             opacity: arrowOpacity,
             transparent: true,
             depthTest: false,
           });
           const arrowLine = new THREE.Line(arrowGeom, arrowMat);
+          arrowLine.computeLineDistances();
           arrowLine.renderOrder = 998;
           group.add(arrowLine);
 
@@ -3502,15 +4972,18 @@ export default function PureThreeGLBViewer({
         let dotColor = statusColor;
         let dotSize = isActive ? 0.012 : 0.008;
 
-        if (isActive && isOverloaded) {
+        // Weak/overloaded/compensating bone markers stay visibly distinct even
+        // when the sling is not the actively selected one, so a clinician can
+        // spot the failing link at a glance across all dysfunctional slings.
+        if (isOverloaded) {
           dotColor = 0xff3300;
-          dotSize = 0.018;
-        } else if (isActive && isWeak) {
+          dotSize = isActive ? 0.018 : 0.014;
+        } else if (isWeak) {
           dotColor = 0xff4444;
-          dotSize = 0.006;
-        } else if (isActive && isComp) {
+          dotSize = isActive ? 0.012 : 0.010;
+        } else if (isComp) {
           dotColor = 0xffcc00;
-          dotSize = 0.015;
+          dotSize = isActive ? 0.015 : 0.012;
         }
 
         const dotGeom = new THREE.SphereGeometry(dotSize, 8, 8);
@@ -3686,6 +5159,7 @@ export default function PureThreeGLBViewer({
     }
 
     const slingMidpoints = new Map<string, THREE.Vector3>();
+    const slingBonePositions = new Map<string, THREE.Vector3[]>();
     for (const sl of slingPathwayVisualization.slings) {
       const slPositions: THREE.Vector3[] = [];
       for (const bn of sl.bonePathway) {
@@ -3699,105 +5173,123 @@ export default function PureThreeGLBViewer({
       if (slPositions.length > 0) {
         const mid = slPositions[Math.floor(slPositions.length / 2)].clone();
         slingMidpoints.set(sl.id, mid);
+        slingBonePositions.set(sl.id, slPositions);
       }
     }
 
     const activeSlingId = slingPathwayVisualization.activeSlingId;
     const crossComps = slingPathwayVisualization.crossSlingCompensations ?? [];
+    const slingById = new Map(slingPathwayVisualization.slings.map(sl => [sl.id, sl]));
 
     if (crossComps.length > 0) {
       for (const comp of crossComps) {
         const fromId = comp.compensatedSling;
         const toId = comp.compensatingSling;
+        const fromSling = slingById.get(fromId);
+        const toSling = slingById.get(toId);
+        const fromPositions = slingBonePositions.get(fromId);
+        const toPositions = slingBonePositions.get(toId);
+        if (!fromSling || !toSling || !fromPositions || !toPositions) continue;
 
-        const fromMid = slingMidpoints.get(fromId);
-        const toMid = slingMidpoints.get(toId);
-        if (!fromMid || !toMid) continue;
-        if (fromMid.distanceTo(toMid) < 0.01) continue;
+        // Anchor the arrow at the failing sling's weak-link (or overloaded)
+        // bone, terminate at the compensating sling's load-bearing bone.
+        const fromIdx = (fromSling.weakLinkBoneIndices?.[0]
+          ?? fromSling.overloadedBoneIndices?.[0]
+          ?? Math.floor(fromPositions.length / 2));
+        const toIdx = (toSling.compensatingBoneIndices?.[0]
+          ?? Math.floor(toPositions.length / 2));
+        const fromPt = fromPositions[Math.min(fromIdx, fromPositions.length - 1)];
+        const toPt = toPositions[Math.min(toIdx, toPositions.length - 1)];
+        if (!fromPt || !toPt) continue;
+        if (fromPt.distanceTo(toPt) < 0.01) continue;
 
-        const bridgeInvolvesActive = activeSlingId === null || activeSlingId === fromId || activeSlingId === toId;
-        const bridgeOpacityMul = bridgeInvolvesActive ? 1.0 : 0.15;
+        const involvesActive = activeSlingId === null || activeSlingId === fromId || activeSlingId === toId;
+        const opacityMul = involvesActive ? 1.0 : 0.18;
+        const REROUTE_ORANGE = 0xff8800;
 
-        const bridgeSeverityColor = comp.severity === 'severe' ? 0xff3333
-          : comp.severity === 'moderate' ? 0xffaa00 : 0x4488ff;
+        const dir = toPt.clone().sub(fromPt);
+        const dirLen = dir.length();
+        if (dirLen < 0.001) continue;
+        dir.normalize();
+        const bend = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 0, 1));
+        if (bend.length() > 0.001) bend.normalize().multiplyScalar(0.08);
+        const ctrl = fromPt.clone().lerp(toPt, 0.5).add(bend);
+        ctrl.z += 0.05;
 
-        const bridgeMidPt = fromMid.clone().lerp(toMid, 0.5);
-        const bridgeDir = toMid.clone().sub(fromMid);
-        const bridgeDirLen = bridgeDir.length();
-        if (bridgeDirLen < 0.001) continue;
-        bridgeDir.normalize();
-        const bridgePerp = new THREE.Vector3().crossVectors(bridgeDir, new THREE.Vector3(0, 0, 1));
-        const perpLen = bridgePerp.length();
-        if (perpLen > 0.001) {
-          bridgePerp.normalize();
-          bridgeMidPt.add(bridgePerp.multiplyScalar(0.06));
-        }
-        bridgeMidPt.z += 0.05;
-
-        const bridgeCurve = new THREE.QuadraticBezierCurve3(fromMid, bridgeMidPt, toMid);
-        const dashSegments = 12;
+        const curve = new THREE.QuadraticBezierCurve3(fromPt, ctrl, toPt);
+        const dashSegments = 14;
         for (let d = 0; d < dashSegments; d++) {
-          const dt0 = (d * 2) / (dashSegments * 2);
-          const dt1 = (d * 2 + 1) / (dashSegments * 2);
-          const dp0 = bridgeCurve.getPoint(dt0);
-          const dp1 = bridgeCurve.getPoint(dt1);
-          const bdGeom = new THREE.BufferGeometry().setFromPoints([dp0, dp1]);
-          const bdMat = new THREE.LineBasicMaterial({
-            color: bridgeSeverityColor,
-            opacity: 0.7 * bridgeOpacityMul,
+          const t0 = (d * 2) / (dashSegments * 2);
+          const t1 = (d * 2 + 1) / (dashSegments * 2);
+          const dGeom = new THREE.BufferGeometry().setFromPoints([curve.getPoint(t0), curve.getPoint(t1)]);
+          const dMat = new THREE.LineBasicMaterial({
+            color: REROUTE_ORANGE,
+            opacity: 0.85 * opacityMul,
             transparent: true,
             depthTest: false,
           });
-          const bdLine = new THREE.Line(bdGeom, bdMat);
-          bdLine.renderOrder = 996;
-          group.add(bdLine);
+          const dLine = new THREE.Line(dGeom, dMat);
+          dLine.renderOrder = 996;
+          group.add(dLine);
         }
 
-        const bridgeLabelCanvas = document.createElement('canvas');
-        bridgeLabelCanvas.width = 320;
-        bridgeLabelCanvas.height = 96;
-        const blCtx = bridgeLabelCanvas.getContext('2d');
-        if (blCtx) {
-          blCtx.fillStyle = 'rgba(10, 10, 28, 0.92)';
-          blCtx.beginPath();
-          blCtx.roundRect(2, 2, 316, 92, 10);
-          blCtx.fill();
-          const borderHex = comp.severity === 'severe' ? '#ff3333'
-            : comp.severity === 'moderate' ? '#ffaa00' : '#4488ff';
-          blCtx.strokeStyle = borderHex;
-          blCtx.lineWidth = 2;
-          blCtx.beginPath();
-          blCtx.roundRect(2, 2, 316, 92, 10);
-          blCtx.stroke();
-          blCtx.font = 'bold 16px sans-serif';
-          blCtx.fillStyle = '#cccccc';
-          blCtx.textAlign = 'center';
-          blCtx.textBaseline = 'top';
-          const compLabel = `${comp.compensatingSlingLabel}`;
-          blCtx.fillText(compLabel, 160, 8);
-          blCtx.font = '14px sans-serif';
-          blCtx.fillStyle = '#9ca3af';
-          blCtx.fillText(`compensating for ${comp.compensatedSlingLabel}`, 160, 30);
-          blCtx.font = 'bold 18px sans-serif';
-          blCtx.fillStyle = borderHex;
-          blCtx.fillText(`+${comp.additionalLoadPct}% load`, 160, 52);
-          blCtx.font = '13px sans-serif';
-          blCtx.fillStyle = borderHex;
-          blCtx.fillText(comp.severity.toUpperCase(), 160, 76);
+        // Arrowhead cone at the compensating sling end.
+        const tipBack = curve.getPoint(0.92);
+        const headDir = toPt.clone().sub(tipBack).normalize();
+        const headGeom = new THREE.ConeGeometry(0.018, 0.05, 12);
+        const headMat = new THREE.MeshBasicMaterial({
+          color: REROUTE_ORANGE,
+          transparent: true,
+          opacity: 0.9 * opacityMul,
+          depthTest: false,
+        });
+        const head = new THREE.Mesh(headGeom, headMat);
+        head.position.copy(toPt);
+        head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), headDir);
+        head.renderOrder = 997;
+        group.add(head);
+
+        // Label sprite at the curve apex.
+        const labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 320;
+        labelCanvas.height = 96;
+        const lCtx = labelCanvas.getContext('2d');
+        if (lCtx) {
+          lCtx.fillStyle = 'rgba(10, 10, 28, 0.92)';
+          lCtx.beginPath();
+          lCtx.roundRect(2, 2, 316, 92, 10);
+          lCtx.fill();
+          lCtx.strokeStyle = '#ff8800';
+          lCtx.lineWidth = 2;
+          lCtx.beginPath();
+          lCtx.roundRect(2, 2, 316, 92, 10);
+          lCtx.stroke();
+          lCtx.font = 'bold 16px sans-serif';
+          lCtx.fillStyle = '#ffd9b3';
+          lCtx.textAlign = 'center';
+          lCtx.textBaseline = 'top';
+          lCtx.fillText(comp.compensatingSlingLabel, 160, 8);
+          lCtx.font = '14px sans-serif';
+          lCtx.fillStyle = '#9ca3af';
+          lCtx.fillText(`compensating for ${comp.compensatedSlingLabel}`, 160, 30);
+          lCtx.font = 'bold 18px sans-serif';
+          lCtx.fillStyle = '#ff8800';
+          lCtx.fillText(`+${comp.additionalLoadPct}% load`, 160, 52);
+          lCtx.font = '13px sans-serif';
+          lCtx.fillText(comp.severity.toUpperCase(), 160, 76);
         }
-        const bridgeTexture = new THREE.CanvasTexture(bridgeLabelCanvas);
-        bridgeTexture.needsUpdate = true;
-        const bridgeSpriteMat = new THREE.SpriteMaterial({
-          map: bridgeTexture,
+        const lTex = new THREE.CanvasTexture(labelCanvas);
+        lTex.needsUpdate = true;
+        const lSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: lTex,
           transparent: true,
           depthTest: false,
-          opacity: 0.9 * bridgeOpacityMul,
-        });
-        const bridgeSprite = new THREE.Sprite(bridgeSpriteMat);
-        bridgeSprite.position.copy(bridgeMidPt);
-        bridgeSprite.scale.set(0.16, 0.048, 1);
-        bridgeSprite.renderOrder = 999;
-        group.add(bridgeSprite);
+          opacity: 0.9 * opacityMul,
+        }));
+        lSprite.position.copy(ctrl);
+        lSprite.scale.set(0.16, 0.048, 1);
+        lSprite.renderOrder = 999;
+        group.add(lSprite);
       }
     }
 
@@ -4051,6 +5543,170 @@ export default function PureThreeGLBViewer({
     if (!sceneRef.current) return;
     const { scene } = sceneRef.current;
 
+    const applyPainMarkerSeverity = (
+      meshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; cleanRing?: THREE.Sprite },
+      marker: PainMarker,
+      markerType: string,
+    ) => {
+      const sevRaw = typeof marker.severity === 'number' ? marker.severity : 5;
+      const sev = Math.max(0, Math.min(10, sevRaw));
+      const ghost = sev < 0.5;
+      const s = ghost ? 0.4 : 0.4 + (sev / 10) * 0.8;
+      const o = ghost ? 0.07 : 0.5 + (sev / 10) * 0.5;
+
+      meshes.inner.scale.setScalar(s);
+      const innerMat = meshes.inner.material as THREE.MeshBasicMaterial;
+      const innerBase = (innerMat.userData.baseOpacity as number | undefined) ?? 0.7;
+      innerMat.opacity = innerBase * o;
+      innerMat.transparent = true;
+
+      const baseRadius = (meshes.outer.userData.baseRadius as number | undefined) ?? (markerType === 'area' ? (marker.radius || 0.15) : 0.1);
+      if (markerType === 'area' && marker.radius && baseRadius > 0) {
+        meshes.outer.scale.setScalar((marker.radius / baseRadius) * s);
+      } else {
+        meshes.outer.scale.setScalar(s);
+      }
+      const outerMat = meshes.outer.material as THREE.MeshBasicMaterial;
+      const outerBase = (outerMat.userData.baseOpacity as number | undefined) ?? (markerType === 'area' ? 0.25 : 0.2);
+      outerMat.opacity = outerBase * o;
+      outerMat.transparent = true;
+
+      if (meshes.extra) {
+        for (const obj of meshes.extra) {
+          if (obj instanceof THREE.Mesh) {
+            obj.scale.setScalar(s);
+            const m = obj.material as THREE.MeshBasicMaterial;
+            const base = (m.userData.baseOpacity as number | undefined) ?? m.opacity;
+            m.opacity = base * o;
+            m.transparent = true;
+          } else if (obj instanceof THREE.Line) {
+            const m = obj.material as THREE.LineBasicMaterial;
+            const base = (m.userData.baseOpacity as number | undefined) ?? m.opacity;
+            m.opacity = base * o;
+            m.transparent = true;
+          }
+        }
+      }
+
+      // Task #382 — also scale the Clean-mode ring with severity so the
+      // visual emphasis matches the legacy outer sphere when toggling modes.
+      if (meshes.cleanRing) {
+        const ring = meshes.cleanRing;
+        const ringBase = (ring.userData.baseRadius as number | undefined) ?? 0.1;
+        const radiusForRing = (markerType === 'area' && marker.radius)
+          ? marker.radius
+          : ringBase;
+        const diameter = radiusForRing * 2.1 * s;
+        ring.scale.set(diameter, diameter, 1);
+        const ringMat = ring.material as THREE.SpriteMaterial;
+        const ringBaseOp = (ringMat.userData.baseOpacity as number | undefined) ?? 0.9;
+        ringMat.opacity = ringBaseOp * o;
+        ringMat.transparent = true;
+      }
+    };
+
+    // Task #382 — thin camera-facing ring used in Clean mode in place of the
+    // bulky translucent outer sphere. Sprites auto-billboard to the camera, so
+    // the ring always reads as a flat circle around the marker without baking
+    // any volume into the scene.
+    const buildPainCleanRing = (color: number, radius: number): THREE.Sprite => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const hex = '#' + color.toString(16).padStart(6, '0');
+      if (ctx) {
+        ctx.clearRect(0, 0, 128, 128);
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = hex;
+        ctx.shadowColor = hex;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(64, 64, 56, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        opacity: 0.9,
+      });
+      mat.userData.baseOpacity = 0.9;
+      const sprite = new THREE.Sprite(mat);
+      const diameter = radius * 2.1;
+      sprite.scale.set(diameter, diameter, 1);
+      sprite.userData.baseRadius = radius;
+      return sprite;
+    };
+
+    const buildAiDecoration = (
+      sc: THREE.Scene,
+      markerId: string,
+      pos: THREE.Vector3,
+      baseOuterRadius: number,
+      markerType: string,
+    ): { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number } => {
+      const ringRadius = (markerType === 'area' ? baseOuterRadius : 0.13) * 1.15;
+      const ringSegments = 48;
+      const ringPts: THREE.Vector3[] = [];
+      for (let i = 0; i <= ringSegments; i++) {
+        const a = (i / ringSegments) * Math.PI * 2;
+        ringPts.push(new THREE.Vector3(Math.cos(a) * ringRadius, Math.sin(a) * ringRadius, 0));
+      }
+      const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+      const ringMat = new THREE.LineDashedMaterial({
+        color: 0x22d3ee, dashSize: 0.025, gapSize: 0.018,
+        transparent: true, opacity: 0.85, depthTest: false, depthWrite: false,
+      });
+      ringMat.userData.baseOpacity = 0.85;
+      const ring = new THREE.LineLoop(ringGeo, ringMat);
+      ring.computeLineDistances();
+      ring.position.copy(pos);
+      ring.lookAt(pos.x, pos.y, pos.z + 1);
+      ring.renderOrder = 1002;
+      ring.userData.isPainMarker = true;
+      ring.userData.markerId = markerId;
+      sc.add(ring);
+
+      const aiCanvas = document.createElement('canvas');
+      aiCanvas.width = 96; aiCanvas.height = 48;
+      const aictx = aiCanvas.getContext('2d');
+      if (aictx) {
+        aictx.fillStyle = 'rgba(8, 47, 73, 0.95)';
+        aictx.beginPath(); aictx.roundRect(2, 2, 92, 44, 10); aictx.fill();
+        aictx.strokeStyle = '#22d3ee'; aictx.lineWidth = 2;
+        aictx.beginPath(); aictx.roundRect(2, 2, 92, 44, 10); aictx.stroke();
+        aictx.font = 'bold 24px sans-serif'; aictx.fillStyle = '#67e8f9';
+        aictx.textAlign = 'center'; aictx.textBaseline = 'middle';
+        aictx.fillText('AI', 48, 26);
+      }
+      const aiTex = new THREE.CanvasTexture(aiCanvas);
+      aiTex.needsUpdate = true;
+      const aiMat = new THREE.SpriteMaterial({ map: aiTex, transparent: true, depthTest: false, opacity: 0.95 });
+      const sprite = new THREE.Sprite(aiMat);
+      sprite.position.set(pos.x + ringRadius * 0.95, pos.y + ringRadius * 0.95, pos.z);
+      sprite.scale.set(0.06, 0.03, 1);
+      sprite.renderOrder = 1003;
+      sprite.userData.isPainMarker = true;
+      sprite.userData.markerId = markerId;
+      sc.add(sprite);
+
+      return { ring, sprite, ringRadius };
+    };
+
+    const disposeAiDecoration = (sc: THREE.Scene, dec: { ring: THREE.LineLoop; sprite: THREE.Sprite }) => {
+      sc.remove(dec.ring);
+      dec.ring.geometry.dispose();
+      (dec.ring.material as THREE.Material).dispose();
+      sc.remove(dec.sprite);
+      const sm = dec.sprite.material as THREE.SpriteMaterial;
+      if (sm.map) sm.map.dispose();
+      sm.dispose();
+    };
+
     const existingIds = new Set(painMarkers.map(m => m.id));
     painMarkerMeshesRef.current.forEach((meshes, id) => {
       if (!existingIds.has(id)) {
@@ -4071,6 +5727,13 @@ export default function PureThreeGLBViewer({
               (obj.material as THREE.Material).dispose();
             }
           });
+        }
+        if (meshes.aiDecoration) disposeAiDecoration(scene, meshes.aiDecoration);
+        if (meshes.cleanRing) {
+          scene.remove(meshes.cleanRing);
+          const cm = meshes.cleanRing.material as THREE.SpriteMaterial;
+          if (cm.map) cm.map.dispose();
+          cm.dispose();
         }
         painMarkerMeshesRef.current.delete(id);
       }
@@ -4102,10 +5765,22 @@ export default function PureThreeGLBViewer({
         const meshes = painMarkerMeshesRef.current.get(marker.id)!;
         meshes.inner.position.copy(pos);
         meshes.outer.position.copy(pos);
+        if (meshes.cleanRing) meshes.cleanRing.position.copy(pos);
 
-        if (markerType === 'area' && marker.radius) {
-          const r = marker.radius;
-          meshes.outer.scale.set(r / 0.1, r / 0.1, r / 0.1);
+        const wantsAi = marker.source === 'prediction';
+        if (wantsAi && !meshes.aiDecoration) {
+          const baseRadiusForRing = (meshes.outer.userData.baseRadius as number | undefined) ?? (markerType === 'area' ? (marker.radius || 0.15) : 0.1);
+          meshes.aiDecoration = buildAiDecoration(scene, marker.id, pos, baseRadiusForRing, markerType);
+        } else if (!wantsAi && meshes.aiDecoration) {
+          disposeAiDecoration(scene, meshes.aiDecoration);
+          meshes.aiDecoration = undefined;
+        } else if (wantsAi && meshes.aiDecoration) {
+          meshes.aiDecoration.ring.position.copy(pos);
+          meshes.aiDecoration.sprite.position.set(
+            pos.x + meshes.aiDecoration.ringRadius * 0.95,
+            pos.y + meshes.aiDecoration.ringRadius * 0.95,
+            pos.z,
+          );
         }
 
         if (markerType === 'referred' && marker.referralTarget && meshes.extra && meshes.extra.length >= 3) {
@@ -4149,6 +5824,7 @@ export default function PureThreeGLBViewer({
           } else if (sceneRef.current) {
             const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
             const lineMat = new THREE.LineBasicMaterial({ color: clr, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+            lineMat.userData.baseOpacity = 0.85;
             lineObj = new THREE.Line(lineGeo, lineMat);
             lineObj.renderOrder = 999;
             sceneRef.current.scene.add(lineObj);
@@ -4163,6 +5839,7 @@ export default function PureThreeGLBViewer({
               const pp = marker.paintPoints[i * 2];
               const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
               const dotMat = new THREE.MeshBasicMaterial({ color: clr, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+              dotMat.userData.baseOpacity = 0.4;
               const dotMesh = new THREE.Mesh(dotGeo, dotMat);
               dotMesh.position.set(pp.x, pp.y, pp.z);
               dotMesh.renderOrder = 1000;
@@ -4173,6 +5850,8 @@ export default function PureThreeGLBViewer({
             }
           }
         }
+
+        applyPainMarkerSeverity(meshes, marker, markerType);
         continue;
       }
 
@@ -4186,6 +5865,20 @@ export default function PureThreeGLBViewer({
       const symptomColor = marker.symptomType ? SYMPTOM_TYPES[marker.symptomType]?.color : null;
       const color = symptomColor || MARKER_TYPE_COLORS[markerType] || MARKER_TYPE_COLORS.point;
 
+      // Task #397 — yellow-toned symptom palettes (pins_needles 0xffaa00,
+      // weakness 0xaaaa44, catching 0xddaa44, etc.) render as large
+      // translucent yellow halo spheres on the body when the
+      // refinement parse adds those symptom types after a follow-up
+      // answer. Detect yellowish colours (R+G high, B low, R≈G) and
+      // suppress the outer halo while keeping the inner sphere and
+      // Clean-mode ring so the marker stays visible and selectable.
+      const isYellowTonedColor = (() => {
+        const r = (color >> 16) & 0xff;
+        const g = (color >> 8) & 0xff;
+        const b = color & 0xff;
+        return r >= 160 && g >= 140 && b <= 100 && Math.abs(r - g) <= 90;
+      })();
+
       const innerGeo = new THREE.SphereGeometry(0.06, 16, 12);
       const innerMat = new THREE.MeshBasicMaterial({
         color,
@@ -4195,35 +5888,58 @@ export default function PureThreeGLBViewer({
         depthTest: true,
         side: THREE.DoubleSide,
       });
+      innerMat.userData.baseOpacity = 0.7;
       const innerMesh = new THREE.Mesh(innerGeo, innerMat);
       innerMesh.position.copy(pos);
       innerMesh.renderOrder = 1001;
       innerMesh.userData.isPainMarker = true;
       innerMesh.userData.markerId = marker.id;
+      innerMesh.userData.role = 'inner';
 
       let outerGeo: THREE.BufferGeometry;
+      let baseOuterRadius: number;
       if (markerType === 'area') {
-        const r = marker.radius || 0.15;
-        outerGeo = new THREE.SphereGeometry(r, 20, 14);
+        baseOuterRadius = marker.radius || 0.15;
+        outerGeo = new THREE.SphereGeometry(baseOuterRadius, 20, 14);
       } else {
-        outerGeo = new THREE.SphereGeometry(0.1, 12, 8);
+        baseOuterRadius = 0.1;
+        outerGeo = new THREE.SphereGeometry(baseOuterRadius, 12, 8);
       }
+      const outerBaseOpacity = isYellowTonedColor ? 0 : (markerType === 'area' ? 0.25 : 0.2);
       const outerMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: markerType === 'area' ? 0.25 : 0.2,
+        opacity: outerBaseOpacity,
         depthWrite: false,
         depthTest: true,
         side: THREE.DoubleSide,
+        visible: !isYellowTonedColor,
       });
+      outerMat.userData.baseOpacity = outerBaseOpacity;
       const outerMesh = new THREE.Mesh(outerGeo, outerMat);
       outerMesh.position.copy(pos);
       outerMesh.renderOrder = 1000;
       outerMesh.userData.isPainMarker = true;
       outerMesh.userData.markerId = marker.id;
+      outerMesh.userData.role = 'outer';
+      outerMesh.userData.markerKind = markerType;
+      outerMesh.userData.baseRadius = baseOuterRadius;
 
       scene.add(innerMesh);
       scene.add(outerMesh);
+
+      // Task #382 — build the Clean-mode ring for every marker. Visibility of
+      // the ring vs the legacy `outerMesh` is governed by `painMarkerVizModeRef`
+      // (and a dedicated useEffect on `stressVizMode` that flips it live).
+      const cleanRing = buildPainCleanRing(color, baseOuterRadius);
+      cleanRing.position.copy(pos);
+      cleanRing.renderOrder = 1002;
+      cleanRing.userData.isPainMarker = true;
+      cleanRing.userData.markerId = marker.id;
+      const initialModeIsClean = painMarkerVizModeRef.current === 'clean';
+      cleanRing.visible = initialModeIsClean;
+      outerMesh.visible = !initialModeIsClean;
+      scene.add(cleanRing);
 
       const extraObjects: THREE.Object3D[] = [];
 
@@ -4232,6 +5948,7 @@ export default function PureThreeGLBViewer({
 
         const tInnerGeo = new THREE.SphereGeometry(0.05, 12, 8);
         const tInnerMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
+        tInnerMat.userData.baseOpacity = 0.6;
         const tInnerMesh = new THREE.Mesh(tInnerGeo, tInnerMat);
         tInnerMesh.position.copy(tp);
         tInnerMesh.renderOrder = 1001;
@@ -4240,14 +5957,20 @@ export default function PureThreeGLBViewer({
 
         const tOuterGeo = new THREE.SphereGeometry(0.08, 10, 6);
         const tOuterMat = new THREE.MeshBasicMaterial({ color: 0xcc66ff, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.DoubleSide });
+        tOuterMat.userData.baseOpacity = 0.15;
         const tOuterMesh = new THREE.Mesh(tOuterGeo, tOuterMat);
         tOuterMesh.position.copy(tp);
         tOuterMesh.renderOrder = 1000;
         tOuterMesh.userData.isPainMarker = true;
         tOuterMesh.userData.markerId = marker.id;
+        // Task #382 — tag the referred-target outer sphere so the Clean-mode
+        // visibility toggle can find it without index-guessing into `extra`
+        // (line/paint markers also populate `extra[1]` with legitimate dots).
+        tOuterMesh.userData.role = 'referredTargetOuter';
 
         const lineGeo = new THREE.BufferGeometry().setFromPoints([pos, tp]);
         const lineMat = new THREE.LineDashedMaterial({ color: 0xcc66ff, dashSize: 0.04, gapSize: 0.02, transparent: true, opacity: 0.7, depthTest: true, depthWrite: false });
+        lineMat.userData.baseOpacity = 0.7;
         const line = new THREE.Line(lineGeo, lineMat);
         line.computeLineDistances();
         line.renderOrder = 999;
@@ -4262,6 +5985,7 @@ export default function PureThreeGLBViewer({
         const pts = [pos, ...marker.linePoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
         const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
         const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8, depthTest: true, depthWrite: false, linewidth: 2 });
+        lineMat.userData.baseOpacity = 0.8;
         const line = new THREE.Line(lineGeo, lineMat);
         line.renderOrder = 999;
         scene.add(line);
@@ -4270,6 +5994,7 @@ export default function PureThreeGLBViewer({
         for (const lp of marker.linePoints) {
           const dotGeo = new THREE.SphereGeometry(0.03, 8, 6);
           const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+          dotMat.userData.baseOpacity = 0.5;
           const dotMesh = new THREE.Mesh(dotGeo, dotMat);
           dotMesh.position.set(lp.x, lp.y, lp.z);
           dotMesh.renderOrder = 1001;
@@ -4284,6 +6009,7 @@ export default function PureThreeGLBViewer({
         const pts = [pos, ...marker.paintPoints.map(p => new THREE.Vector3(p.x, p.y, p.z))];
         const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
         const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false, linewidth: 3 });
+        lineMat.userData.baseOpacity = 0.85;
         const line = new THREE.Line(lineGeo, lineMat);
         line.renderOrder = 999;
         scene.add(line);
@@ -4293,6 +6019,7 @@ export default function PureThreeGLBViewer({
         for (const tp of tubePts) {
           const dotGeo = new THREE.SphereGeometry(0.025, 6, 4);
           const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+          dotMat.userData.baseOpacity = 0.4;
           const dotMesh = new THREE.Mesh(dotGeo, dotMat);
           dotMesh.position.copy(tp);
           dotMesh.renderOrder = 1000;
@@ -4303,9 +6030,100 @@ export default function PureThreeGLBViewer({
         }
       }
 
-      painMarkerMeshesRef.current.set(marker.id, { inner: innerMesh, outer: outerMesh, extra: extraObjects.length > 0 ? extraObjects : undefined });
+      const newMeshes: { inner: THREE.Mesh; outer: THREE.Mesh; extra?: THREE.Object3D[]; aiDecoration?: { ring: THREE.LineLoop; sprite: THREE.Sprite; ringRadius: number }; cleanRing?: THREE.Sprite } = {
+        inner: innerMesh,
+        outer: outerMesh,
+        extra: extraObjects.length > 0 ? extraObjects : undefined,
+        cleanRing,
+      };
+      // Task #382 — referred-marker target sphere is also a translucent volume;
+      // hide it in Clean mode to match the source sphere. Found by role tag,
+      // not by index, so line/paint marker dots are unaffected.
+      if (markerType === 'referred') {
+        for (const obj of extraObjects) {
+          if (obj instanceof THREE.Mesh && obj.userData.role === 'referredTargetOuter') {
+            obj.visible = !initialModeIsClean;
+          }
+        }
+      }
+      if (marker.source === 'prediction') {
+        newMeshes.aiDecoration = buildAiDecoration(scene, marker.id, pos, baseOuterRadius, markerType);
+      }
+      painMarkerMeshesRef.current.set(marker.id, newMeshes);
+      applyPainMarkerSeverity(newMeshes, marker, markerType);
     }
   }, [painMarkers]);
+
+  // Failure-beat pulse — when the Sling Failure Movement Visualizer is
+  // showing the failure frame, oscillate scale + opacity of the outer
+  // halo of pain markers anchored on bones in failureBoneSet so the
+  // clinician sees the symptom flash on the same beat as the failure.
+  useEffect(() => {
+    if (!pulseAtFailureBeat || painMarkers.length === 0) return;
+    let raf = 0;
+    const start = performance.now();
+    const baseScales = new Map<string, { inner: THREE.Vector3; outer: THREE.Vector3; outerOpacity: number; ring?: THREE.Vector3; ringOpacity?: number }>();
+    painMarkerMeshesRef.current.forEach((meshes, id) => {
+      baseScales.set(id, {
+        inner: meshes.inner.scale.clone(),
+        outer: meshes.outer.scale.clone(),
+        outerOpacity: (meshes.outer.material as THREE.MeshBasicMaterial).opacity ?? 0.4,
+        ring: meshes.cleanRing?.scale.clone(),
+        ringOpacity: meshes.cleanRing
+          ? (meshes.cleanRing.material as THREE.SpriteMaterial).opacity ?? 0.9
+          : undefined,
+      });
+    });
+    const matchesBone = (markerBone: string | undefined) => {
+      if (!failureBoneSet || failureBoneSet.size === 0) return true;
+      return !!markerBone && failureBoneSet.has(markerBone);
+    };
+    const loop = () => {
+      const t = (performance.now() - start) / 1000;
+      const beat = 0.5 + 0.5 * Math.sin(t * 6.28); // 1 Hz
+      painMarkerMeshesRef.current.forEach((meshes, id) => {
+        const marker = painMarkers.find(m => m.id === id);
+        const base = baseScales.get(id);
+        if (!base) return;
+        if (matchesBone(marker?.nearestBone)) {
+          const k = 1 + 0.45 * beat;
+          meshes.outer.scale.set(base.outer.x * k, base.outer.y * k, base.outer.z * k);
+          meshes.inner.scale.set(base.inner.x * (1 + 0.12 * beat), base.inner.y * (1 + 0.12 * beat), base.inner.z * (1 + 0.12 * beat));
+          const mat = meshes.outer.material as THREE.MeshBasicMaterial;
+          mat.opacity = Math.min(1, base.outerOpacity + 0.45 * beat);
+          mat.needsUpdate = true;
+          // Task #382 — pulse the Clean-mode ring on the same beat so the
+          // failure flash reads even when the legacy cloud is hidden.
+          if (meshes.cleanRing && base.ring && base.ringOpacity !== undefined) {
+            meshes.cleanRing.scale.set(base.ring.x * k, base.ring.y * k, base.ring.z * k);
+            const rmat = meshes.cleanRing.material as THREE.SpriteMaterial;
+            rmat.opacity = Math.min(1, base.ringOpacity + 0.1 * beat);
+            rmat.needsUpdate = true;
+          }
+        }
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      painMarkerMeshesRef.current.forEach((meshes, id) => {
+        const base = baseScales.get(id);
+        if (!base) return;
+        meshes.inner.scale.copy(base.inner);
+        meshes.outer.scale.copy(base.outer);
+        const mat = meshes.outer.material as THREE.MeshBasicMaterial;
+        mat.opacity = base.outerOpacity;
+        mat.needsUpdate = true;
+        if (meshes.cleanRing && base.ring && base.ringOpacity !== undefined) {
+          meshes.cleanRing.scale.copy(base.ring);
+          const rmat = meshes.cleanRing.material as THREE.SpriteMaterial;
+          rmat.opacity = base.ringOpacity;
+          rmat.needsUpdate = true;
+        }
+      });
+    };
+  }, [pulseAtFailureBeat, failureBoneSet, painMarkers]);
 
   useEffect(() => {
     return () => {
@@ -4322,6 +6140,22 @@ export default function PureThreeGLBViewer({
             if (obj instanceof THREE.Mesh) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
             else if (obj instanceof THREE.Line) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
           });
+        }
+        if (meshes.aiDecoration) {
+          const dec = meshes.aiDecoration;
+          if (dec.ring.parent) dec.ring.parent.remove(dec.ring);
+          dec.ring.geometry.dispose();
+          (dec.ring.material as THREE.Material).dispose();
+          if (dec.sprite.parent) dec.sprite.parent.remove(dec.sprite);
+          const sm = dec.sprite.material as THREE.SpriteMaterial;
+          if (sm.map) sm.map.dispose();
+          sm.dispose();
+        }
+        if (meshes.cleanRing) {
+          if (meshes.cleanRing.parent) meshes.cleanRing.parent.remove(meshes.cleanRing);
+          const cm = meshes.cleanRing.material as THREE.SpriteMaterial;
+          if (cm.map) cm.map.dispose();
+          cm.dispose();
         }
       });
       painMarkerMeshesRef.current.clear();
@@ -5022,32 +6856,131 @@ export default function PureThreeGLBViewer({
     };
   }, [enableRomMode, selectedRomJointId]);
 
+  // Unified joint-pick click listener — services BOTH ROM mode and
+  // Task #391 Joint Zoom Mode. Pick targets are tagged with
+  // `userData.pickKind` ('rom' | 'jointZoom') and dispatched to the
+  // appropriate callback. This is the single click pipeline; the
+  // joint-zoom render-side effect just adds its own meshes to the
+  // scene with the right userData.
   useEffect(() => {
-    if (!enableRomMode || !sceneRef.current) return;
+    if (!sceneRef.current) return;
+    if (!enableRomMode && !enableJointZoomMode) return;
     const domElement = sceneRef.current.renderer.domElement;
     const camera = sceneRef.current.camera;
 
     const onClick = (e: MouseEvent) => {
-      if (!enableRomModeRef.current) return;
+      if (!enableRomModeRef.current && !enableJointZoomModeRef.current) return;
       const rect = domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(romHighlightMeshesRef.current, false);
-      if (hits.length > 0) {
-        const jointId = hits[0].object.userData.romJointId;
-        const jointDef = ROM_JOINT_DEFINITIONS.find(j => j.id === jointId);
-        if (jointDef) {
-          onRomJointSelectRef.current?.(jointDef);
-        }
+      const candidates: THREE.Object3D[] = [];
+      if (enableRomModeRef.current) candidates.push(...romHighlightMeshesRef.current);
+      if (enableJointZoomModeRef.current) candidates.push(...jointZoomMeshesRef.current);
+      if (candidates.length === 0) return;
+      const hits = raycasterRef.current.intersectObjects(candidates, false);
+      if (hits.length === 0) return;
+      const ud = hits[0].object.userData;
+      if (ud.romJointId && enableRomModeRef.current) {
+        const jointDef = ROM_JOINT_DEFINITIONS.find(j => j.id === ud.romJointId);
+        if (jointDef) onRomJointSelectRef.current?.(jointDef);
+      } else if (ud.jointZoomSide && enableJointZoomModeRef.current) {
+        onJointZoomSelectRef.current?.(ud.jointZoomSide as 'left' | 'right');
       }
     };
 
     domElement.addEventListener('click', onClick);
     return () => { domElement.removeEventListener('click', onClick); };
-  }, [enableRomMode]);
+  }, [enableRomMode, enableJointZoomMode]);
+
+  // ===== Task #391 — Joint Zoom Mode (hip v1) =====
+  // Renders click-target spheres on Hip_L and Hip_R when enabled, then
+  // raycasts on click and emits 'left' / 'right' to the parent. Kept as
+  // a separate effect from the ROM picker so the two modes can coexist
+  // (e.g. Movement Mode + Joint Zoom).
+  useEffect(() => {
+    if (!sceneRef.current || !enableJointZoomMode) return;
+    const { scene } = sceneRef.current;
+    const bones = bonesRef.current;
+    const hipPicks: Array<{ side: 'left' | 'right'; boneName: string }> = [
+      { side: 'left', boneName: 'Hip_L' },
+      { side: 'right', boneName: 'Hip_R' },
+    ];
+
+    jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+    jointZoomMeshesRef.current = [];
+
+    // Decide whether the model is actually loaded. `modelReadyTick > 0`
+    // means the GLB load callback has populated `bonesRef.current`. If
+    // it hasn't yet, bail silently — this effect will re-run when the
+    // tick advances. If the model IS loaded but expected hip bones are
+    // missing, that's a real rig mismatch — warn once.
+    const modelLoaded = modelReadyTick > 0;
+    const missing = hipPicks.filter(p => !bones[p.boneName]);
+    if (!modelLoaded) {
+      return;
+    }
+    if (missing.length > 0) {
+      const key = missing.map(m => m.boneName).sort().join(',');
+      if (!hipPickWarnedRef.current.has(key)) {
+        hipPickWarnedRef.current.add(key);
+        console.warn(
+          `[JointZoom] Loaded rig is missing expected hip bone(s): ${missing.map(m => m.boneName).join(', ')}. ` +
+          `Pick spheres will not be created for those side(s).`
+        );
+      }
+      if (missing.length === hipPicks.length) {
+        // Nothing to render, but we've surfaced the cause above.
+        return;
+      }
+    }
+
+    hipPicks.forEach(({ side, boneName }) => {
+      const bone = bones[boneName];
+      if (!bone) return;
+      const geo = new THREE.SphereGeometry(0.05, 20, 16);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x10b981,
+        transparent: true,
+        opacity: 0.55,
+        depthTest: false,
+      });
+      const sphere = new THREE.Mesh(geo, mat);
+      sphere.userData.jointZoomSide = side;
+      sphere.userData.jointZoomBone = boneName;
+      sphere.renderOrder = 1000;
+      const wp = new THREE.Vector3();
+      bone.getWorldPosition(wp);
+      sphere.position.copy(wp);
+      scene.add(sphere);
+      jointZoomMeshesRef.current.push(sphere);
+    });
+
+    // Position-tracking only — clicks are handled by the unified joint
+    // pick listener above (shared with ROM mode).
+    let raf = 0;
+    const tick = () => {
+      if (!enableJointZoomModeRef.current) return;
+      const wp = new THREE.Vector3();
+      jointZoomMeshesRef.current.forEach(sphere => {
+        const b = bonesRef.current[sphere.userData.jointZoomBone as string];
+        if (b) { b.getWorldPosition(wp); sphere.position.copy(wp); }
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      jointZoomMeshesRef.current.forEach(m => { scene.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose(); });
+      jointZoomMeshesRef.current = [];
+    };
+    // `modelReadyTick` advances when the GLB finishes loading and bones
+    // are populated; depending on it ensures the picker re-runs and
+    // creates the spheres if Movement Mode was already on at load time.
+  }, [enableJointZoomMode, modelReadyTick]);
 
   useEffect(() => {
     if (!sceneRef.current || !enablePoseMode) return;
@@ -5059,6 +6992,19 @@ export default function PureThreeGLBViewer({
     let hoveredBone: string | null = null;
     let hoverGlow: THREE.Mesh | null = null;
     let selectedGlow: THREE.Mesh | null = null;
+    let selectedJointKey: string | null = null;
+    let selectedAnchorBoneName: string | null = null;
+    let arrowsGroup: THREE.Group | null = null;
+    let arrowPickMeshes: { mesh: THREE.Mesh; def: MovementArrowDef; dirWorld: THREE.Vector3 }[] = [];
+    let hoveredArrowIdx: number = -1;
+    // Bone-segment selection (Task #212): orthogonal to joint selection — at
+    // most one of (selectedJointKey, selectedBoneSegmentId) is set at a time.
+    let selectedBoneSegmentId: BoneSegmentId | null = null;
+    let isShiftHeld = false;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') isShiftHeld = true; };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') isShiftHeld = false; };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     const cachedMeshes: THREE.Mesh[] = [];
     model.traverse((child) => {
@@ -5077,11 +7023,58 @@ export default function PureThreeGLBViewer({
     };
 
     const MAX_BONE_DISTANCE = 1.5;
+    // Movement Mode uses a tight screen-space cushion so the cursor only
+    // grabs a joint when it is visibly on (or right next to) the bone the
+    // user is pointing at. Posture Mode keeps the looser world-space
+    // behaviour so users can grab joints freely in the editor.
+    const MOVEMENT_PICK_PIXEL_RADIUS = 26;
 
     const findBoneFromRaycast = (ndc: THREE.Vector2): string | null => {
       raycasterRef.current.setFromCamera(ndc, camera);
+      const isMovement = skeletonModeRef.current === 'movement';
+      const rect = domElement.getBoundingClientRect();
+      const cursorPx = new THREE.Vector2(
+        (ndc.x * 0.5 + 0.5) * rect.width,
+        (-ndc.y * 0.5 + 0.5) * rect.height
+      );
+      const projWorld = new THREE.Vector3();
+      const projectedPx = new THREE.Vector2();
+      const projectToPixels = (worldPos: THREE.Vector3, out: THREE.Vector2): boolean => {
+        projWorld.copy(worldPos).project(camera);
+        // Joint is behind the camera or outside clip space — skip it.
+        if (projWorld.z > 1 || projWorld.z < -1) return false;
+        out.set(
+          (projWorld.x * 0.5 + 0.5) * rect.width,
+          (-projWorld.y * 0.5 + 0.5) * rect.height
+        );
+        return true;
+      };
+      const nearestJointWithinPixels = (): string | null => {
+        const worldPos = new THREE.Vector3();
+        let bestName = '';
+        let bestPx = Infinity;
+        for (const name of poseBoneNames) {
+          const bone = bones[name];
+          if (!bone) continue;
+          bone.getWorldPosition(worldPos);
+          if (!projectToPixels(worldPos, projectedPx)) continue;
+          const d = projectedPx.distanceTo(cursorPx);
+          if (d < bestPx) {
+            bestPx = d;
+            bestName = name;
+          }
+        }
+        return bestPx <= MOVEMENT_PICK_PIXEL_RADIUS ? (bestName || null) : null;
+      };
+
       const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
       if (hits.length === 0) {
+        if (isMovement) {
+          // No mesh under the cursor in Movement Mode — only accept a
+          // joint when the cursor is within the small pixel cushion of
+          // an actual joint. Empty-space hovers return null.
+          return nearestJointWithinPixels();
+        }
         const modelCenter = new THREE.Vector3();
         const box = new THREE.Box3().setFromObject(model);
         box.getCenter(modelCenter);
@@ -5122,6 +7115,18 @@ export default function PureThreeGLBViewer({
           nearestBone = name;
         }
       }
+      if (isMovement) {
+        // Even on a real mesh hit, require the resolved joint to be
+        // close to the cursor in screen space so a hit on a far-away
+        // mesh region doesn't snap to an unrelated joint.
+        if (!nearestBone) return null;
+        const bone = bones[nearestBone];
+        if (!bone) return null;
+        bone.getWorldPosition(worldPos);
+        if (!projectToPixels(worldPos, projectedPx)) return null;
+        if (projectedPx.distanceTo(cursorPx) > MOVEMENT_PICK_PIXEL_RADIUS) return null;
+        return nearestBone;
+      }
       if (nearestDist > MAX_BONE_DISTANCE) return null;
       return nearestBone || null;
     };
@@ -5157,41 +7162,928 @@ export default function PureThreeGLBViewer({
       return groupObj?.[prop] ?? 0;
     };
 
+    // ---------------------------------------------------------------------
+    // Movement Mode hold-to-test spring-back (Task #319)
+    // ---------------------------------------------------------------------
+    // When a Movement Mode drag releases, we tween the dragged DOF (and any
+    // compensation-chain targets it pulled along) back to their pre-drag
+    // values over ~300 ms. Locked joints (double-click) skip the tween.
+    let springBackAnimFrame = 0;
+    const cancelSpringBack = () => {
+      if (springBackAnimFrame) {
+        cancelAnimationFrame(springBackAnimFrame);
+        springBackAnimFrame = 0;
+      }
+    };
+    const startSpringBack = (targets: Record<string, number>) => {
+      cancelSpringBack();
+      const fromValues: Record<string, number> = {};
+      for (const k of Object.keys(targets)) fromValues[k] = getCurrentValue(k);
+      const t0 = performance.now();
+      const duration = 300;
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration);
+        // ease-out cubic for a natural-feeling settle.
+        const eased = 1 - Math.pow(1 - t, 3);
+        for (const k of Object.keys(targets)) {
+          const v = Math.round(fromValues[k] + (targets[k] - fromValues[k]) * eased);
+          onModelConfigChangeRef.current?.(k, v);
+        }
+        if (t < 1) {
+          springBackAnimFrame = requestAnimationFrame(tick);
+        } else {
+          springBackAnimFrame = 0;
+        }
+      };
+      springBackAnimFrame = requestAnimationFrame(tick);
+    };
+    /** Snapshot the current values of `primaryConfigKey` plus every
+     * compensation-chain target it might drive, so the spring-back tween
+     * can revert all of them on release. */
+    const captureSpringBack = (primaryConfigKey: string): Record<string, number> => {
+      const snap: Record<string, number> = {};
+      // Task #321: filter pinned DOFs out of the snapshot so the
+      // spring-back tween never reverts a key the clinician pinned via
+      // slider or double-click. The outer arrow-drag guard already skips
+      // capture when the primary itself is pinned; this protects chain
+      // targets (and the slider drag, which calls capture for whichever
+      // DOF the clinician released).
+      if (!lockedMovementConfigKeysRef.current.has(primaryConfigKey)) {
+        snap[primaryConfigKey] = getCurrentValue(primaryConfigKey);
+      }
+      const [j, mv] = primaryConfigKey.split('.');
+      const chainKey = `${camelToSnake(j)}:${camelToSnake(mv)}`;
+      const chain = COMPENSATION_CHAIN_BY_KEY.get(chainKey);
+      if (chain) {
+        for (const c of chain) {
+          const k = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+          if (lockedMovementConfigKeysRef.current.has(k)) continue;
+          if (!(k in snap)) snap[k] = getCurrentValue(k);
+        }
+      }
+      return snap;
+    };
+
+    // Task #321: shared value-update pipeline. Both the 3D arrow drag
+    // (onMouseMove) and the slider HUD call this with the unclamped raw
+    // target value the user is attempting to set, so they share the same
+    // constraint, friction-near-active-limit, painful-arc, exceeded-limit,
+    // compensation-chain, and muscle-activation behaviour. Returns the
+    // clamped final value, or null if no drag is active.
+    const applyDragTarget = (targetRaw: number): number | null => {
+      const drag = poseDragRef.current;
+      if (!drag) return null;
+      const lim = DOF_LIMIT_INDEX.get(drag.configKey);
+      const lo = lim ? lim.min : drag.min;
+      const hi = lim ? lim.max : drag.max;
+      let newValue = Math.max(lo, Math.min(hi, Math.round(targetRaw)));
+      let inPainfulArc = false;
+      let exceededActiveLimit = false;
+      let frictionApplied = false;
+      const row = drag.activeRow;
+      if (skeletonModeRef.current === 'movement' && row) {
+        const aMin = row.activeRomMin;
+        const aMax = row.activeRomMax;
+        const delta = targetRaw - drag.startValue;
+        const frameDelta = targetRaw - (drag.lastValue ?? drag.startValue);
+        const approachingHigh = delta > 0;
+        const distanceToLimit = approachingHigh ? aMax - newValue : newValue - aMin;
+        if (distanceToLimit <= 15 && distanceToLimit > 0) {
+          const friction = Math.max(0.3, distanceToLimit / 15);
+          newValue = Math.round(drag.startValue + delta * friction);
+          frictionApplied = true;
+        }
+        if (targetRaw > aMax + 0.5 || targetRaw < aMin - 0.5) exceededActiveLimit = true;
+        newValue = Math.max(aMin, Math.min(aMax, newValue));
+        if (row.painfulArc) {
+          const lo2 = Math.min(row.painfulArc.start, row.painfulArc.end);
+          const hi2 = Math.max(row.painfulArc.start, row.painfulArc.end);
+          const dir = row.painfulArc.direction;
+          const lm = row.painfulArc.loadingMode;
+          const carry = lastPainfulArcStateRef.current;
+          let dirMatches: boolean;
+          if (dir === 'ascending') dirMatches = frameDelta > 0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
+          else if (dir === 'descending') dirMatches = frameDelta < -0.5 || (Math.abs(frameDelta) <= 0.5 && carry);
+          else dirMatches = true;
+          // Friction must be applied BEFORE we evaluate length state so the
+          // candidate config we sample reflects the value we'll actually
+          // commit this tick.
+          const wouldEnterArc = newValue >= lo2 && newValue <= hi2 && dirMatches;
+          if (wouldEnterArc && !frictionApplied && Math.abs(delta) > 0.5) {
+            newValue = Math.max(aMin, Math.min(aMax, Math.round(drag.startValue + delta * 0.7)));
+          }
+          let lmMatches: boolean;
+          if (!lm || lm === 'any') {
+            lmMatches = true;
+          } else {
+            // Derive dominant length state from a CANDIDATE config that
+            // already has the post-friction newValue patched in. Sampling
+            // modelConfigRef directly would give us pre-drag state because
+            // onModelConfigChangeRef hasn't fired yet for this tick.
+            const baselineMuscles = movementBaselineMusclesRef.current;
+            const [joint, movement] = drag.configKey.split('.');
+            if (!baselineMuscles || !joint || !movement) {
+              // Safe degrade: with no baseline we cannot infer length state,
+              // so fall back to direction-only gating rather than silently
+              // suppressing every loading-specific arc.
+              lmMatches = true;
+            } else {
+              const base = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined>;
+              const candidate: ModelConfig = {
+                ...(modelConfigRef.current as ModelConfig),
+                [joint]: { ...(base[joint] ?? {}), [movement]: newValue },
+              };
+              const liveAnalysis = computeFullMuscleAnalysis(candidate);
+              let bestDelta = 0;
+              let bestLen = 100;
+              for (const m of liveAnalysis.allMuscles) {
+                const baseMuscle = baselineMuscles[m.id];
+                if (!baseMuscle) continue;
+                const d = Math.abs(m.activationPercent - baseMuscle.activationPercent);
+                if (d > bestDelta) { bestDelta = d; bestLen = m.lengthPercent; }
+              }
+              const dom: 'concentric' | 'eccentric' | 'isometric' | null = bestDelta > 0
+                ? (bestLen < 95 ? 'concentric' : bestLen > 105 ? 'eccentric' : 'isometric')
+                : null;
+              if (dom) lastDominantLengthStateRef.current = dom;
+              lmMatches = dom !== null && dom === lm;
+            }
+          }
+          if (newValue >= lo2 && newValue <= hi2 && dirMatches && lmMatches) {
+            inPainfulArc = true;
+          }
+        }
+      }
+      drag.lastValue = newValue;
+      if (exceededActiveLimit) drag.attemptedExceeded = true;
+      if (inPainfulArc) drag.lastPainfulArc = true;
+      if (skeletonModeRef.current === 'movement' && row) {
+        const now = performance.now();
+        // Activation chip throttled to ~30 Hz; heavy muscle/JRF block to ~10 Hz.
+        const baselineValue = movementBaselineMapRef.current.get(drag.configKey) ?? drag.startValue;
+        if (now - lastMovementActivationPushRef.current >= 33) {
+          lastMovementActivationPushRef.current = now;
+          const activation = computeMovementMuscleActivation(
+            drag.configKey,
+            baselineValue,
+            newValue,
+            row.activeRomMin,
+            row.activeRomMax,
+            row.painInhibitionFactor ?? 0,
+          );
+          // Task #323 — review-3 fix: explicitly clear when null (pose
+          // returned to baseline within threshold, or DOF has no muscle
+          // mapping) so the prior highlight doesn't persist visibly until
+          // drag-release.
+          setMovementMuscleActivation(activation ?? null);
+        }
+        if (now - lastMovementOverlayPushRef.current >= 100) {
+          lastMovementOverlayPushRef.current = now;
+          // Per-muscle delta vs baseline drives the full-body overlay.
+          // Group averages are misleading because the engine bundles
+          // antagonists into the same meshGroup, so we surface the
+          // dominant-delta muscle's state on each group.
+          const baselineMuscles = movementBaselineMusclesRef.current;
+          if (baselineMuscles) {
+            const liveAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+            const dominantByGroup: Record<string, { muscle: IndividualMuscle; delta: number }> = {};
+            for (const m of liveAnalysis.allMuscles) {
+              const base = baselineMuscles[m.id];
+              if (!base) continue;
+              const delta = Math.abs(m.activationPercent - base.activationPercent);
+              if (delta < 5) continue;
+              const existing = dominantByGroup[m.meshGroup];
+              if (!existing || delta > existing.delta) {
+                dominantByGroup[m.meshGroup] = { muscle: m, delta };
+              }
+            }
+            const overlay: MuscleStatesMap = {};
+            for (const [groupId, { muscle }] of Object.entries(dominantByGroup)) {
+              const t = muscle.tightnessPercent;
+              const a = muscle.activationPercent;
+              const len = muscle.lengthPercent;
+              const tension = Math.max(5, Math.min(95, 50 + (t - 15) * 0.8 + (100 - len) * 0.5 + (a - 15) * 0.4));
+              overlay[groupId] = {
+                id: groupId,
+                label: muscle.label,
+                state: muscle.state,
+                tension,
+                activation: a >= 70 ? 'high' : a >= 40 ? 'moderate' : a >= 15 ? 'low' : 'inactive',
+                activationPercent: a,
+                description: muscle.clinicalNote,
+              };
+            }
+            const changedCount = Object.keys(overlay).length;
+            setMovementMuscleStatesOverlay(changedCount > 0 ? overlay : null);
+            const moverEntries = Object.values(dominantByGroup);
+            moverEntries.sort((a, b) => b.delta - a.delta);
+            const strengthPct = Math.max(1, row.activeStrengthPct ?? 100);
+            const top = moverEntries.slice(0, 5).map(({ muscle }) => {
+              const base = baselineMuscles[muscle.id]!;
+              const signedDelta = muscle.activationPercent - base.activationPercent;
+              const lenState: 'concentric' | 'eccentric' | 'isometric' =
+                muscle.lengthPercent < 95 ? 'concentric'
+                : muscle.lengthPercent > 105 ? 'eccentric'
+                : 'isometric';
+              const capacityLoadPct = (muscle.activationPercent / strengthPct) * 100;
+              const capacityStatus: 'safe' | 'near' | 'over' =
+                capacityLoadPct >= 95 ? 'over'
+                : capacityLoadPct >= 70 ? 'near'
+                : 'safe';
+              return {
+                id: muscle.id,
+                label: muscle.label,
+                activation: muscle.activationPercent,
+                delta: signedDelta,
+                lengthPct: muscle.lengthPercent,
+                lengthState: lenState,
+                capacityLoadPct,
+                capacityStatus,
+              };
+            });
+            if (top.length > 0) {
+              const [j, mv] = drag.configKey.split('.');
+              setMovementTopMovers({ configKey: drag.configKey, joint: j, movement: mv, movers: top });
+              lastDominantLengthStateRef.current = top[0].lengthState;
+            } else {
+              setMovementTopMovers(null);
+            }
+          }
+          const force = estimateMovementJointReactionForce(
+            drag.configKey,
+            baselineValue,
+            newValue,
+            row.activeRomMin,
+            row.activeRomMax,
+            bodyWeightKgRef.current,
+            row.painInhibitionFactor ?? 0,
+          );
+          if (force) {
+            setMovementJointReactionForce({
+              configKey: drag.configKey,
+              joint: force.joint,
+              newtons: force.newtons,
+              bwMultiple: force.bwMultiple,
+            });
+          } else {
+            setMovementJointReactionForce(null);
+          }
+        }
+      }
+      // Mirror the gated inPainfulArc into live state for the on-body halo.
+      if (inPainfulArc && row?.painfulArc) {
+        const [j, mv] = drag.configKey.split('.');
+        const arc = row.painfulArc;
+        if (!lastPainfulArcStateRef.current) {
+          onPainfulArcFlareRef.current?.({
+            joint: j,
+            movement: mv,
+            angle: newValue,
+            intensity: arc.intensity,
+            arcStart: arc.start,
+            arcEnd: arc.end,
+          });
+        }
+        setLivePainfulArc({
+          angle: newValue,
+          intensity: arc.intensity,
+          movement: mv,
+          direction: arc.direction,
+          loadingMode: arc.loadingMode,
+          label: arc.label,
+        });
+      } else if (lastPainfulArcStateRef.current) {
+        setLivePainfulArc(null);
+      }
+      lastPainfulArcStateRef.current = inPainfulArc;
+      onModelConfigChangeRef.current?.(drag.configKey, newValue);
+
+      if (exceededActiveLimit && skeletonModeRef.current === 'movement' && row && !frictionApplied) {
+        const [j, m] = drag.configKey.split('.');
+        const chain = COMPENSATION_CHAIN_BY_KEY.get(`${camelToSnake(j)}:${camelToSnake(m)}`);
+        if (chain) {
+          const residual = targetRaw > row.activeRomMax
+            ? targetRaw - row.activeRomMax
+            : targetRaw < row.activeRomMin
+              ? row.activeRomMin - targetRaw
+              : 0;
+          const dragSign = targetRaw >= row.activeRomMax ? 1 : -1;
+          const triggered: string[] = [];
+          for (const c of chain) {
+            const targetKey = `${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`;
+            const currentVal = (modelConfigRef.current as Record<string, number>)[targetKey] || 0;
+            const compDelta = Math.round(residual * c.ratio) * dragSign;
+            const lim2 = DOF_LIMIT_INDEX.get(targetKey);
+            const next = Math.max(lim2?.min ?? -180, Math.min(lim2?.max ?? 180, currentVal + compDelta));
+            if (next !== currentVal) {
+              onModelConfigChangeRef.current?.(targetKey, next);
+              triggered.push(`${snakeToCamel(c.joint)}.${snakeToCamel(c.movement)}`);
+            }
+          }
+          drag.compensationsTriggered = triggered;
+        }
+      }
+      return newValue;
+    };
+
+    // Task #321: shared release path. Both onMouseUp and the slider HUD
+    // drag-end call this so the movement-attempt settle timer fires with
+    // the achieved angle and the spring-back tween (which already filters
+    // pinned DOFs through captureSpringBack) plays for un-pinned keys.
+    const releaseDrag = () => {
+      if (!poseDragRef.current) return;
+      const drag = poseDragRef.current;
+      if (skeletonModeRef.current === 'movement' && drag.activeRow && onActiveMovementAttemptRef.current) {
+        const [joint, movement] = drag.configKey.split('.');
+        const achievedAngle = drag.lastValue ?? drag.startValue;
+        // Use ONLY the gated flag — the angle-only fallback would have
+        // ignored direction + loading-mode constraints.
+        const inPainfulArc = !!drag.lastPainfulArc;
+        pendingMovementAttemptRef.current = {
+          joint,
+          movement,
+          achievedAngle,
+          activeRomMax: drag.activeRow.activeRomMax,
+          passiveRomMax: drag.activeRow.passiveRomMax,
+          inPainfulArc,
+          exceededActiveLimit: !!drag.attemptedExceeded,
+          compensationsTriggered: drag.compensationsTriggered ?? [],
+        };
+        if (movementSettleTimerRef.current !== null) window.clearTimeout(movementSettleTimerRef.current);
+        movementSettleTimerRef.current = window.setTimeout(() => {
+          const payload = pendingMovementAttemptRef.current;
+          pendingMovementAttemptRef.current = null;
+          movementSettleTimerRef.current = null;
+          if (payload) onActiveMovementAttemptRef.current?.(payload);
+        }, 800);
+      }
+      if (drag.springBackValues) {
+        startSpringBack(drag.springBackValues);
+      }
+      poseDragRef.current = null;
+      onPoseDragChangeRef.current?.(false);
+      controls.enabled = true;
+      domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
+      lastPainfulArcStateRef.current = false;
+      lastDominantLengthStateRef.current = null;
+      setLivePainfulArc(null);
+      setMovementMuscleActivation(null);
+      // Task #323 — review-5 fix: also drop the engine-derived overlay so
+      // the highlighted muscles return to their resting color when the
+      // clinician releases the slider.
+      setMovementMuscleStatesOverlay(null);
+      // Task #323: drop the live joint force readout the moment the drag
+      // ends so the chip vanishes alongside the muscle highlights.
+      setMovementJointReactionForce(null);
+      // Task #329: drop the Top Movers readout in lockstep with the JRF
+      // chip — both are drag-only readouts.
+      setMovementTopMovers(null);
+      lastMovementOverlayPushRef.current = 0;
+      lastMovementActivationPushRef.current = 0;
+    };
+
+    // Task #321: imperative API for the slider HUD. Mounted onto a ref so
+    // the JSX-rendered chip can call into the same drag pipeline as the
+    // mouse handlers without lifting THREE state out of this useEffect.
+    sliderHudApiRef.current = {
+      getCurrentValue,
+      // Wrap so the assignment doesn't enter the temporal dead zone of
+      // deselectJoint (declared further down in this useEffect closure).
+      deselect: () => deselectJoint(),
+      beginDrag: (configKey: string) => {
+        // Cancel any pending movement-attempt settle timer + in-flight
+        // spring-back so the new slider drag takes precedence cleanly.
+        if (movementSettleTimerRef.current !== null) {
+          window.clearTimeout(movementSettleTimerRef.current);
+          movementSettleTimerRef.current = null;
+          pendingMovementAttemptRef.current = null;
+        }
+        cancelSpringBack();
+        // If a previous drag is somehow still active (e.g. arrow drag
+        // never released), drop it without recording — the slider takes
+        // precedence on its own mouseDown.
+        if (poseDragRef.current) {
+          poseDragRef.current = null;
+          onPoseDragChangeRef.current?.(false);
+          setMovementMuscleActivation(null);
+          setMovementMuscleStatesOverlay(null);
+          setMovementJointReactionForce(null);
+          setMovementTopMovers(null);
+        }
+        const startValue = getCurrentValue(configKey);
+        const lim = DOF_LIMIT_INDEX.get(configKey);
+        let activeRow: {
+          activeRomMin: number;
+          activeRomMax: number;
+          passiveRomMax: number;
+          painfulArc: {
+            start: number;
+            end: number;
+            intensity: number;
+            direction?: 'ascending' | 'descending' | 'either';
+            loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+            label?: string;
+          } | null;
+          painInhibitionFactor: number;
+          activeStrengthPct: number;
+        } | null = null;
+        if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
+          const lookupKey = configKey.replace('.', ':');
+          const r = activeCapacitiesRef.current[lookupKey];
+          if (r) {
+            activeRow = {
+              activeRomMin: r.activeRomMin ?? 0,
+              activeRomMax: r.activeRomMax,
+              passiveRomMax: r.passiveRomMax,
+              painfulArc: r.painfulArc
+                ? {
+                    start: r.painfulArc.start,
+                    end: r.painfulArc.end,
+                    intensity: r.painfulArc.intensity ?? 5,
+                    direction: r.painfulArc.direction,
+                    loadingMode: r.painfulArc.loadingMode,
+                    label: r.painfulArc.label,
+                  }
+                : null,
+              painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+              activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
+            };
+          }
+        }
+        if (skeletonModeRef.current === 'movement') {
+          onPoseDragChangeRef.current?.(true);
+        }
+        poseDragRef.current = {
+          configKey,
+          startX: 0,
+          startY: 0,
+          startValue,
+          screenDirX: 0,
+          screenDirY: 0,
+          scale: 1,
+          sensitivity: 1,
+          label: lim?.label ?? configKey,
+          min: lim ? lim.min : -180,
+          max: lim ? lim.max : 180,
+          activeRow,
+          lastValue: startValue,
+          attemptedExceeded: false,
+          lastPainfulArc: false,
+          compensationsTriggered: [],
+          springBackValues:
+            skeletonModeRef.current === 'movement' && !lockedMovementConfigKeysRef.current.has(configKey)
+              ? captureSpringBack(configKey)
+              : undefined,
+        };
+        lastPainfulArcStateRef.current = false;
+        controls.enabled = false;
+      },
+      applyValue: (configKey: string, targetRaw: number) => {
+        if (!poseDragRef.current || poseDragRef.current.configKey !== configKey) return;
+        applyDragTarget(targetRaw);
+      },
+      endDrag: () => releaseDrag(),
+    };
+
+    // Arrow gizmo helpers --------------------------------------------------
+    const ARROW_LENGTH = 0.18;
+    const ARROW_BASE_OFFSET = 0.06;
+    const ARROW_BASE_COLOR = 0x33ddff;
+    const ARROW_HOVER_COLOR = 0xffe066;
+
+    const labelTexCache = new Map<string, THREE.CanvasTexture>();
+    const createLabelSprite = (text: string): THREE.Sprite => {
+      let tex = labelTexCache.get(text);
+      if (!tex) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d')!;
+        ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.fillStyle = '#ccffff';
+        ctx.strokeText(text, 64, 32);
+        ctx.fillText(text, 64, 32);
+        tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        labelTexCache.set(text, tex);
+      }
+      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.09, 0.045, 1);
+      sprite.renderOrder = 1003;
+      return sprite;
+    };
+
+    const createArrow = (def: MovementArrowDef): { group: THREE.Group; pickMesh: THREE.Mesh; visualMats: THREE.MeshBasicMaterial[]; dirNorm: THREE.Vector3 } => {
+      const group = new THREE.Group();
+      const dir = new THREE.Vector3(def.direction[0], def.direction[1], def.direction[2]).normalize();
+
+      const shaftMat = new THREE.MeshBasicMaterial({ color: ARROW_BASE_COLOR, transparent: true, opacity: 0.85, depthTest: false });
+      const headMat = new THREE.MeshBasicMaterial({ color: ARROW_BASE_COLOR, transparent: true, opacity: 0.95, depthTest: false });
+
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, ARROW_LENGTH * 0.7, 8), shaftMat);
+      shaft.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.35;
+      shaft.renderOrder = 1002;
+      group.add(shaft);
+
+      const head = new THREE.Mesh(new THREE.ConeGeometry(0.022, ARROW_LENGTH * 0.3, 12), headMat);
+      head.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.85;
+      head.renderOrder = 1002;
+      group.add(head);
+
+      // Invisible pick proxy (larger cylinder) for forgiving hit-testing
+      const pickMat = new THREE.MeshBasicMaterial({ visible: false, depthTest: false });
+      const pickMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, ARROW_LENGTH + ARROW_BASE_OFFSET, 6), pickMat);
+      pickMesh.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH * 0.5;
+      pickMesh.renderOrder = 1002;
+      group.add(pickMesh);
+
+      // Label sprite at the tip
+      const sprite = createLabelSprite(def.label);
+      sprite.position.y = ARROW_BASE_OFFSET + ARROW_LENGTH + 0.04;
+      group.add(sprite);
+
+      // Default geometry points along +Y; rotate group so +Y aligns with dir
+      const up = new THREE.Vector3(0, 1, 0);
+      const quat = new THREE.Quaternion();
+      const dotUp = up.dot(dir);
+      if (dotUp < -0.9999) {
+        // Opposite direction: rotate 180° around X
+        quat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
+      } else {
+        quat.setFromUnitVectors(up, dir);
+      }
+      group.quaternion.copy(quat);
+
+      return { group, pickMesh, visualMats: [shaftMat, headMat], dirNorm: dir };
+    };
+
+    const disposeArrows = () => {
+      if (arrowsGroup) {
+        arrowsGroup.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (m.geometry) m.geometry.dispose();
+          const mat = (m as THREE.Mesh).material;
+          if (mat) {
+            if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose());
+            else (mat as THREE.Material).dispose();
+          }
+        });
+        scene.remove(arrowsGroup);
+        arrowsGroup = null;
+      }
+      arrowPickMeshes = [];
+      hoveredArrowIdx = -1;
+    };
+
+    const buildArrowsForJoint = (jointKey: string, anchorWorldPos: THREE.Vector3) => {
+      disposeArrows();
+      const allDefs = JOINT_MOVEMENT_DEFS[jointKey];
+      if (!allDefs || allDefs.length === 0) return;
+      // Drop arrows whose configKey is not in the canonical DOF registry —
+      // this prevents UI controls from claiming to drive movements that the
+      // model/sidebar do not actually expose.
+      const defs = allDefs.filter((d) => DOF_LIMIT_INDEX.has(d.configKey));
+      if (defs.length === 0) return;
+      const grp = new THREE.Group();
+      grp.position.copy(anchorWorldPos);
+      scene.add(grp);
+      arrowsGroup = grp;
+      defs.forEach((def, idx) => {
+        const arr = createArrow(def);
+        arr.pickMesh.userData.movementDef = def;
+        arr.pickMesh.userData.dirNorm = arr.dirNorm;
+        arr.pickMesh.userData.visualMats = arr.visualMats;
+        arr.pickMesh.userData.arrowIdx = idx;
+        arr.pickMesh.userData.baseColor = ARROW_BASE_COLOR;
+        grp.add(arr.group);
+        arrowPickMeshes.push({ mesh: arr.pickMesh, def, dirWorld: arr.dirNorm.clone() });
+      });
+    };
+
+    const setArrowColor = (idx: number, color: number) => {
+      if (idx < 0 || idx >= arrowPickMeshes.length) return;
+      const mats = arrowPickMeshes[idx].mesh.userData.visualMats as THREE.MeshBasicMaterial[];
+      mats?.forEach((m) => m.color.setHex(color));
+    };
+    const restoreArrowColor = (idx: number) => {
+      if (idx < 0 || idx >= arrowPickMeshes.length) return;
+      const base = (arrowPickMeshes[idx].mesh.userData.baseColor as number) ?? ARROW_BASE_COLOR;
+      setArrowColor(idx, base);
+    };
+
+    const findArrowFromRaycast = (ndc: THREE.Vector2): number => {
+      if (arrowPickMeshes.length === 0) return -1;
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const meshes = arrowPickMeshes.map((a) => a.mesh);
+      const hits = raycasterRef.current.intersectObjects(meshes, false);
+      if (hits.length === 0) return -1;
+      return (hits[0].object.userData.arrowIdx as number) ?? -1;
+    };
+
+    const computeScreenDir = (anchorWorld: THREE.Vector3, dirWorld: THREE.Vector3): { x: number; y: number } => {
+      const a = anchorWorld.clone().project(camera);
+      const b = anchorWorld.clone().add(dirWorld).project(camera);
+      const rect = domElement.getBoundingClientRect();
+      const ax = (a.x + 1) * 0.5 * rect.width;
+      const ay = (1 - (a.y + 1) * 0.5) * rect.height;
+      const bx = (b.x + 1) * 0.5 * rect.width;
+      const by = (1 - (b.y + 1) * 0.5) * rect.height;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return { x: dx / len, y: dy / len };
+    };
+
+    // Task #322: imperative deselect — mirrors the background-miss path
+    // in the canvas mousedown handler (see "Deselect" branch below). Used
+    // by the slider HUD's close button and click-outside listener so the
+    // chip, ROM pill, lock badge, glow, and arrows all unmount together.
+    // Bails out while any drag is mid-flight so a release outside the
+    // chip never closes it.
+    const deselectJoint = () => {
+      if (poseDragRef.current) return;
+      const hadJointSelection = !!selectedJointKey || !!selectedAnchorBoneName;
+      const hadBoneSelection = !!selectedBoneSegmentId;
+      if (!hadJointSelection && !hadBoneSelection) return;
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      disposeArrows();
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
+      selectedBoneSegmentId = null;
+      poseSelectedBoneRef.current = null;
+      poseHighlightMeshRef.current = null;
+      setPoseModeTooltip(null);
+      setMovementSelectedJoint(null);
+      if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
+    };
+
+    const selectJoint = (boneName: string) => {
+      const jointKey = getJointKeyFromBone(boneName);
+      if (!jointKey) return;
+      const hadBoneSelection = !!selectedBoneSegmentId;
+      removeGlow(selectedGlow);
+      selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
+      selectedAnchorBoneName = boneName;
+      selectedJointKey = jointKey;
+      selectedBoneSegmentId = null;
+      poseSelectedBoneRef.current = boneName;
+      poseHighlightMeshRef.current = selectedGlow;
+      const wp = new THREE.Vector3();
+      bones[boneName]?.getWorldPosition(wp);
+      buildArrowsForJoint(jointKey, wp);
+      // Task #400 — Posture mode also gets the slider HUD now, so we
+      // populate movementSelectedJoint in both Posture and Movement
+      // (Treatment still suppresses the chip).
+      if (skeletonModeRef.current !== 'treatment') {
+        const screen = wp.clone().project(camera);
+        const rect = domElement.getBoundingClientRect();
+        const sx = (screen.x * 0.5 + 0.5) * rect.width;
+        const sy = (-screen.y * 0.5 + 0.5) * rect.height;
+        setMovementSelectedJoint({ key: jointKey, x: sx, y: sy });
+      } else {
+        setMovementSelectedJoint(null);
+      }
+      // Notify any external bone-selection consumer that the bone slot is now
+      // empty. Without this, a parent-controlled selection would re-apply on
+      // the next sync tick and clobber the joint we just selected.
+      if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
+    };
+
+    // --- Bone-segment selection (Task #212) ---------------------------------
+    const computeBoneSegmentAnchor = (spec: BoneSegmentSpec): THREE.Vector3 | null => {
+      const a = bones[spec.proximalBone];
+      const b = bones[spec.distalBone];
+      if (!a || !b) return null;
+      const pa = new THREE.Vector3();
+      const pb = new THREE.Vector3();
+      a.getWorldPosition(pa);
+      b.getWorldPosition(pb);
+      return pa.add(pb).multiplyScalar(0.5);
+    };
+
+    const buildArrowsForBoneSegment = (spec: BoneSegmentSpec) => {
+      disposeArrows();
+      const anchor = computeBoneSegmentAnchor(spec);
+      if (!anchor) return;
+      const defs = spec.morphology.filter((d) => DOF_LIMIT_INDEX.has(d.configKey));
+      if (defs.length === 0) return;
+      const grp = new THREE.Group();
+      grp.position.copy(anchor);
+      scene.add(grp);
+      arrowsGroup = grp;
+      defs.forEach((def, idx) => {
+        const arr = createArrow(def);
+        arr.pickMesh.userData.movementDef = def;
+        arr.pickMesh.userData.dirNorm = arr.dirNorm;
+        arr.pickMesh.userData.visualMats = arr.visualMats;
+        arr.pickMesh.userData.arrowIdx = idx;
+        // Tint morphology arrows blue to differentiate from joint-movement (cyan) arrows
+        const morphColor = 0x6699ff;
+        arr.pickMesh.userData.baseColor = morphColor;
+        arr.visualMats.forEach((m) => m.color.setHex(morphColor));
+        grp.add(arr.group);
+        arrowPickMeshes.push({ mesh: arr.pickMesh, def, dirWorld: arr.dirNorm.clone() });
+      });
+    };
+
+    const selectBoneSegment = (spec: BoneSegmentSpec, opts?: { silent?: boolean }) => {
+      // Clear any joint selection so the two interactions don't overlap.
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
+      poseSelectedBoneRef.current = null;
+      poseHighlightMeshRef.current = null;
+      disposeArrows();
+
+      selectedBoneSegmentId = spec.id;
+      const anchor = computeBoneSegmentAnchor(spec);
+      if (anchor) {
+        const geo = new THREE.SphereGeometry(0.05, 16, 16);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.7, depthTest: false });
+        selectedGlow = new THREE.Mesh(geo, mat);
+        selectedGlow.renderOrder = 1001;
+        selectedGlow.position.copy(anchor);
+        scene.add(selectedGlow);
+        poseHighlightMeshRef.current = selectedGlow;
+      }
+      buildArrowsForBoneSegment(spec);
+      if (!opts?.silent) onSelectedBoneSegmentChangeRef.current?.(spec.id);
+    };
+
+    const clearBoneSegmentSelection = (opts?: { silent?: boolean }) => {
+      removeGlow(selectedGlow);
+      selectedGlow = null;
+      disposeArrows();
+      selectedBoneSegmentId = null;
+      poseHighlightMeshRef.current = null;
+      if (!opts?.silent) onSelectedBoneSegmentChangeRef.current?.(null);
+    };
+
+    /** Resolve the bone-segment under the cursor, or null. */
+    const findBoneSegmentFromRaycast = (ndc: THREE.Vector2): BoneSegmentSpec | null => {
+      // Match the clicked bone shaft to a registered pick-bone in
+      // BONE_SEGMENT_BY_PICK_BONE. We pick the pick-bone closest to the hit
+      // point (or the nearest model-plane projection if no mesh hit).
+      raycasterRef.current.setFromCamera(ndc, camera);
+      const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
+      const refPoint = new THREE.Vector3();
+      if (hits.length > 0) {
+        refPoint.copy(hits[0].point);
+      } else {
+        const modelCenter = new THREE.Vector3();
+        const box = new THREE.Box3().setFromObject(model);
+        box.getCenter(modelCenter);
+        const cameraDir = new THREE.Vector3();
+        camera.getWorldDirection(cameraDir);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+          cameraDir.clone().negate(),
+          modelCenter
+        );
+        if (!raycasterRef.current.ray.intersectPlane(plane, refPoint)) return null;
+      }
+      const wp = new THREE.Vector3();
+      let bestSpec: BoneSegmentSpec | null = null;
+      let bestDist = Infinity;
+      // 1) Prefer the registered pick-bone closest to the hit. This honors
+      //    BONE_SEGMENT_BY_PICK_BONE so the clicked shaft drives the result.
+      for (const pickBoneName of Object.keys(BONE_SEGMENT_BY_PICK_BONE)) {
+        const bone = bones[pickBoneName];
+        if (!bone) continue;
+        bone.getWorldPosition(wp);
+        const d = refPoint.distanceTo(wp);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSpec = BONE_SEGMENT_BY_PICK_BONE[pickBoneName];
+        }
+      }
+      if (bestSpec && bestDist <= MAX_BONE_DISTANCE) return bestSpec;
+      // 2) Fallback: nearest segment midpoint (covers segments whose
+      //    pick-bones aren't present in this rig).
+      bestSpec = null;
+      bestDist = Infinity;
+      for (const spec of BONE_SEGMENT_SPECS) {
+        const a = bones[spec.proximalBone];
+        const b = bones[spec.distalBone];
+        if (!a || !b) continue;
+        const pa = new THREE.Vector3(); a.getWorldPosition(pa);
+        const pb = new THREE.Vector3(); b.getWorldPosition(pb);
+        wp.copy(pa).add(pb).multiplyScalar(0.5);
+        const d = refPoint.distanceTo(wp);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSpec = spec;
+        }
+      }
+      return bestDist <= MAX_BONE_DISTANCE ? bestSpec : null;
+    };
+
     const onMouseMove = (e: MouseEvent) => {
       if (!enablePoseModeRef.current) return;
 
+      // Active arrow drag
       if (poseDragRef.current) {
         const dx = e.clientX - poseDragRef.current.startX;
         const dy = e.clientY - poseDragRef.current.startY;
-        const useVertical = poseDragRef.current.axis === 'x';
-        const rawDelta = useVertical ? -dy : dx;
-        const dragDistance = rawDelta * poseDragRef.current.scale * poseDragRef.current.sensitivity;
-        const cfg = POSE_BONE_MAP[poseDragRef.current.boneName];
-        if (!cfg) return;
-        let newValue = poseDragRef.current.startValue + dragDistance;
-        newValue = Math.max(cfg.minValue, Math.min(cfg.maxValue, Math.round(newValue)));
-        onModelConfigChangeRef.current?.(cfg.configKey, newValue);
+        const along = dx * poseDragRef.current.screenDirX + dy * poseDragRef.current.screenDirY;
+        const delta = along * poseDragRef.current.sensitivity * poseDragRef.current.scale;
+        // Task #321: hand the unclamped raw target to the shared pipeline
+        // so arrow drag and slider drag follow the exact same constraint /
+        // friction / painful-arc / exceeded-limit / compensation behaviour.
+        const targetRaw = poseDragRef.current.startValue + delta;
+        const newValue = applyDragTarget(targetRaw);
+        if (newValue == null) return;
+        const row = poseDragRef.current.activeRow;
+        const exceededActiveLimit = !!poseDragRef.current.attemptedExceeded;
+        const inPainfulArc = !!poseDragRef.current.lastPainfulArc;
 
         const rect = domElement.getBoundingClientRect();
+        // In movement mode add a small annotation to the tooltip so
+        // the clinician sees why the joint stopped moving.
+        let tooltipValue = `${newValue}°`;
+        if (skeletonModeRef.current === 'movement' && row) {
+          const tag = exceededActiveLimit ? ' • active limit'
+            : inPainfulArc ? ' • painful arc' : '';
+          tooltipValue = `${newValue}° / ${Math.round(row.activeRomMax)}° active${tag}`;
+        }
         setPoseModeTooltip({
           x: e.clientX - rect.left,
           y: e.clientY - rect.top - 40,
-          label: cfg.label,
-          value: `${newValue}°`,
+          label: poseDragRef.current.label,
+          value: tooltipValue,
         });
+        return;
+      }
 
-        if (selectedGlow) {
-          const bone = bones[poseDragRef.current.boneName];
-          if (bone) {
-            const wp = new THREE.Vector3();
-            bone.getWorldPosition(wp);
-            selectedGlow.position.copy(wp);
+      const ndc = getMouseNDC(e);
+
+      // First check arrow hover (when a joint OR bone-segment is selected)
+      if (selectedJointKey || selectedBoneSegmentId) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx !== hoveredArrowIdx) {
+          if (hoveredArrowIdx >= 0) restoreArrowColor(hoveredArrowIdx);
+          if (arrowIdx >= 0) setArrowColor(arrowIdx, ARROW_HOVER_COLOR);
+          hoveredArrowIdx = arrowIdx;
+        }
+        if (arrowIdx >= 0) {
+          const a = arrowPickMeshes[arrowIdx];
+          const val = getCurrentValue(a.def.configKey);
+          const rect = domElement.getBoundingClientRect();
+          setPoseModeTooltip({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top - 40,
+            label: a.def.label,
+            value: `${val}°`,
+          });
+          domElement.style.cursor = 'grab';
+          // Clear hover-bone glow if any
+          if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+          return;
+        }
+      }
+
+      // Bone-segment hover when Shift is held: highlight the segment that
+      // would be selected and show a "Shift-click for bone" hint.
+      if (isShiftHeld) {
+        const segSpec = findBoneSegmentFromRaycast(ndc);
+        const hoverKey = segSpec ? `seg:${segSpec.id}` : null;
+        if (hoverKey !== hoveredBone) {
+          removeGlow(hoverGlow);
+          hoverGlow = null;
+          hoveredBone = hoverKey;
+          if (segSpec) {
+            const anchor = computeBoneSegmentAnchor(segSpec);
+            if (anchor) {
+              const geo = new THREE.SphereGeometry(0.04, 16, 16);
+              const mat = new THREE.MeshBasicMaterial({ color: 0x88bbff, transparent: true, opacity: 0.45, depthTest: false });
+              hoverGlow = new THREE.Mesh(geo, mat);
+              hoverGlow.renderOrder = 1001;
+              hoverGlow.position.copy(anchor);
+              scene.add(hoverGlow);
+            }
+            domElement.style.cursor = 'pointer';
+            const rect = domElement.getBoundingClientRect();
+            setPoseModeTooltip({
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top - 40,
+              label: segSpec.label,
+              value: 'Shift-click: bone',
+            });
+          } else {
+            domElement.style.cursor = '';
+            if (!selectedJointKey && !selectedBoneSegmentId) setPoseModeTooltip(null);
           }
         }
         return;
       }
 
-      const ndc = getMouseNDC(e);
+      // Otherwise hover a bone for joint selection
       const boneName = findBoneFromRaycast(ndc);
 
       if (boneName !== hoveredBone) {
@@ -5199,21 +8091,20 @@ export default function PureThreeGLBViewer({
         hoverGlow = null;
         hoveredBone = boneName;
 
-        if (boneName && POSE_BONE_MAP[boneName] && boneName !== poseSelectedBoneRef.current) {
+        if (boneName && POSE_BONE_MAP[boneName] && boneName !== selectedAnchorBoneName) {
           hoverGlow = createGlowSphere(boneName, 0x66ffcc, 0.4);
-          domElement.style.cursor = 'grab';
-          const cfg = POSE_BONE_MAP[boneName];
-          const val = getCurrentValue(cfg.configKey);
+          domElement.style.cursor = 'pointer';
+          const jointKey = getJointKeyFromBone(boneName);
           const rect = domElement.getBoundingClientRect();
           setPoseModeTooltip({
             x: e.clientX - rect.left,
             y: e.clientY - rect.top - 40,
-            label: cfg.label,
-            value: `${val}°`,
+            label: jointKey || POSE_BONE_MAP[boneName].label,
+            value: 'Click to select',
           });
         } else {
           domElement.style.cursor = '';
-          setPoseModeTooltip(null);
+          if (!selectedJointKey && !selectedBoneSegmentId) setPoseModeTooltip(null);
         }
       }
     };
@@ -5221,70 +8112,399 @@ export default function PureThreeGLBViewer({
     const onMouseDown = (e: MouseEvent) => {
       if (!enablePoseModeRef.current || e.button !== 0) return;
       const ndc = getMouseNDC(e);
+
+      // Arrow drag takes priority when either a joint or bone-segment is selected
+      if (selectedJointKey || selectedBoneSegmentId) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx >= 0) {
+          const a = arrowPickMeshes[arrowIdx];
+          const anchor = new THREE.Vector3();
+          if (selectedBoneSegmentId) {
+            const spec = BONE_SEGMENT_BY_ID[selectedBoneSegmentId];
+            const segAnchor = spec ? computeBoneSegmentAnchor(spec) : null;
+            if (segAnchor) anchor.copy(segAnchor);
+          } else if (selectedAnchorBoneName) {
+            bones[selectedAnchorBoneName]?.getWorldPosition(anchor);
+          }
+          const screenDir = computeScreenDir(anchor, a.dirWorld);
+          const startValue = getCurrentValue(a.def.configKey);
+          const lim = DOF_LIMIT_INDEX.get(a.def.configKey);
+          let activeRow: {
+            activeRomMin: number;
+            activeRomMax: number;
+            passiveRomMax: number;
+            painfulArc: {
+              start: number;
+              end: number;
+              intensity: number;
+              direction?: 'ascending' | 'descending' | 'either';
+              loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+              label?: string;
+            } | null;
+            painInhibitionFactor: number;
+            activeStrengthPct: number;
+          } | null = null;
+          if (skeletonModeRef.current === 'movement' && activeCapacitiesRef.current) {
+            const lookupKey = a.def.configKey.replace('.', ':');
+            const r = activeCapacitiesRef.current[lookupKey];
+            if (r) {
+              activeRow = {
+                activeRomMin: r.activeRomMin ?? 0,
+                activeRomMax: r.activeRomMax,
+                passiveRomMax: r.passiveRomMax,
+                painfulArc: r.painfulArc
+                  ? {
+                      start: r.painfulArc.start,
+                      end: r.painfulArc.end,
+                      intensity: r.painfulArc.intensity ?? 5,
+                      direction: r.painfulArc.direction,
+                      loadingMode: r.painfulArc.loadingMode,
+                      label: r.painfulArc.label,
+                    }
+                  : null,
+                painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+                activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
+              };
+            }
+          }
+          if (movementSettleTimerRef.current !== null) {
+            window.clearTimeout(movementSettleTimerRef.current);
+            movementSettleTimerRef.current = null;
+            pendingMovementAttemptRef.current = null;
+          }
+          // Cancel any in-flight spring-back so a new drag on the same
+          // joint takes precedence cleanly.
+          cancelSpringBack();
+          if (skeletonModeRef.current === 'movement') {
+            onPoseDragChangeRef.current?.(true);
+          }
+          poseDragRef.current = {
+            configKey: a.def.configKey,
+            startX: e.clientX,
+            startY: e.clientY,
+            startValue,
+            screenDirX: screenDir.x,
+            screenDirY: screenDir.y,
+            scale: a.def.scale ?? 1,
+            sensitivity: a.def.sensitivity,
+            label: a.def.label,
+            min: lim ? lim.min : -180,
+            max: lim ? lim.max : 180,
+            activeRow,
+            lastValue: startValue,
+            attemptedExceeded: false,
+            lastPainfulArc: false,
+            compensationsTriggered: [],
+            // Movement Mode hold-to-test: snapshot pre-drag values for the
+            // dragged DOF + its compensation-chain targets so mouseUp can
+            // spring back. Locked joints opt out (value persists).
+            springBackValues:
+              skeletonModeRef.current === 'movement' && !lockedMovementConfigKeysRef.current.has(a.def.configKey)
+                ? captureSpringBack(a.def.configKey)
+                : undefined,
+          };
+          lastPainfulArcStateRef.current = false;
+          if (skeletonModeRef.current !== 'movement') {
+            setMovementMuscleActivation(null);
+            setMovementMuscleStatesOverlay(null);
+            setMovementJointReactionForce(null);
+            setMovementTopMovers(null);
+          }
+          controls.enabled = false;
+          domElement.style.cursor = 'grabbing';
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+
+      // Shift+click selects a bone segment instead of a joint.
+      if (isShiftHeld) {
+        const segSpec = findBoneSegmentFromRaycast(ndc);
+        if (segSpec) {
+          selectBoneSegment(segSpec);
+          if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
+
+      // Otherwise: select a joint. In Movement Mode the same mouse-down
+      // also begins an immediate hold-to-test drag of the bone's primary
+      // degree of freedom, removing the click-to-select-then-click-arrow
+      // ceremony (Task #319). In Posture Mode this remains a plain
+      // selection — the clinician must subsequently click an arrow.
       const boneName = findBoneFromRaycast(ndc);
-      if (!boneName || !POSE_BONE_MAP[boneName]) return;
-
-      const cfg = POSE_BONE_MAP[boneName];
-      const currentVal = getCurrentValue(cfg.configKey);
-
-      removeGlow(selectedGlow);
-      selectedGlow = createGlowSphere(boneName, 0x00ff88, 0.7);
-      poseSelectedBoneRef.current = boneName;
-      poseHighlightMeshRef.current = selectedGlow;
-
-      poseDragRef.current = {
-        boneName,
-        configKey: cfg.configKey,
-        startX: e.clientX,
-        startY: e.clientY,
-        startValue: currentVal,
-        axis: cfg.axis,
-        scale: cfg.scale,
-        sensitivity: cfg.sensitivity,
-        label: cfg.label,
-      };
-
-      controls.enabled = false;
-      domElement.style.cursor = 'grabbing';
-      e.preventDefault();
-      e.stopPropagation();
+      // Task #322: in Movement Mode, a single click on empty 3D space
+      // (no arrow, no bone, no shift-segment) dismisses the slider HUD
+      // and clears the joint selection. The HUD's own click-outside
+      // listener intentionally skips canvas-targeted clicks so it
+      // doesn't fight bone-switch / arrow-drag picks; this is the
+      // background-miss path that closes the chip from inside the
+      // canvas. We don't preventDefault here so OrbitControls is still
+      // free to begin a camera drag from the same gesture.
+      if (
+        (!boneName || !POSE_BONE_MAP[boneName]) &&
+        skeletonModeRef.current !== 'treatment' &&
+        (selectedJointKey || selectedAnchorBoneName || selectedBoneSegmentId)
+      ) {
+        // Task #400 — In Posture mode too, a click on empty space dismisses
+        // the slider chip and clears the joint selection, matching Movement.
+        deselectJoint();
+        return;
+      }
+      if (boneName && POSE_BONE_MAP[boneName]) {
+        selectJoint(boneName);
+        if (skeletonModeRef.current === 'movement') {
+          const primaryConfigKey = POSE_BONE_MAP[boneName].configKey;
+          // selectJoint just rebuilt arrowPickMeshes via buildArrowsForJoint.
+          // Pick the arrow matching the bone's primary configKey, preferring
+          // the +ve direction (scale != -1) so a flexion bone drags flexion,
+          // not extension.
+          const candidates = arrowPickMeshes.filter(a => a.def.configKey === primaryConfigKey);
+          const primaryArrow = candidates.find(a => (a.def.scale ?? 1) >= 0) ?? candidates[0];
+          if (primaryArrow) {
+            const anchor = new THREE.Vector3();
+            bones[boneName]?.getWorldPosition(anchor);
+            const screenDir = computeScreenDir(anchor, primaryArrow.dirWorld);
+            const startValue = getCurrentValue(primaryArrow.def.configKey);
+            const lim = DOF_LIMIT_INDEX.get(primaryArrow.def.configKey);
+            let activeRow: {
+              activeRomMin: number;
+              activeRomMax: number;
+              passiveRomMax: number;
+              painfulArc: {
+                start: number;
+                end: number;
+                intensity: number;
+                direction?: 'ascending' | 'descending' | 'either';
+                loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+                label?: string;
+              } | null;
+              painInhibitionFactor: number;
+              activeStrengthPct: number;
+            } | null = null;
+            if (activeCapacitiesRef.current) {
+              const lookupKey = primaryArrow.def.configKey.replace('.', ':');
+              const r = activeCapacitiesRef.current[lookupKey];
+              if (r) {
+                activeRow = {
+                  activeRomMin: r.activeRomMin ?? 0,
+                  activeRomMax: r.activeRomMax,
+                  passiveRomMax: r.passiveRomMax,
+                  painfulArc: r.painfulArc
+                    ? {
+                        start: r.painfulArc.start,
+                        end: r.painfulArc.end,
+                        intensity: r.painfulArc.intensity ?? 5,
+                        direction: r.painfulArc.direction,
+                        loadingMode: r.painfulArc.loadingMode,
+                        label: r.painfulArc.label,
+                      }
+                    : null,
+                  painInhibitionFactor: (r as { painInhibitionFactor?: number }).painInhibitionFactor ?? 0,
+                  activeStrengthPct: (r as { activeStrengthPct?: number }).activeStrengthPct ?? 100,
+                };
+              }
+            }
+            if (movementSettleTimerRef.current !== null) {
+              window.clearTimeout(movementSettleTimerRef.current);
+              movementSettleTimerRef.current = null;
+              pendingMovementAttemptRef.current = null;
+            }
+            cancelSpringBack();
+            if (skeletonModeRef.current === 'movement') {
+              onPoseDragChangeRef.current?.(true);
+            }
+            poseDragRef.current = {
+              configKey: primaryArrow.def.configKey,
+              startX: e.clientX,
+              startY: e.clientY,
+              startValue,
+              screenDirX: screenDir.x,
+              screenDirY: screenDir.y,
+              scale: primaryArrow.def.scale ?? 1,
+              sensitivity: primaryArrow.def.sensitivity,
+              label: primaryArrow.def.label,
+              min: lim ? lim.min : -180,
+              max: lim ? lim.max : 180,
+              activeRow,
+              lastValue: startValue,
+              attemptedExceeded: false,
+              lastPainfulArc: false,
+              compensationsTriggered: [],
+              springBackValues: lockedMovementConfigKeysRef.current.has(primaryArrow.def.configKey)
+                ? undefined
+                : captureSpringBack(primaryArrow.def.configKey),
+            };
+            lastPainfulArcStateRef.current = false;
+            controls.enabled = false;
+            domElement.style.cursor = 'grabbing';
+          }
+        }
+        // clear hover glow now that this bone is selected
+        if (hoverGlow) { removeGlow(hoverGlow); hoverGlow = null; hoveredBone = null; }
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (poseDragRef.current) {
-        poseDragRef.current = null;
-        controls.enabled = true;
-        domElement.style.cursor = enablePoseModeRef.current ? 'grab' : '';
-        setPoseModeTooltip(null);
-      }
+    const onMouseUp = (_e: MouseEvent) => {
+      // Task #321: delegate to the shared releaseDrag so arrow drag and
+      // slider drag run the exact same settle + spring-back path.
+      if (poseDragRef.current) releaseDrag();
     };
 
     const onDblClick = (e: MouseEvent) => {
       if (!enablePoseModeRef.current) return;
       const ndc = getMouseNDC(e);
+      // Movement Mode (Task #319): double-click on any draggable bone
+      // toggles a per-joint lock. Locked joints skip the spring-back tween
+      // on mouseUp, so the clinician can pin a position without holding
+      // the mouse. Takes priority over arrow-reset because in Movement
+      // Mode a "reset to 0" is meaningless — release already restores.
+      if (skeletonModeRef.current === 'movement') {
+        const boneName = findBoneFromRaycast(ndc);
+        if (boneName && POSE_BONE_MAP[boneName]) {
+          const primaryConfigKey = POSE_BONE_MAP[boneName].configKey;
+          setLockedMovementConfigKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(primaryConfigKey)) next.delete(primaryConfigKey);
+            else next.add(primaryConfigKey);
+            return next;
+          });
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      }
+      // Reset the DOF associated with a hovered arrow, if any
+      if (selectedJointKey || selectedBoneSegmentId) {
+        const arrowIdx = findArrowFromRaycast(ndc);
+        if (arrowIdx >= 0) {
+          const a = arrowPickMeshes[arrowIdx];
+          onModelConfigChangeRef.current?.(a.def.configKey, 0);
+          setPoseModeTooltip(null);
+          return;
+        }
+      }
+      // Otherwise, double-click on empty area / non-arrow deselects the joint or bone
       const boneName = findBoneFromRaycast(ndc);
-      if (!boneName || !POSE_BONE_MAP[boneName]) return;
-      const cfg = POSE_BONE_MAP[boneName];
-      onModelConfigChangeRef.current?.(cfg.configKey, 0);
-      setPoseModeTooltip(null);
+      if (!boneName || !POSE_BONE_MAP[boneName]) {
+        // Deselect (and notify any external bone-selection consumer).
+        const hadBoneSelection = !!selectedBoneSegmentId;
+        removeGlow(selectedGlow);
+        selectedGlow = null;
+        disposeArrows();
+        selectedJointKey = null;
+        selectedAnchorBoneName = null;
+        selectedBoneSegmentId = null;
+        poseSelectedBoneRef.current = null;
+        poseHighlightMeshRef.current = null;
+        setPoseModeTooltip(null);
+        if (hadBoneSelection) onSelectedBoneSegmentChangeRef.current?.(null);
+      }
     };
 
+    /** Apply an externally-controlled bone-segment selection. */
+    const applyExternalBoneSelection = (next: BoneSegmentId | null | undefined) => {
+      if (next === undefined) return; // uncontrolled
+      if (next === selectedBoneSegmentId) return;
+      if (next === null) {
+        clearBoneSegmentSelection({ silent: true });
+        return;
+      }
+      const spec = BONE_SEGMENT_BY_ID[next];
+      if (spec) selectBoneSegment(spec, { silent: true });
+    };
+    // Sync once on mount in case parent already passed a selection.
+    applyExternalBoneSelection(selectedBoneSegmentExternalRef.current);
+    // Expose the applier so the prop-driven useEffect below can call it
+    // whenever selectedBoneSegmentIdProp changes — no polling required.
+    applyExternalBoneSelectionRef.current = applyExternalBoneSelection;
+
     const poseGlowAnimFrame = { current: 0 };
+    // Task #321: throttle the joint-occlusion raycast to ~10 Hz so the
+    // per-frame slider-HUD anchor update stays cheap. We cache the last
+    // visibility result and reuse it between checks.
+    let occlusionFrameCounter = 0;
+    let lastJointOccluded = false;
     const animateGlows = () => {
       poseGlowAnimFrame.current = requestAnimationFrame(animateGlows);
       const wp = new THREE.Vector3();
-      if (selectedGlow && poseSelectedBoneRef.current) {
-        const bone = bones[poseSelectedBoneRef.current];
+      if (selectedGlow && selectedAnchorBoneName) {
+        const bone = bones[selectedAnchorBoneName];
         if (bone) {
           bone.getWorldPosition(wp);
           selectedGlow.position.copy(wp);
+          if (arrowsGroup) arrowsGroup.position.copy(wp);
+          // Task #321: re-project the selected joint to screen space so
+          // the slider HUD chip follows the camera (and the underlying
+          // skeleton) on every frame. We write to a ref so this does not
+          // force a viewer-wide re-render — the slider HUD reads it via
+          // a getter and re-renders itself on its own raf tick.
+          if (skeletonModeRef.current !== 'treatment') {
+            const screen = wp.clone().project(camera);
+            const rect = domElement.getBoundingClientRect();
+            const sx = (screen.x * 0.5 + 0.5) * rect.width;
+            const sy = (-screen.y * 0.5 + 0.5) * rect.height;
+            // Hide the chip when the joint is behind the camera or
+            // outside the canvas — projected NDC.z > 1 means behind.
+            const offscreen = screen.z > 1
+              || sx < -40 || sy < -40
+              || sx > rect.width + 40 || sy > rect.height + 40;
+            // Throttled occlusion check: cast camera→joint and see if a
+            // body mesh sits clearly in front of the joint. Skipped during
+            // an active drag (clinician needs the HUD to stay put even
+            // when geometry temporarily occludes the bone mid-motion).
+            occlusionFrameCounter = (occlusionFrameCounter + 1) % 6;
+            if (occlusionFrameCounter === 0 && !poseDragRef.current) {
+              const ndc = new THREE.Vector2(screen.x, screen.y);
+              raycasterRef.current.setFromCamera(ndc, camera);
+              const camPos = new THREE.Vector3();
+              camera.getWorldPosition(camPos);
+              const jointDist = camPos.distanceTo(wp);
+              const hits = raycasterRef.current.intersectObjects(cachedMeshes, true);
+              // Allow a generous epsilon — many bones live just inside
+              // the surface, so a hit ≤ jointDist is fine; only flag as
+              // occluded when a surface is meaningfully in front.
+              const occluder = hits.find(h => h.distance < jointDist - 0.04);
+              lastJointOccluded = !!occluder;
+            }
+            // Skip writes under ~1 px to avoid HUD churn on sub-pixel jitter.
+            const next = (offscreen || lastJointOccluded) ? null : { x: sx, y: sy };
+            const prev = selectedJointAnchorRef.current;
+            if (next === null) {
+              if (prev !== null) selectedJointAnchorRef.current = null;
+            } else if (!prev || Math.abs(prev.x - next.x) >= 1 || Math.abs(prev.y - next.y) >= 1) {
+              selectedJointAnchorRef.current = next;
+            }
+          } else {
+            if (selectedJointAnchorRef.current !== null) selectedJointAnchorRef.current = null;
+          }
+        }
+      } else if (selectedGlow && selectedBoneSegmentId) {
+        // Track the bone-segment midpoint as the underlying skeleton moves.
+        const spec = BONE_SEGMENT_BY_ID[selectedBoneSegmentId];
+        const segAnchor = spec ? computeBoneSegmentAnchor(spec) : null;
+        if (segAnchor) {
+          selectedGlow.position.copy(segAnchor);
+          if (arrowsGroup) arrowsGroup.position.copy(segAnchor);
         }
       }
       if (hoverGlow && hoveredBone) {
-        const bone = bones[hoveredBone];
-        if (bone) {
-          bone.getWorldPosition(wp);
-          hoverGlow.position.copy(wp);
+        if (hoveredBone.startsWith('seg:')) {
+          const segId = hoveredBone.slice(4) as BoneSegmentId;
+          const spec = BONE_SEGMENT_BY_ID[segId];
+          const a = spec ? computeBoneSegmentAnchor(spec) : null;
+          if (a) hoverGlow.position.copy(a);
+        } else {
+          const bone = bones[hoveredBone];
+          if (bone) {
+            bone.getWorldPosition(wp);
+            hoverGlow.position.copy(wp);
+          }
         }
       }
     };
@@ -5297,23 +8517,118 @@ export default function PureThreeGLBViewer({
 
     return () => {
       cancelAnimationFrame(poseGlowAnimFrame.current);
+      applyExternalBoneSelectionRef.current = null;
+      // Task #321: tear down the slider HUD API so unmounted-viewer
+      // chips can never call into stale closures.
+      sliderHudApiRef.current = null;
+      canvasElRef.current = null;
+      selectedJointAnchorRef.current = null;
+      if (movementSettleTimerRef.current !== null) {
+        window.clearTimeout(movementSettleTimerRef.current);
+        movementSettleTimerRef.current = null;
+      }
+      pendingMovementAttemptRef.current = null;
       domElement.removeEventListener('mousemove', onMouseMove);
       domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
       domElement.removeEventListener('dblclick', onDblClick);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      cancelSpringBack();
       removeGlow(hoverGlow);
       removeGlow(selectedGlow);
+      disposeArrows();
+      labelTexCache.forEach((t) => t.dispose());
+      labelTexCache.clear();
       hoverGlow = null;
       selectedGlow = null;
       hoveredBone = null;
+      selectedJointKey = null;
+      selectedAnchorBoneName = null;
+      selectedBoneSegmentId = null;
       poseSelectedBoneRef.current = null;
       poseHighlightMeshRef.current = null;
-      poseDragRef.current = null;
+      if (poseDragRef.current) {
+        poseDragRef.current = null;
+        onPoseDragChangeRef.current?.(false);
+      }
       controls.enabled = true;
       domElement.style.cursor = '';
       setPoseModeTooltip(null);
     };
   }, [enablePoseMode, status]);
+
+  // Movement Mode hold-to-test (Task #319): clear all per-joint locks
+  // whenever the clinician leaves Movement Mode, so locks don't survive
+  // into Posture Mode where they have no meaning.
+  useEffect(() => {
+    if (skeletonMode !== 'movement') {
+      setLockedMovementConfigKeys(prev => (prev.size > 0 ? new Set() : prev));
+      // Task #323: also wipe the live overlays (muscle highlights + joint
+      // reaction force chip) on the way out — they're meaningless in
+      // Posture Mode, and the effect won't re-render them anyway.
+      setMovementMuscleActivation(null);
+      setMovementMuscleStatesOverlay(null);
+      setMovementJointReactionForce(null);
+      setMovementTopMovers(null);
+      movementBaselineMapRef.current = new Map();
+      movementBaselineMuscleStatesRef.current = null;
+      movementBaselineMusclesRef.current = null;
+      // Task #323 — review-7 fix: tear down bone-glow markers on mode exit.
+      if (sceneRef.current && movementMuscleGlowsRef.current.length > 0) {
+        const scene = sceneRef.current.scene;
+        for (const m of movementMuscleGlowsRef.current) {
+          scene.remove(m);
+          m.geometry.dispose();
+          if (m.material instanceof THREE.Material) m.material.dispose();
+        }
+        movementMuscleGlowsRef.current = [];
+      }
+    } else {
+      // Task #323 — review-3 fix + review-4 harmonization: snapshot every
+      // DOF value when entering Movement Mode AND whenever the patient /
+      // archetype context changes (modelConfig identity flips). We skip
+      // the refresh while a drag is active so per-frame mutations during
+      // a drag don't collapse the baseline back to the current pose.
+      if (poseDragRef.current) return;
+      const snapshot = new Map<string, number>();
+      const cfg = modelConfigRef.current as Record<string, Record<string, number | undefined> | undefined> | undefined;
+      if (cfg) {
+        for (const spec of DOF_SPECS) {
+          const grp = cfg[spec.joint];
+          const v = grp?.[spec.property];
+          if (typeof v === 'number') snapshot.set(spec.id, v);
+        }
+      }
+      movementBaselineMapRef.current = snapshot;
+      // Task #323 — review-5 fix: capture the engine's full-body activation
+      // map so the live diff covers EVERY muscle the engine models —
+      // upper body / spine / scapula / neck / pelvis as well as legs.
+      // Wrapped in try/catch because computeAllMuscleStates is defensive
+      // but a malformed modelConfig shouldn't kill mode entry.
+      // Task #323 — review-7 fix: also capture the per-muscle baseline
+      // (IndividualMuscle indexed by muscle id) so the drag tick can
+      // compute per-muscle activation deltas and surface the dominant
+      // muscle per meshGroup, not the diluted group average.
+      try {
+        const baselineAnalysis = computeFullMuscleAnalysis(modelConfigRef.current);
+        movementBaselineMuscleStatesRef.current = baselineAnalysis.groupStates;
+        const byId: Record<string, IndividualMuscle> = {};
+        for (const m of baselineAnalysis.allMuscles) byId[m.id] = m;
+        movementBaselineMusclesRef.current = byId;
+      } catch {
+        movementBaselineMuscleStatesRef.current = null;
+        movementBaselineMusclesRef.current = null;
+      }
+    }
+  }, [skeletonMode, modelConfig]);
+
+  // Prop-driven external bone-selection sync (Task #212). Runs whenever the
+  // controlled selection prop changes; the inner pose-mode effect installs
+  // applyExternalBoneSelectionRef.current while it's mounted.
+  useEffect(() => {
+    applyExternalBoneSelectionRef.current?.(selectedBoneSegmentIdProp);
+  }, [selectedBoneSegmentIdProp]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -5364,6 +8679,7 @@ export default function PureThreeGLBViewer({
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.info.autoReset = false;
         container.appendChild(renderer.domElement);
+        canvasElRef.current = renderer.domElement;
 
         renderer.domElement.addEventListener('webglcontextlost', (e) => {
           e.preventDefault();
@@ -5772,6 +9088,7 @@ export default function PureThreeGLBViewer({
             }
             
             setStatus('ready');
+            setModelReadyTick(t => t + 1);
             onModelReady?.();
             
             if (initialDPR < window.devicePixelRatio && !isLowMemDevice) {
@@ -6023,6 +9340,12 @@ export default function PureThreeGLBViewer({
             setForceLabels(projectedForces);
           } else if (!forceOverlayRef.current || forceOverlayRef.current.length === 0) {
             setForceLabels(prev => prev.length > 0 ? [] : prev);
+          }
+
+          // Task #381 — keep clean-mode stress rings facing the camera.
+          // No-op when no rings exist (detailed mode or no force data).
+          if (forceVisualizationRef.current) {
+            forceVisualizationRef.current.updateBillboards(sceneRef.current.camera);
           }
 
           sceneRef.current.renderer.render(sceneRef.current.scene, sceneRef.current.camera);
@@ -7591,6 +10914,51 @@ export default function PureThreeGLBViewer({
     };
   }, [animationState?.isPlaying, animationState?.currentMovement, animationState?.speed, status, onAnimationFrame, jointLimits]);
 
+  // Task #381 — local mirror of the clinician's Clean/Detailed preference,
+  // persisted to localStorage by `BiomechanicsHUD`. Listening to a custom
+  // window event keeps the toggle reactive without threading another prop
+  // through every consumer (PhysioGPT, TestSkeletonNew, MultiViewSkeletonLayout).
+  const [stressVizMode, setStressVizMode] = useState<'clean' | 'detailed'>(() => {
+    if (typeof window === 'undefined') return 'clean';
+    const stored = window.localStorage.getItem('physiogpt:stressVizMode');
+    return stored === 'detailed' ? 'detailed' : 'clean';
+  });
+  // Task #382 — keep the pain-marker ref in sync so newly-created marker
+  // meshes pick up the correct initial visibility on first paint.
+  painMarkerVizModeRef.current = stressVizMode;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode?: 'clean' | 'detailed' }>).detail;
+      const next = detail?.mode === 'detailed' ? 'detailed' : 'clean';
+      setStressVizMode(next);
+    };
+    window.addEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
+    return () => window.removeEventListener('physiogpt:stress-viz-mode-change', handler as EventListener);
+  }, []);
+
+  // Task #382 — flip outer sphere ↔ clean ring visibility on every existing
+  // pain marker when the clinician toggles the HUD's Cloud control. Mesh
+  // creation lives in another effect (deps: [painMarkers]) and we don't want
+  // to rebuild every marker just because the mode changed.
+  useEffect(() => {
+    painMarkerMeshesRef.current.forEach((meshes) => {
+      meshes.outer.visible = stressVizMode === 'detailed';
+      if (meshes.cleanRing) meshes.cleanRing.visible = stressVizMode === 'clean';
+      // Referred-marker target sphere is also a translucent blob — hide it in
+      // Clean mode so stacked referred markers don't form a cloud either.
+      // Located via the explicit `role` tag set at creation time so we don't
+      // accidentally hide line/paint marker dots that also live in `extra`.
+      if (meshes.extra) {
+        for (const obj of meshes.extra) {
+          if (obj instanceof THREE.Mesh && obj.userData.role === 'referredTargetOuter') {
+            obj.visible = stressVizMode === 'detailed';
+          }
+        }
+      }
+    });
+  }, [stressVizMode]);
+
   // Force visualization effect
   useEffect(() => {
     if (status !== 'ready' || !sceneRef.current || Object.keys(bonesRef.current).length === 0) {
@@ -7610,7 +10978,13 @@ export default function PureThreeGLBViewer({
 
     // Update visualization if biomechanics data is provided
     if (biomechanicsData) {
-      forceVisualizationRef.current.updateVisualization(biomechanicsData);
+      // Task #381 — overlay the clinician's preferred stress-viz mode onto
+      // the data the parent sends. Parent code paths (TestSkeletonNew, etc.)
+      // don't need to know about the toggle.
+      forceVisualizationRef.current.updateVisualization({
+        ...biomechanicsData,
+        stressVizMode: biomechanicsData.stressVizMode ?? stressVizMode,
+      });
     } else {
       forceVisualizationRef.current.clearVisualization();
     }
@@ -7618,7 +10992,7 @@ export default function PureThreeGLBViewer({
     return () => {
       // Clear visualization when component updates
     };
-  }, [biomechanicsData, status]);
+  }, [biomechanicsData, status, stressVizMode]);
 
   // Muscle visualization effect
   useEffect(() => {
@@ -7634,19 +11008,27 @@ export default function PureThreeGLBViewer({
       );
     }
 
-    // Update muscle visualization based on visibility config
-    if (muscleVisibility?.enabled) {
-      muscleVisualizationRef.current.setShowLabels(muscleVisibility.showLabels || false);
+    const effectiveActivation = (skeletonMode === 'movement' && movementMuscleActivation)
+      ? movementMuscleActivation
+      : (muscleActivation || {});
+    // Task #323 — review-6 fix: split muscle groups must also be visible
+    // when only the engine-derived overlay is active (e.g. shoulder /
+    // spine / neck DOFs that the legacy MuscleActivationLevels heuristic
+    // doesn't cover). Without this OR, showMuscles flips false for
+    // upper-body sliders and the entire layer is hidden.
+    const showMuscles = muscleVisibility?.enabled || (skeletonMode === 'movement' && (!!movementMuscleActivation || !!movementMuscleStatesOverlay));
+    if (showMuscles) {
+      muscleVisualizationRef.current.setShowLabels(muscleVisibility?.showLabels || false);
       muscleVisualizationRef.current.updateMuscles(
-        muscleActivation || {},
+        effectiveActivation,
         {
-          quadriceps: muscleVisibility.quadriceps ?? true,
-          hamstrings: muscleVisibility.hamstrings ?? true,
-          adductors: muscleVisibility.adductors ?? true,
-          calf: muscleVisibility.calf ?? true,
-          shin: muscleVisibility.shin ?? true,
-          lateral: muscleVisibility.lateral ?? true,
-          other: muscleVisibility.other ?? true
+          quadriceps: muscleVisibility?.quadriceps ?? true,
+          hamstrings: muscleVisibility?.hamstrings ?? true,
+          adductors: muscleVisibility?.adductors ?? true,
+          calf: muscleVisibility?.calf ?? true,
+          shin: muscleVisibility?.shin ?? true,
+          lateral: muscleVisibility?.lateral ?? true,
+          other: muscleVisibility?.other ?? true
         }
       );
     } else {
@@ -7656,7 +11038,7 @@ export default function PureThreeGLBViewer({
     return () => {
       // Clear visualization when component updates
     };
-  }, [muscleVisibility, muscleActivation, status]);
+  }, [muscleVisibility, muscleActivation, status, skeletonMode, movementMuscleActivation, movementMuscleStatesOverlay]);
 
   // Muscle layer (GLB model) effect
   useEffect(() => {
@@ -7773,43 +11155,180 @@ export default function PureThreeGLBViewer({
   useEffect(() => {
     if (splitMuscleGroupsRef.current.size === 0) return;
 
-    if (!muscleStates) {
+    // Task #323 — review-5 fix: prefer the engine-derived live overlay
+    // (baseline-vs-current activation diff) when a Movement Mode drag is
+    // in progress, so muscles around ANY engaged joint light up. Falls
+    // back to the muscle-panel `muscleStates` prop otherwise.
+    const effectiveStates = movementMuscleStatesOverlay ?? muscleStates;
+
+    if (!effectiveStates) {
       originalMaterialsRef.current.forEach((originalMat, mesh) => {
         mesh.material = originalMat;
       });
       return;
     }
 
+    // Task #323 — review-6 fix: explicitly RESET materials for any
+    // split-group mesh whose group id is absent from `effectiveStates`,
+    // so a muscle that was lit on the previous frame but has dropped
+    // below the activation-delta threshold this frame visibly fades
+    // back to its resting color instead of staying highlighted until
+    // drag-release. Previously the `if (!state) return` short-circuit
+    // skipped the reset, leaving stale colors.
     splitMuscleGroupsRef.current.forEach((group, groupId) => {
-      const state = muscleStates[groupId];
-      if (!state) return;
-
-      const hasIssue = state.state !== 'neutral' ||
-        state.tension > 50 || state.activationPercent > 60;
+      const state = effectiveStates[groupId];
+      const hasIssue = state
+        ? state.state !== 'neutral' || state.tension > 50 || state.activationPercent > 60
+        : false;
 
       group.meshes.forEach((mesh) => {
-        if (mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh) {
-          if (!originalMaterialsRef.current.has(mesh)) {
-            originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
-          }
-          if (!hasIssue) {
-            const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
-            if (orig) {
-              mesh.material = orig.clone();
-            }
-            return;
-          }
-          const color = getMuscleColor(state);
-          const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
-          const mat = orig ? orig.clone() as THREE.MeshStandardMaterial : (mesh.material as THREE.MeshStandardMaterial);
-          mat.color.setRGB(color.r, color.g, color.b);
-          if (mat.emissive) mat.emissive.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
-          mat.needsUpdate = true;
-          mesh.material = mat;
+        if (!(mesh instanceof THREE.SkinnedMesh || mesh instanceof THREE.Mesh)) return;
+        if (!originalMaterialsRef.current.has(mesh)) {
+          originalMaterialsRef.current.set(mesh, (mesh.material as THREE.Material).clone());
         }
+        if (!state || !hasIssue) {
+          const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+          if (orig) {
+            mesh.material = orig.clone();
+          }
+          return;
+        }
+        const color = getMuscleColor(state);
+        const orig = originalMaterialsRef.current.get(mesh) as THREE.Material | undefined;
+        const mat = orig ? orig.clone() as THREE.MeshStandardMaterial : (mesh.material as THREE.MeshStandardMaterial);
+        mat.color.setRGB(color.r, color.g, color.b);
+        if (mat.emissive) mat.emissive.setRGB(color.r * 0.15, color.g * 0.15, color.b * 0.15);
+        mat.needsUpdate = true;
+        mesh.material = mat;
       });
     });
-  }, [muscleStates]);
+  }, [muscleStates, movementMuscleStatesOverlay]);
+
+  // Task #323 — review-7 fix: bone-positioned glow markers for muscle
+  // groups whose meshGroup id has NO corresponding split mesh in the
+  // loaded GLB. The shipped 3D asset only has torso/leg muscle meshes;
+  // it does NOT have biceps, triceps, deltoid_l, scapula_l, etc. So even
+  // when the engine overlay correctly contains `bicep_l: { activation:
+  // 73, state: 'shortened' }` for an elbow flex, the mesh-paint effect
+  // above can't surface it (no mesh to tint). This effect places a
+  // colored glow sphere at the bone position(s) for those groups so the
+  // muscle still visibly "lights up" on the skeleton.
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current.scene;
+
+    // Tear down any prior glow markers before re-emitting.
+    if (movementMuscleGlowsRef.current.length > 0) {
+      for (const m of movementMuscleGlowsRef.current) {
+        scene.remove(m);
+        m.geometry.dispose();
+        if (m.material instanceof THREE.Material) m.material.dispose();
+      }
+      movementMuscleGlowsRef.current = [];
+    }
+
+    if (!movementMuscleStatesOverlay) return;
+
+    // Per-group bone(s) we want to glow. Pulled from the rig's bone
+    // names. Multiple bones → average position. Picked to anchor visually
+    // where the muscle BELLY sits, not just its insertion (e.g. biceps
+    // is between Shoulder_L and Elbow_L, not on the forearm).
+    const MUSCLE_GLOW_BONES: Record<string, string[]> = {
+      bicep_l: ['Shoulder_L', 'Elbow_L'],
+      bicep_r: ['Shoulder_R', 'Elbow_R'],
+      deltoid_l: ['Shoulder_L'],
+      deltoid_r: ['Shoulder_R'],
+      scapula_l: ['Scapula_L'],
+      scapula_r: ['Scapula_R'],
+      glute_l: ['Hip_L'],
+      glute_r: ['Hip_R'],
+      quad_l: ['HipPart1_L'],
+      quad_r: ['HipPart1_R'],
+      calf_l: ['Knee_L'],
+      calf_r: ['Knee_R'],
+      shin_l: ['Ankle_L'],
+      shin_r: ['Ankle_R'],
+      chest: ['Chest_M'],
+      spine: ['Spine1_M', 'Chest_M'],
+      neck: ['Neck_M'],
+      core: ['Root_M'],
+    };
+
+    for (const [groupId, status] of Object.entries(movementMuscleStatesOverlay)) {
+      // Skip groups that already paint via the mesh pipeline.
+      if (splitMuscleGroupsRef.current.has(groupId)) continue;
+      const boneNames = MUSCLE_GLOW_BONES[groupId];
+      if (!boneNames || boneNames.length === 0) continue;
+
+      const positions: THREE.Vector3[] = [];
+      for (const bn of boneNames) {
+        const bone = bonesRef.current[bn];
+        if (!bone) continue;
+        const wp = new THREE.Vector3();
+        bone.getWorldPosition(wp);
+        positions.push(wp);
+      }
+      if (positions.length === 0) continue;
+
+      const center = positions.reduce(
+        (acc, p) => acc.add(p),
+        new THREE.Vector3()
+      ).multiplyScalar(1 / positions.length);
+
+      const c = getMuscleColor(status);
+      const color = new THREE.Color(c.r, c.g, c.b);
+
+      // Scale the inner glow with activation so a 73% biceps fires
+      // visibly larger than a 25% wrist flexor twitch.
+      const intensity = Math.max(0.4, status.activationPercent / 100);
+      const innerR = 0.08 + intensity * 0.06;
+
+      const innerGeo = new THREE.SphereGeometry(innerR, 16, 12);
+      const innerMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const inner = new THREE.Mesh(innerGeo, innerMat);
+      inner.position.copy(center);
+      inner.renderOrder = 999;
+      inner.userData.isMovementMuscleGlow = true;
+      scene.add(inner);
+      movementMuscleGlowsRef.current.push(inner);
+
+      const outerGeo = new THREE.SphereGeometry(innerR * 1.7, 12, 8);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.18,
+        depthWrite: false,
+        depthTest: true,
+        side: THREE.DoubleSide,
+      });
+      const outer = new THREE.Mesh(outerGeo, outerMat);
+      outer.position.copy(center);
+      outer.renderOrder = 998;
+      outer.userData.isMovementMuscleGlow = true;
+      scene.add(outer);
+      movementMuscleGlowsRef.current.push(outer);
+    }
+
+    return () => {
+      // Dispose markers when overlay changes/clears.
+      if (sceneRef.current && movementMuscleGlowsRef.current.length > 0) {
+        const sc = sceneRef.current.scene;
+        for (const m of movementMuscleGlowsRef.current) {
+          sc.remove(m);
+          m.geometry.dispose();
+          if (m.material instanceof THREE.Material) m.material.dispose();
+        }
+        movementMuscleGlowsRef.current = [];
+      }
+    };
+  }, [movementMuscleStatesOverlay]);
 
   useEffect(() => {
     for (const entry of biomechanicalHighlightRef.current) {
@@ -7833,10 +11352,16 @@ export default function PureThreeGLBViewer({
           const origMat = mesh.material as THREE.MeshStandardMaterial;
           if (origMat) {
             const clonedMat = origMat.clone() as THREE.MeshStandardMaterial;
-            clonedMat.emissive = new THREE.Color(colorHex);
-            clonedMat.emissiveIntensity = 0.5;
+            // Task #399b — boosted emissive from 0.5 → 0.85 and tinted the
+            // base diffuse colour toward the chain colour so chain-painted
+            // muscles read clearly as the selected chain colour at a glance,
+            // not just as a faint glow on top of the GLB skin tone.
+            const chainColor = new THREE.Color(colorHex);
+            clonedMat.emissive = chainColor;
+            clonedMat.emissiveIntensity = 0.85;
+            clonedMat.color = chainColor.clone().lerp(new THREE.Color('#ffffff'), 0.35);
             clonedMat.transparent = true;
-            clonedMat.opacity = 0.85;
+            clonedMat.opacity = 0.95;
             clonedMat.needsUpdate = true;
 
             biomechanicalHighlightRef.current.push({
@@ -8731,6 +12256,21 @@ export default function PureThreeGLBViewer({
           {CAMERA_PRESETS[cameraAngle].label}
         </div>
       )}
+      {/* Skeleton-mode pill: always-visible, unambiguous indicator
+          of the current interaction mode (Posture vs Movement). */}
+      <div
+        className={`absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider shadow-lg backdrop-blur ${
+          skeletonMode === 'movement'
+            ? 'bg-emerald-500/95 text-white border border-emerald-300/50'
+            : 'bg-slate-800/90 text-slate-200 border border-slate-600/50'
+        }`}
+        data-testid={`skeleton-mode-pill-${skeletonMode}`}
+        title={skeletonMode === 'movement'
+          ? 'Drags simulate active patient movement gated by capacity'
+          : 'Drags reposition posture without active gating'}
+      >
+        {skeletonMode === 'movement' ? '● Movement Mode' : '○ Posture Mode'}
+      </div>
       
       {enableZoomTool && landmarkLabels.length > 0 && (
         <>
@@ -8793,6 +12333,33 @@ export default function PureThreeGLBViewer({
           })}
         </>
       )}
+      {/* Pose mode hint: how to select bones vs joints (Task #212).
+          Movement Mode (Task #319) shows hold-to-test instructions instead. */}
+      {enablePoseMode && (
+        <div
+          className="absolute top-2 left-2 z-10 pointer-events-none px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur text-[10px] text-emerald-100 border border-emerald-500/30 shadow"
+          data-testid="pose-mode-hint"
+        >
+          {skeletonMode === 'movement' ? (
+            <div><span className="text-emerald-300">Hold</span> any joint to move · release to relax · <span className="text-amber-300">double-click</span> to lock</div>
+          ) : (
+            <div><span className="text-emerald-300">Click</span> joint dot · <span className="text-blue-300">Shift+Click</span> bone shaft</div>
+          )}
+        </div>
+      )}
+      {/* Movement Mode lock summary (Task #319): a small pill listing how
+          many joints are pinned, so the clinician can see locks at a glance
+          even when those joints aren't currently selected. */}
+      {enablePoseMode && skeletonMode === 'movement' && lockedMovementConfigKeys.size > 0 && (
+        <div
+          className="absolute top-2 left-2 z-10 pointer-events-none px-2 py-1 rounded-md bg-amber-500/15 backdrop-blur text-[10px] text-amber-100 border border-amber-500/40 shadow flex items-center gap-1"
+          style={{ marginTop: 26 }}
+          data-testid="movement-locks-pill"
+        >
+          <Lock className="h-2.5 w-2.5" />
+          <span>{lockedMovementConfigKeys.size} joint{lockedMovementConfigKeys.size === 1 ? '' : 's'} locked · double-click to unlock</span>
+        </div>
+      )}
       {/* Pose mode tooltip */}
       {poseModeTooltip && enablePoseMode && (
         <div
@@ -8805,6 +12372,366 @@ export default function PureThreeGLBViewer({
           </div>
         </div>
       )}
+      {skeletonMode === 'movement' && movementSelectedJoint && activeCapacities && (() => {
+        const rows = Object.entries(activeCapacities)
+          .filter(([k]) => k.startsWith(`${movementSelectedJoint.key}:`))
+          .slice(0, 3);
+        if (rows.length === 0) return null;
+        // Task #319: surface a Locked badge inside this HUD when any
+        // configKey under the currently-selected joint is pinned.
+        const selectedJointLocked = Array.from(lockedMovementConfigKeys).some(
+          k => k.startsWith(`${movementSelectedJoint.key}.`)
+        );
+        return (
+          <div
+            className="absolute pointer-events-none z-20"
+            style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y - 18, transform: 'translate(-50%, -100%)' }}
+            data-testid="movement-rom-pill"
+          >
+            <div className="px-2.5 py-1.5 rounded-md shadow-lg bg-slate-900/95 backdrop-blur border border-emerald-500/40 text-white text-[11px] leading-tight space-y-0.5">
+              {rows.map(([k, r]) => {
+                const mv = k.split(':')[1];
+                const aMin = r.activeRomMin ?? 0;
+                const pMin = r.passiveRomMin ?? 0;
+                return (
+                  <div key={k} className="flex items-center gap-2">
+                    <span className="text-emerald-300 capitalize">{mv.replace(/([A-Z])/g, ' $1').trim()}</span>
+                    <span className="font-semibold tabular-nums">Active {Math.round(aMin)}–{Math.round(r.activeRomMax)}°</span>
+                    <span className="text-slate-400 tabular-nums">/ Passive {Math.round(pMin)}–{Math.round(r.passiveRomMax)}°</span>
+                  </div>
+                );
+              })}
+              {selectedJointLocked && (
+                <div
+                  className="flex items-center gap-1 mt-1 pt-1 border-t border-amber-500/40 text-amber-200"
+                  data-testid="movement-rom-pill-lock"
+                >
+                  <Lock className="h-2.5 w-2.5" />
+                  <span>Locked · double-click joint to unlock</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+      {/* Task #319: selected-joint lock badge that does NOT depend on
+          activeCapacities rows — guarantees the clinician always sees a
+          near-joint Locked indicator when a joint is pinned, even if its
+          ROM rows aren't loaded. Suppressed when the ROM-pill above is
+          already rendering (which has its own lock row) to avoid
+          stacking duplicate badges on the same joint. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && (() => {
+        const selectedJointLocked = Array.from(lockedMovementConfigKeys).some(
+          k => k.startsWith(`${movementSelectedJoint.key}.`)
+        );
+        if (!selectedJointLocked) return null;
+        const romPillVisible = !!activeCapacities && Object.keys(activeCapacities).some(
+          k => k.startsWith(`${movementSelectedJoint.key}:`)
+        );
+        if (romPillVisible) return null;
+        return (
+          <div
+            className="absolute pointer-events-none z-20"
+            style={{ left: movementSelectedJoint.x, top: movementSelectedJoint.y - 18, transform: 'translate(-50%, -100%)' }}
+            data-testid="movement-joint-lock-badge"
+          >
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md shadow-lg bg-amber-500/15 backdrop-blur border border-amber-500/40 text-amber-200 text-[11px] leading-tight">
+              <Lock className="h-2.5 w-2.5" />
+              <span>Locked · double-click joint to unlock</span>
+            </div>
+          </div>
+        );
+      })()}
+      {/* On-body painful-arc halo + label, driven by live gated state. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && livePainfulArc && (() => {
+        const anchor = selectedJointAnchorRef.current ?? { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        const intensity = livePainfulArc.intensity;
+        const ringSize = 42 + Math.min(28, intensity * 3);
+        const haloTint = intensity >= 7
+          ? { ring: 'border-red-500', glow: 'bg-red-500/35', shadow: 'shadow-red-500/60' }
+          : intensity >= 4
+            ? { ring: 'border-orange-400', glow: 'bg-orange-400/30', shadow: 'shadow-orange-400/50' }
+            : { ring: 'border-amber-400', glow: 'bg-amber-400/25', shadow: 'shadow-amber-400/40' };
+        const dirIcon = livePainfulArc.direction === 'ascending' ? '↑'
+          : livePainfulArc.direction === 'descending' ? '↓'
+            : '↕';
+        const lmShort = livePainfulArc.loadingMode === 'eccentric' ? 'ECC'
+          : livePainfulArc.loadingMode === 'concentric' ? 'CON'
+            : livePainfulArc.loadingMode === 'isometric' ? 'ISO'
+              : null;
+        const movementText = livePainfulArc.movement.replace(/([A-Z])/g, ' $1').trim();
+        return (
+          <div
+            className="absolute pointer-events-none z-30 animate-in fade-in zoom-in-90 duration-150"
+            style={{ left: anchor.x, top: anchor.y, transform: 'translate(-50%, -50%)' }}
+            data-testid="painful-arc-halo"
+            data-direction={livePainfulArc.direction || 'either'}
+            data-loading-mode={livePainfulArc.loadingMode || 'any'}
+          >
+            <div
+              className={`absolute rounded-full border-2 ${haloTint.ring} ${haloTint.glow} ${haloTint.shadow} shadow-2xl animate-pulse`}
+              style={{
+                width: ringSize,
+                height: ringSize,
+                left: -ringSize / 2,
+                top: -ringSize / 2,
+              }}
+            />
+            <div
+              className={`absolute rounded-full ${haloTint.ring} border bg-white/90`}
+              style={{ width: 6, height: 6, left: -3, top: -3 }}
+            />
+            <div
+              className={`absolute text-[18px] font-bold leading-none ${
+                intensity >= 7 ? 'text-red-200' : intensity >= 4 ? 'text-orange-200' : 'text-amber-200'
+              } drop-shadow-lg`}
+              style={{ left: ringSize / 2 + 2, top: -10 }}
+              data-testid="painful-arc-direction-arrow"
+            >
+              {dirIcon}
+            </div>
+            <div
+              className="absolute"
+              style={{ left: 0, top: ringSize / 2 + 4, transform: 'translate(-50%, 0)' }}
+            >
+              <div className={`whitespace-nowrap px-2 py-1 rounded-md shadow-xl backdrop-blur text-white text-[11px] font-medium border ${
+                intensity >= 7 ? 'bg-red-600/90 border-red-300' :
+                intensity >= 4 ? 'bg-orange-500/90 border-orange-200' :
+                'bg-amber-500/90 border-amber-200'
+              }`}
+              data-testid="painful-arc-label"
+              >
+                {livePainfulArc.label ? (
+                  <span className="font-semibold">{livePainfulArc.label}</span>
+                ) : (
+                  <span className="font-semibold capitalize">{movementText}</span>
+                )}
+                <span className="ml-1.5 opacity-90 tabular-nums">{livePainfulArc.angle}° · {intensity}/10</span>
+                {lmShort && (
+                  <span className="ml-1.5 px-1 py-0.5 rounded bg-white/20 text-[9px] tracking-wider font-bold">
+                    {lmShort}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Task #323: Live joint reaction force chip — renders during a
+          Movement Mode drag near the moving joint anchor. Shows total
+          Newtons (primary) + body-weight multiple (secondary). Suppressed
+          outside Movement Mode and the moment the drag releases. */}
+      {skeletonMode === 'movement' && movementSelectedJoint && movementJointReactionForce && (() => {
+        const anchor = selectedJointAnchorRef.current ?? { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        const f = movementJointReactionForce;
+        // Cool→warm gradient buckets keyed off BW multiple — keeps the
+        // colour scheme consistent with the rest of the force overlays.
+        const tint = f.bwMultiple >= 4
+          ? { bg: 'bg-red-600/90', border: 'border-red-300', label: 'text-red-100' }
+          : f.bwMultiple >= 3
+            ? { bg: 'bg-orange-500/90', border: 'border-orange-200', label: 'text-orange-100' }
+            : f.bwMultiple >= 2
+              ? { bg: 'bg-amber-500/90', border: 'border-amber-200', label: 'text-amber-100' }
+              : { bg: 'bg-emerald-600/90', border: 'border-emerald-200', label: 'text-emerald-100' };
+        return (
+          <div
+            className="absolute z-30 pointer-events-none"
+            style={{ left: anchor.x - 12, top: anchor.y - 38, transform: 'translate(-100%, -50%)' }}
+            data-testid="movement-joint-force-chip"
+            data-joint={f.joint}
+          >
+            <div className={`rounded-md shadow-xl backdrop-blur border ${tint.bg} ${tint.border} px-2 py-1 text-white leading-tight`}>
+              <div className={`text-[8px] uppercase tracking-wider ${tint.label}`}>{f.joint} reaction</div>
+              <div className="text-[13px] font-bold tabular-nums">{Math.round(f.newtons)} N</div>
+              <div className="text-[9px] tabular-nums opacity-90">{Math.round(f.bwMultiple * 100)}% BW</div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Task #329: Top Movers HUD — lists the 3-5 muscles with the
+          biggest activation shift from the Movement-Mode baseline, with
+          activation %, signed delta, length state, and a capacity-relative
+          load pill (activation vs. patient's tested strength %). Anchored
+          bottom-right so it sits opposite the muscle activation legend
+          (bottom-left) and never collides with the slider HUD anchored to
+          the joint itself. Only renders during a drag. */}
+      {skeletonMode === 'movement' && movementTopMovers && movementTopMovers.movers.length > 0 && (
+        <div
+          className="absolute bottom-3 right-3 z-30 pointer-events-none"
+          data-testid="movement-top-movers-hud"
+          data-config-key={movementTopMovers.configKey}
+        >
+          <div className="rounded-lg shadow-2xl backdrop-blur bg-slate-900/92 border border-slate-700/60 px-3 py-2 w-72">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-slate-300">Top movers</div>
+              <div className="text-[9px] text-slate-400 tabular-nums">
+                {movementTopMovers.joint} · {movementTopMovers.movement}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {movementTopMovers.movers.map(m => {
+                const pillCls = m.capacityStatus === 'over'
+                  ? 'bg-red-500/30 text-red-100 border-red-400/50'
+                  : m.capacityStatus === 'near'
+                    ? 'bg-amber-500/30 text-amber-100 border-amber-400/50'
+                    : 'bg-emerald-500/25 text-emerald-100 border-emerald-400/40';
+                const barCls = m.capacityStatus === 'over'
+                  ? 'h-full bg-red-500'
+                  : m.capacityStatus === 'near'
+                    ? 'h-full bg-amber-400'
+                    : 'h-full bg-emerald-400';
+                const lenIcon = m.lengthState === 'concentric' ? '↓' : m.lengthState === 'eccentric' ? '↑' : '·';
+                const lenCls = m.lengthState === 'concentric'
+                  ? 'text-sky-300'
+                  : m.lengthState === 'eccentric'
+                    ? 'text-violet-300'
+                    : 'text-slate-400';
+                const deltaSign = m.delta >= 0 ? '+' : '';
+                const deltaCls = m.delta >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                return (
+                  <div key={m.id} className="text-[10px] text-slate-100" data-testid={`top-mover-${m.id}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span
+                          className={`text-[11px] leading-none ${lenCls}`}
+                          title={m.lengthState}
+                          data-testid={`top-mover-${m.id}-length-state`}
+                        >
+                          {lenIcon}
+                        </span>
+                        <span className="truncate" title={m.label}>{m.label}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className="tabular-nums text-slate-200"
+                          data-testid={`top-mover-${m.id}-activation`}
+                        >
+                          {Math.round(m.activation)}%
+                        </span>
+                        <span
+                          className={`tabular-nums text-[9px] ${deltaCls}`}
+                          data-testid={`top-mover-${m.id}-delta`}
+                        >
+                          {deltaSign}{Math.round(m.delta)}
+                        </span>
+                        <span
+                          className={`text-[9px] tabular-nums rounded border px-1 py-0.5 ${pillCls}`}
+                          title={`${Math.round(m.capacityLoadPct)}% of patient's tested strength`}
+                          data-testid={`top-mover-${m.id}-capacity`}
+                        >
+                          {Math.round(m.capacityLoadPct)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-0.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={barCls}
+                        style={{ width: `${Math.min(100, Math.max(2, m.capacityLoadPct))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-1.5 pt-1.5 border-t border-slate-700/40 text-[8px] text-slate-400 leading-tight">
+              Activation · Δ vs baseline · % of patient capacity
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Task #323: muscle activation legend — gradient strip + cap labels
+          shown only while live activation is being computed (drag in
+          progress). Anchored bottom-left so it doesn't fight the slider
+          HUD or the goal-state pill. */}
+      {skeletonMode === 'movement' && (movementMuscleActivation || movementMuscleStatesOverlay) && (
+        <div
+          className="absolute bottom-3 left-3 z-20 pointer-events-none"
+          data-testid="movement-muscle-activation-legend"
+        >
+          <div className="rounded-md shadow-lg bg-slate-900/90 backdrop-blur border border-slate-700/60 px-2 py-1.5">
+            <div className="text-[9px] uppercase tracking-wider text-slate-300 mb-1">Muscle activation</div>
+            <div
+              className="h-1.5 w-32 rounded-full"
+              style={{ background: 'linear-gradient(90deg, #1e3a8a 0%, #38bdf8 30%, #facc15 60%, #f97316 80%, #ef4444 100%)' }}
+            />
+            <div className="flex justify-between mt-0.5 text-[8px] tabular-nums text-slate-400">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+            <div className="text-[8px] text-slate-500 mt-0.5">Δ from baseline · agonist + antagonist</div>
+          </div>
+        </div>
+      )}
+      {/* Task #321: Movement Mode slider HUD — one slider per unique DOF
+          on the selected joint, drives the same constraint /
+          compensation / painful-arc / exceeded-limit pipeline as the 3D
+          arrow drag. Pin toggle reuses lockedMovementConfigKeys so a
+          pinned slider DOF skips spring-back. The 3D arrow gizmo stays
+          rendered as the fallback. */}
+      {skeletonMode !== 'treatment' && movementSelectedJoint && (() => {
+        const seen = new Set<string>();
+        const dofs: SliderDof[] = (JOINT_MOVEMENT_DEFS[movementSelectedJoint.key] ?? [])
+          .filter(def => DOF_LIMIT_INDEX.has(def.configKey))
+          .filter(def => {
+            if (seen.has(def.configKey)) return false;
+            seen.add(def.configKey);
+            return true;
+          })
+          .map(def => {
+            const lim = DOF_LIMIT_INDEX.get(def.configKey)!;
+            const lookup = def.configKey.replace('.', ':');
+            // Task #400 — Posture mode never reads active-capacity bands
+            // or painful-arc data even if a parent accidentally passes
+            // it in, keeping the local invariant explicit.
+            const row = skeletonMode === 'movement' ? activeCapacities?.[lookup] : undefined;
+            return {
+              configKey: def.configKey,
+              label: def.label,
+              hardMin: lim.min,
+              hardMax: lim.max,
+              activeRomMin: row?.activeRomMin ?? null,
+              activeRomMax: row?.activeRomMax ?? null,
+              passiveRomMin: row?.passiveRomMin ?? null,
+              passiveRomMax: row?.passiveRomMax ?? null,
+              painfulArc: row?.painfulArc
+                ? {
+                    start: row.painfulArc.start,
+                    end: row.painfulArc.end,
+                    intensity: row.painfulArc.intensity,
+                    direction: row.painfulArc.direction,
+                    loadingMode: row.painfulArc.loadingMode,
+                    label: row.painfulArc.label,
+                  }
+                : null,
+              pinned: lockedMovementConfigKeys.has(def.configKey),
+            };
+          });
+        if (dofs.length === 0) return null;
+        const fallbackAnchor = { x: movementSelectedJoint.x, y: movementSelectedJoint.y };
+        return (
+          <MovementJointSliderHUD
+            jointKey={movementSelectedJoint.key}
+            getAnchor={() => selectedJointAnchorRef.current ?? fallbackAnchor}
+            dofs={dofs}
+            getCurrentValue={(k) => sliderHudApiRef.current?.getCurrentValue(k) ?? 0}
+            onDragStart={(k) => sliderHudApiRef.current?.beginDrag(k)}
+            onDrag={(k, v) => sliderHudApiRef.current?.applyValue(k, v)}
+            onDragEnd={() => sliderHudApiRef.current?.endDrag()}
+            onTogglePin={(k) => {
+              setLockedMovementConfigKeys(prev => {
+                const next = new Set(prev);
+                if (next.has(k)) next.delete(k);
+                else next.add(k);
+                return next;
+              });
+            }}
+            onClose={() => sliderHudApiRef.current?.deselect()}
+            getCanvasEl={() => canvasElRef.current}
+            hidePinControls={skeletonMode === 'posture'}
+          />
+        );
+      })()}
       {/* Force value tooltip */}
       {hoverData && (
         <div 

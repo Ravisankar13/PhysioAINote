@@ -39,12 +39,13 @@ import {
   Search,
   ExternalLink,
   Globe,
+  FlaskConical,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import EvidenceCitationInline from "@/components/clinical/EvidenceCitationInline";
 import StructuredReasoningTab, { type StructuredReasoningResult, type ReasoningHypothesis as StructuredHypothesis } from "./StructuredReasoningTab";
 import DecisionTab, { type TreatmentDecisionResult } from "./DecisionTab";
-import PlanTab, { type TreatmentPlanResult } from "./PlanTab";
+import PlanTab, { type TreatmentPlanResult, type LoadingOverridePayload } from "./PlanTab";
 
 export interface EvidenceReference {
   title: string;
@@ -256,15 +257,20 @@ interface ClinicalReasoningPanelProps {
   onVisualizationRequest?: (request: VisualizationRequest | null) => void;
   activeVisualizationId?: string | null;
   onHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
+  onTestHypothesisClick?: (hypothesis: ClinicalHypothesis) => void;
   structuredData?: StructuredReasoningResult | null;
   structuredLoading?: boolean;
   onStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
+  onTestStructuredHypothesisClick?: (hypothesis: StructuredHypothesis) => void;
   decisionData?: TreatmentDecisionResult | null;
   decisionLoading?: boolean;
   onDecisionTargetClick?: (regions: string[]) => void;
   planData?: TreatmentPlanResult | null;
   planLoading?: boolean;
   onPlanTargetClick?: (regions: string[]) => void;
+  onPlanLoadingRecalculate?: () => void;
+  onPlanLoadingOverride?: (override: LoadingOverridePayload) => void;
+  onPlanLoadingClearOverride?: (exerciseId: string, weekIndex: number) => void;
   evidenceData?: EvidenceEngineResult | null;
   evidenceLoading?: boolean;
   onEvidenceQuery?: () => void;
@@ -272,6 +278,25 @@ interface ClinicalReasoningPanelProps {
   requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
   onRequestedTabHandled?: () => void;
   onActiveTabChange?: (tab: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence') => void;
+  showEvidenceTab?: boolean;
+  externalClinicalNotes?: ClinicalNotes | null;
+  onExternalClinicalNotesChange?: (notes: ClinicalNotes | null) => void;
+  externalIsGeneratingNotes?: boolean;
+  onExternalIsGeneratingNotesChange?: (isGenerating: boolean) => void;
+  // When provided, the in-panel "Generate Clinical Notes" button delegates
+  // to this generator (which lives in the parent and carries the
+  // keyed/stale-response-safe guard). Otherwise the legacy local
+  // generator below is used.
+  onExternalGenerateClinicalNotes?: () => void | Promise<void>;
+}
+
+export interface ClinicalNotes {
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  additionalNotes: string;
+  generatedAt: string;
 }
 
 const EMPTY_DATA: ClinicalReasoningData = {
@@ -477,15 +502,20 @@ export default function ClinicalReasoningPanel({
   onVisualizationRequest,
   activeVisualizationId,
   onHypothesisClick,
+  onTestHypothesisClick,
   structuredData,
   structuredLoading,
   onStructuredHypothesisClick,
+  onTestStructuredHypothesisClick,
   decisionData,
   decisionLoading,
   onDecisionTargetClick,
   planData,
   planLoading,
   onPlanTargetClick,
+  onPlanLoadingRecalculate,
+  onPlanLoadingOverride,
+  onPlanLoadingClearOverride,
   evidenceData,
   evidenceLoading,
   onEvidenceQuery,
@@ -493,15 +523,29 @@ export default function ClinicalReasoningPanel({
   requestedTab,
   onRequestedTabHandled,
   onActiveTabChange,
+  showEvidenceTab = true,
+  externalClinicalNotes,
+  onExternalClinicalNotesChange,
+  externalIsGeneratingNotes,
+  onExternalIsGeneratingNotesChange,
+  onExternalGenerateClinicalNotes,
 }: ClinicalReasoningPanelProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
 
   useEffect(() => {
     if (requestedTab) {
+      // Defensive guard: when the Evidence tab is hidden by the parent
+      // (e.g. PhysioGPT's bottom toolbar no longer surfaces Evidence),
+      // ignore stale evidence requests so the tab cannot be activated
+      // by other affordances.
+      if (requestedTab === 'evidence' && !showEvidenceTab) {
+        onRequestedTabHandled?.();
+        return;
+      }
       setActiveTab(requestedTab);
       onRequestedTabHandled?.();
     }
-  }, [requestedTab, onRequestedTabHandled]);
+  }, [requestedTab, onRequestedTabHandled, showEvidenceTab]);
 
   useEffect(() => {
     onActiveTabChange?.(activeTab);
@@ -540,15 +584,24 @@ export default function ClinicalReasoningPanel({
     clinicalNotes: true,
   });
 
-  const [clinicalNotes, setClinicalNotes] = useState<{
-    subjective: string;
-    objective: string;
-    assessment: string;
-    plan: string;
-    additionalNotes: string;
-    generatedAt: string;
-  } | null>(null);
-  const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+  const [internalClinicalNotes, setInternalClinicalNotes] = useState<ClinicalNotes | null>(null);
+  const [internalIsGeneratingNotes, setInternalIsGeneratingNotes] = useState(false);
+  const clinicalNotes = externalClinicalNotes !== undefined ? externalClinicalNotes : internalClinicalNotes;
+  const setClinicalNotes = useCallback((notes: ClinicalNotes | null) => {
+    if (onExternalClinicalNotesChange) {
+      onExternalClinicalNotesChange(notes);
+    } else {
+      setInternalClinicalNotes(notes);
+    }
+  }, [onExternalClinicalNotesChange]);
+  const isGeneratingNotes = externalIsGeneratingNotes !== undefined ? externalIsGeneratingNotes : internalIsGeneratingNotes;
+  const setIsGeneratingNotes = useCallback((generating: boolean) => {
+    if (onExternalIsGeneratingNotesChange) {
+      onExternalIsGeneratingNotesChange(generating);
+    } else {
+      setInternalIsGeneratingNotes(generating);
+    }
+  }, [onExternalIsGeneratingNotesChange]);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -646,6 +699,11 @@ export default function ClinicalReasoningPanel({
   }, [onVisualizationRequest, activeVisualizationId, extractRegionsFromText, extractMuscleHints]);
 
   const generateClinicalNotes = useCallback(async () => {
+    // Prefer the parent's stale-response-safe generator when wired in.
+    if (onExternalGenerateClinicalNotes) {
+      await onExternalGenerateClinicalNotes();
+      return;
+    }
     if (!hasContent || isGeneratingNotes) return;
     setIsGeneratingNotes(true);
     try {
@@ -659,7 +717,7 @@ export default function ClinicalReasoningPanel({
     } finally {
       setIsGeneratingNotes(false);
     }
-  }, [d, subjectiveHistory, hasContent, isGeneratingNotes]);
+  }, [onExternalGenerateClinicalNotes, d, subjectiveHistory, hasContent, isGeneratingNotes, setClinicalNotes, setIsGeneratingNotes]);
 
   const copySection = useCallback((sectionName: string, text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -862,27 +920,29 @@ export default function ClinicalReasoningPanel({
             Plan
             {planData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-cyan-400" />}
           </button>
-          <button
-            onClick={() => {
-              setActiveTab('evidence');
-              if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
-                onEvidenceQuery();
-              }
-            }}
-            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
-          >
-            <BookOpen className="h-3 w-3" />
-            Evidence
-            {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
-            {!evidenceLoading && evidenceData && (() => {
-              const totalCount = (evidenceData.pubmedPapers?.length || 0) + (evidenceData.options?.length || 0);
-              return totalCount > 0 ? (
-                <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 min-w-[14px] text-center">{totalCount}</span>
-              ) : (
-                <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
-              );
-            })()}
-          </button>
+          {showEvidenceTab && (
+            <button
+              onClick={() => {
+                setActiveTab('evidence');
+                if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
+                  onEvidenceQuery();
+                }
+              }}
+              className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+            >
+              <BookOpen className="h-3 w-3" />
+              Evidence
+              {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
+              {!evidenceLoading && evidenceData && (() => {
+                const totalCount = (evidenceData.pubmedPapers?.length || 0) + (evidenceData.options?.length || 0);
+                return totalCount > 0 ? (
+                  <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 min-w-[14px] text-center">{totalCount}</span>
+                ) : (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
+                );
+              })()}
+            </button>
+          )}
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">
@@ -1290,6 +1350,9 @@ export default function ClinicalReasoningPanel({
               data={planData ?? null}
               isLoading={planLoading ?? false}
               onTargetRegionClick={onPlanTargetClick}
+              onLoadingRecalculate={onPlanLoadingRecalculate}
+              onLoadingOverride={onPlanLoadingOverride}
+              onLoadingClearOverride={onPlanLoadingClearOverride}
             />
           ) : activeTab === 'decision' ? (
             <DecisionTab
@@ -1302,6 +1365,7 @@ export default function ClinicalReasoningPanel({
               data={structuredData ?? null}
               isLoading={structuredLoading ?? false}
               onHypothesisClick={onStructuredHypothesisClick}
+              onTestHypothesisClick={onTestStructuredHypothesisClick}
             />
           ) : (
           <>
@@ -1416,6 +1480,16 @@ export default function ClinicalReasoningPanel({
                               >
                                 {isVizActive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                               </span>
+                            )}
+                            {onTestHypothesisClick && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onTestHypothesisClick(hypothesis); }}
+                                className="flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded bg-cyan-600/30 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-600/50 transition-colors"
+                                title="Test this hypothesis on the skeleton"
+                                data-testid={`button-test-hypothesis-${hypothesis.id}`}
+                              >
+                                <FlaskConical className="h-2.5 w-2.5" /> Test
+                              </button>
                             )}
                           </div>
                         </div>

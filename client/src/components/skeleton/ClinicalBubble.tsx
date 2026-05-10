@@ -91,6 +91,31 @@ interface ClinicalBubbleProps {
   onDataLoaded?: (markerId: string, data: ClinicalBubbleData, severity: string) => void;
   subjectiveHistory?: string;
   onSubjectiveHistoryChange?: (markerId: string, history: string) => void;
+  /** Optional human-readable attribution describing why the AI placed this
+   *  marker (e.g. "From provocation site for L4 disc bulge: lateral thigh"). */
+  sourceAttribution?: string | null;
+  /** Optional handler shown as a "Re-seed" button when the AI-seeded marker
+   *  has been edited by the clinician. */
+  onReSeed?: (markerId: string) => void;
+  /** Optional structured rationale shown as the "Why this marker" panel
+   *  above the tab strip. Built by the parent from existing marker
+   *  attribution + tissue intelligence + provocation state — no new AI. */
+  markerRationale?: MarkerRationale | null;
+}
+
+export interface MarkerRationale {
+  /** 'tissue' = compromised-tissue seed, 'provocation' = provocation-test seed. */
+  sourceKind: 'tissue' | 'provocation';
+  /** The driving working hypothesis (clickable -> jumps to DDx tab). */
+  condition?: string;
+  /** One-line summary (tissue: "Compromised tendon: supraspinatus (severity 7/10)";
+   *  provocation: "Hawkins-Kennedy · forced internal rotation"). */
+  primary: string;
+  /** Short evidence bullets pulled from tissue intelligence / provocation expectations. */
+  evidence: string[];
+  /** True when the AI-seeded marker has been edited by the clinician — the
+   *  panel still shows the original AI rationale so it can be trusted/overridden. */
+  edited?: boolean;
 }
 
 type TabType = "ddx" | "questions" | "subjective" | "assessment" | "treatment" | "exercises" | "behaviour";
@@ -121,6 +146,9 @@ export default function ClinicalBubble({
   onDataLoaded,
   subjectiveHistory,
   onSubjectiveHistoryChange,
+  sourceAttribution,
+  onReSeed,
+  markerRationale,
 }: ClinicalBubbleProps) {
   const [activeTab, setActiveTab] = useState<TabType>("ddx");
   const [data, setData] = useState<ClinicalBubbleData | null>(null);
@@ -144,6 +172,7 @@ export default function ClinicalBubble({
     clinical_pattern: string;
   } | null>(null);
   const [behaviourLoading, setBehaviourLoading] = useState(false);
+  const [highlightedCondition, setHighlightedCondition] = useState<string | null>(null);
   const localHistoryRef = useRef(localHistory);
   localHistoryRef.current = localHistory;
 
@@ -264,6 +293,87 @@ export default function ClinicalBubble({
           </div>
         )}
 
+        {markerRationale ? (
+          <div
+            className="px-3 py-2 bg-cyan-900/20 border-b border-cyan-700/30 space-y-1.5"
+            data-testid="clinical-bubble-why-marker"
+          >
+            <div className="flex items-start gap-1.5">
+              <span className="mt-px text-[8px] px-1 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-500/40 flex-shrink-0" title="AI-seeded marker">AI</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-wide text-cyan-300/80 font-semibold">Why this marker</span>
+                  <span className="text-[9px] px-1 py-px rounded bg-cyan-900/40 text-cyan-300/90 border border-cyan-500/30 capitalize">
+                    {markerRationale.sourceKind}
+                  </span>
+                  {markerRationale.edited && (
+                    <span className="text-[9px] px-1 py-px rounded bg-amber-900/40 text-amber-300 border border-amber-500/30" title="Marker has been moved by the clinician — original AI rationale shown">
+                      edited
+                    </span>
+                  )}
+                </div>
+                {markerRationale.condition && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('ddx');
+                      setHighlightedCondition(markerRationale.condition ?? null);
+                    }}
+                    className="mt-0.5 text-[11px] text-cyan-200 hover:text-white underline decoration-dotted underline-offset-2 transition-colors text-left"
+                    data-testid="clinical-bubble-why-condition"
+                    title="Open the matching differential diagnosis"
+                  >
+                    {markerRationale.condition}
+                  </button>
+                )}
+              </div>
+              {onReSeed && (
+                <button
+                  type="button"
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-900/40 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-900/70 hover:text-white transition-colors flex-shrink-0"
+                  onClick={() => onReSeed(markerId)}
+                  data-testid="clinical-bubble-reseed"
+                  title="Restore the AI-suggested placement"
+                >
+                  Re-seed
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-cyan-100/90 leading-snug" data-testid="clinical-bubble-why-primary">
+              {markerRationale.primary}
+            </p>
+            {markerRationale.evidence.length > 0 && (
+              <ul className="space-y-0.5 pt-0.5" data-testid="clinical-bubble-why-evidence">
+                {markerRationale.evidence.map((e, i) => (
+                  <li key={i} className="text-[10px] text-cyan-200/80 leading-snug flex items-start gap-1.5">
+                    <span className="text-cyan-400/70 mt-px flex-shrink-0">•</span>
+                    <span className="flex-1">{e}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : sourceAttribution && (
+          <div
+            className="px-3 py-1.5 bg-cyan-900/20 border-b border-cyan-700/30 flex items-start gap-1.5"
+            data-testid="clinical-bubble-source-attribution"
+          >
+            <span className="mt-px text-[8px] px-1 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-500/40 flex-shrink-0">AI</span>
+            <span className="text-[10px] text-cyan-200 leading-snug flex-1">{sourceAttribution}</span>
+            {onReSeed && (
+              <button
+                type="button"
+                className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-900/40 text-cyan-200 border border-cyan-500/40 hover:bg-cyan-900/70 hover:text-white transition-colors flex-shrink-0"
+                onClick={() => onReSeed(markerId)}
+                data-testid="clinical-bubble-reseed"
+                title="Restore the AI-suggested placement"
+              >
+                Re-seed
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="px-3 py-1.5 border-b border-gray-700/50 flex items-center gap-2">
           <Gauge className="h-3 w-3 text-gray-400" />
           <span className="text-[10px] text-gray-400">Severity:</span>
@@ -334,8 +444,19 @@ export default function ClinicalBubble({
 
               {activeTab === "ddx" && (
                 <div className="space-y-2">
-                  {data.differentials.map((d, i) => (
-                    <div key={i} className="bg-white/5 rounded-lg p-2">
+                  {data.differentials.map((d, i) => {
+                    const isHighlighted = highlightedCondition
+                      ? d.name.toLowerCase().includes(highlightedCondition.toLowerCase()) ||
+                        highlightedCondition.toLowerCase().includes(d.name.toLowerCase())
+                      : false;
+                    return (
+                    <div
+                      key={i}
+                      className={`bg-white/5 rounded-lg p-2 transition-all ${
+                        isHighlighted ? 'ring-2 ring-cyan-400/70 bg-cyan-500/10' : ''
+                      }`}
+                      data-testid={isHighlighted ? 'ddx-highlighted-row' : undefined}
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-white font-medium">{d.name}</span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
@@ -348,7 +469,8 @@ export default function ClinicalBubble({
                       </div>
                       <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{d.reasoning}</p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

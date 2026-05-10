@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw } from 'lucide-react';
+import { Hand, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, Target, TrendingUp, Shield, Loader2, Zap, Activity, Sparkles, ArrowRight, Clock, ShieldAlert, Crosshair, Home, MessageSquare, Send, RotateCcw, Link2 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
+import { AddToPlanButton, makeCartId, usePlanCart } from '@/lib/planCart';
+import { matchRecommendationsForItem, sortByDriverRole, type SlingDrivenRecommendation } from '@/lib/slingDriverAnalysis';
 import type { InjuryMechanismResult } from '@/lib/injuryMechanismEngine';
 import type { SlingAnalysisResult } from '@/lib/slingEngine';
 import type { ScarMarker, AdhesionBand } from '@/lib/scarTissueMapping';
@@ -95,6 +97,10 @@ interface ManualTherapyEngineTabProps {
   mechanismAnalysis: InjuryMechanismResult | null;
   slingAnalysis: SlingAnalysisResult | null;
   painMarkers: PainMarkerInput[];
+  /** Sling-driven recommendations (Task #235) — optional. Matching cards
+   *  show a "Sling-driven · <name>" chip and calm-compensatory items are
+   *  demoted in the manual therapy list. */
+  slingDrivenRecommendations?: SlingDrivenRecommendation[];
   scarMarkers?: ScarMarker[];
   adhesionBands?: AdhesionBand[];
   musclePathologies?: MusclePathologyInput[];
@@ -110,6 +116,9 @@ interface ManualTherapyEngineTabProps {
   pendingGenerate?: boolean;
   onGenerateStarted?: () => void;
   onGenerateComplete?: (success: boolean) => void;
+  /** Master Plan auto-build: when true, every generated technique is added to
+   *  the plan cart in a staggered cascade (~110ms apart). */
+  autoAddOnGenerate?: boolean;
 }
 
 const TISSUE_NAME_TO_MUSCLE_GROUP: Record<string, string[]> = {
@@ -262,6 +271,19 @@ function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { techn
               <Clock className="h-2 w-2" />
               {technique.dosage.frequency}
             </span>
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('manual_therapy_custom', `${technique.name}::${technique.targetSystem}::${technique.clinicalTarget}`),
+                modality: 'manual_therapy_custom',
+                name: technique.name,
+                targetStructure: technique.targetSystem,
+                targetFinding: technique.clinicalTarget,
+                dosage: `${technique.dosage.sets} sets × ${technique.dosage.repetitions} · ${technique.dosage.frequency}`,
+                rationale: technique.biomechanicalRationale,
+                contraindications: technique.contraindications,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-cyan-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-cyan-500 shrink-0 mt-1" />}
@@ -441,7 +463,7 @@ function CustomTechniqueCard({ technique, index, isSelected, onSelect }: { techn
   );
 }
 
-function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: number }) {
+function TechniqueCard({ technique, index, slingMatch }: { technique: TechniqueItem; index: number; slingMatch?: SlingDrivenRecommendation }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -459,17 +481,66 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
               <span className="truncate">{technique.targetFinding}</span>
             </div>
           )}
-          <div className="flex gap-2 mt-1 text-[9px]">
+          <div className="flex gap-2 mt-1 text-[9px] flex-wrap items-center">
             <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-300">{technique.dosage || '?'}</span>
             {technique.patientPosition && (
               <span className="px-1.5 py-0.5 rounded bg-gray-700/60 text-gray-400">Pos: {technique.patientPosition}</span>
             )}
+            {slingMatch && (
+              <span
+                className={`px-1.5 py-0.5 rounded border flex items-center gap-0.5 text-[8.5px] ${
+                  slingMatch.role === 'restore'
+                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                    : slingMatch.role === 'address-driver'
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-500/40'
+                }`}
+                title={
+                  slingMatch.role === 'calm-compensatory'
+                    ? `⚠ Compensatory load — secondary intervention. Treat the ${slingMatch.slingLabel} driver first; manual work here will only briefly down-regulate the symptom.`
+                    : slingMatch.rationale
+                }
+                data-testid={`sling-chip-${technique.technique}`}
+              >
+                <Link2 className="h-2 w-2" />
+                Sling-driven · {slingMatch.slingLabel}
+              </span>
+            )}
+            <AddToPlanButton
+              size="xs"
+              item={{
+                id: makeCartId('manual_therapy', technique.technique),
+                modality: 'manual_therapy',
+                name: technique.technique,
+                targetStructure: technique.targetStructure,
+                targetFinding: technique.targetFinding,
+                dosage: technique.dosage,
+                rationale: technique.rationale,
+                contraindications: technique.contraindications,
+                patientPosition: technique.patientPosition,
+                slingTag: slingMatch?.slingLabel,
+                slingRole: slingMatch?.role,
+              }}
+            />
           </div>
         </div>
         {expanded ? <ChevronUp className="h-3 w-3 text-gray-500 shrink-0 mt-1" /> : <ChevronDown className="h-3 w-3 text-gray-500 shrink-0 mt-1" />}
       </button>
       {expanded && (
         <div className="px-2 pb-2 space-y-1.5 border-t border-gray-700/30 pt-1.5">
+          {slingMatch?.role === 'calm-compensatory' && (
+            <div
+              className="rounded border border-amber-500/40 bg-amber-500/10 p-1.5 flex items-start gap-1.5"
+              data-testid={`sling-compensatory-warning-${technique.technique}`}
+            >
+              <AlertTriangle className="h-3 w-3 text-amber-300 shrink-0 mt-0.5" />
+              <div className="text-[9.5px] text-amber-100 leading-snug">
+                <span className="font-semibold uppercase tracking-wide text-amber-200">Compensatory load · </span>
+                This technique calms tissue downstream of the {slingMatch.slingLabel} sling and is a <span className="font-semibold">secondary</span> intervention.
+                Treat the driving sling first; manual work here will only briefly down-regulate the symptom and the load will reroute back without addressing the source.
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">Target Structure</div>
             <div className="text-[10px] text-gray-300">{technique.targetStructure}</div>
@@ -504,13 +575,17 @@ function TechniqueCard({ technique, index }: { technique: TechniqueItem; index: 
   );
 }
 
-export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete }: ManualTherapyEngineTabProps) {
+export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysis, painMarkers, slingDrivenRecommendations, scarMarkers, adhesionBands, musclePathologies, onHighlightMuscles, onSetMuscleHighlightColors, onSetManualTherapyAnnotations, onCustomManualTherapyResult, goalProfile, clinicalState, goalGap, sessionPrescription, sessionPrescriptionNum, pendingGenerate, onGenerateStarted, onGenerateComplete, autoAddOnGenerate }: ManualTherapyEngineTabProps) {
+  const { add: addToPlanCart } = usePlanCart();
   const [plan, setPlan] = useState<ManualTherapyPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotes, setShowNotes] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Track stagger timer IDs from autoAddOnGenerate so we can cancel them on
+  // unmount or before a fresh generate run.
+  const autoAddTimeoutsRef = useRef<number[]>([]);
 
   const [customResult, setCustomResult] = useState<CustomManualTherapyResult | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
@@ -692,7 +767,42 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
       setPlan(sorted);
       const allIds = new Set(sorted.techniqueGroups.map(g => g.groupId));
       setExpandedGroups(allIds);
-      onGenerateComplete?.(true);
+      if (autoAddOnGenerate) {
+        // Cancel any leftover stagger timers from a prior auto-add cascade.
+        autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+        autoAddTimeoutsRef.current = [];
+        const items = sorted.techniqueGroups.flatMap(group => group.techniques);
+        items.forEach((technique, i) => {
+          const tid = window.setTimeout(() => {
+            // Resolve sling match so auto-added items carry the same
+            // slingTag/slingRole metadata as in-card AddToPlanButton clicks.
+            const slingMatch = matchRecommendationsForItem(
+              technique.technique,
+              technique.targetStructure,
+              slingDrivenRecommendations ?? [],
+              'manual_therapy',
+            );
+            addToPlanCart({
+              id: makeCartId('manual_therapy', technique.technique),
+              modality: 'manual_therapy',
+              name: technique.technique,
+              targetStructure: technique.targetStructure,
+              targetFinding: technique.targetFinding,
+              dosage: technique.dosage,
+              rationale: technique.rationale,
+              contraindications: technique.contraindications,
+              patientPosition: technique.patientPosition,
+              slingTag: slingMatch?.slingLabel,
+              slingRole: slingMatch?.role,
+            });
+          }, i * 110);
+          autoAddTimeoutsRef.current.push(tid);
+        });
+        const completeTid = window.setTimeout(() => onGenerateComplete?.(true), items.length * 110 + 60);
+        autoAddTimeoutsRef.current.push(completeTid);
+      } else {
+        onGenerateComplete?.(true);
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -701,7 +811,15 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [buildPayload, onGenerateComplete]);
+  }, [buildPayload, onGenerateComplete, autoAddOnGenerate, addToPlanCart, slingDrivenRecommendations]);
+
+  // Cancel any pending auto-add stagger timers on unmount.
+  useEffect(() => {
+    return () => {
+      autoAddTimeoutsRef.current.forEach(window.clearTimeout);
+      autoAddTimeoutsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     if (pendingGenerate) {
@@ -1250,14 +1368,27 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
               const ctxForMt = effectiveCtx;
               const maxGradeNum = ctxForMt ? parseGradeNum(ctxForMt.mtGradeGuidance.maxGrade) : 99;
 
-              const filtered = ctxForMt && ctxForMt.contraindications.length > 0
+              const filteredRaw = ctxForMt && ctxForMt.contraindications.length > 0
                 ? group.techniques.filter(tech =>
                     !ctxForMt.contraindications.some(c =>
                       tech.technique.toLowerCase().includes(c.toLowerCase()) ||
                       (tech.contraindications && tech.contraindications.toLowerCase().includes(c.toLowerCase()))
                     ))
                 : group.techniques;
-              const excluded = group.techniques.length - filtered.length;
+              const excluded = group.techniques.length - filteredRaw.length;
+              // Annotate with sling-driven matches (Task #235). For manual
+              // therapy we demote calm-compensatory items to the bottom while
+              // keeping the relative order of address-driver / restore intact.
+              const annotated = filteredRaw.map(tech => ({
+                tech,
+                slingMatch: matchRecommendationsForItem(
+                  tech.technique,
+                  tech.targetStructure,
+                  slingDrivenRecommendations ?? [],
+                  'manual_therapy',
+                ),
+              }));
+              const filtered = sortByDriverRole(annotated, a => a.slingMatch?.role);
               return (
                 <div className="p-2 space-y-1.5">
                   {excluded > 0 && (
@@ -1266,7 +1397,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                       {excluded} technique{excluded > 1 ? 's' : ''} excluded (contraindicated)
                     </div>
                   )}
-                  {filtered.map((tech, i) => {
+                  {filtered.map(({ tech, slingMatch }, i) => {
                     const matchingGap = ctxForMt?.goalGaps.find(g =>
                       tech.targetStructure?.toLowerCase().includes(g.label.toLowerCase()) ||
                       tech.targetFinding?.toLowerCase().includes(g.label.toLowerCase())
@@ -1294,7 +1425,7 @@ export default function ManualTherapyEngineTab({ mechanismAnalysis, slingAnalysi
                             <span className="text-[7px] text-amber-400">{gradeWarning}</span>
                           </div>
                         )}
-                        <TechniqueCard technique={tech} index={i} />
+                        <TechniqueCard technique={tech} index={i} slingMatch={slingMatch} />
                       </div>
                     );
                   })}

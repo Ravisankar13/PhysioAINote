@@ -28,6 +28,17 @@ export interface ClinicalFinding {
   description: string;
   muscleSource: string;
   pathology: PathologyType;
+  /** Optional enrichment populated by the Compensation Re-Education engine
+   *  (see `client/src/lib/compensationReEducation.ts`). The grouped
+   *  `enrichment` object and the top-level fields are written together so
+   *  downstream consumers can read either form. */
+  enrichment?: import('./compensationReEducation').CompensationEnrichment;
+  driver?: import('./compensationReEducation').CompensationDriver;
+  drivers?: import('./compensationReEducation').CompensationDriver[];
+  verdict?: import('./compensationReEducation').CompensationVerdict;
+  cost?: import('./compensationLibrary').CompensationCostProfile;
+  betterPatternId?: string | null;
+  retrainingPlanId?: string | null;
 }
 
 export interface PathologyCompensationResult {
@@ -35,6 +46,14 @@ export interface PathologyCompensationResult {
   romRestrictions: RomRestriction[];
   posturalDeviations: PosturalDeviation[];
   clinicalFindings: ClinicalFinding[];
+}
+
+export interface PainfulArc {
+  joint: string;
+  movement: string;
+  startAngle: number;
+  endAngle: number;
+  painIntensity: number;
 }
 
 interface CompensationPattern {
@@ -45,7 +64,32 @@ interface CompensationPattern {
   clinicalTitle: string;
   clinicalDescription: string;
   severity: 'mild' | 'moderate' | 'severe';
+  painfulArcs?: PainfulArc[];
+  activeStrengthReductionPercent?: number;
+  painInhibitionFactor?: number;
 }
+
+export interface ActiveCapacityRow {
+  joint: string;
+  movement: string;
+  passiveRomMin: number;
+  passiveRomMax: number;
+  activeRomMin: number;
+  activeRomMax: number;
+  painfulArc: {
+    start: number;
+    end: number;
+    intensity: number;
+    direction?: 'ascending' | 'descending' | 'either';
+    loadingMode?: 'concentric' | 'eccentric' | 'isometric' | 'any';
+    label?: string;
+  } | null;
+  activeStrengthPct: number;
+  painInhibitionFactor: number;
+  source: 'pathology-baseline' | 'ai' | 'manual';
+}
+
+export type ActiveCapacityProfile = Record<string, ActiveCapacityRow>;
 
 const PATHOLOGY_COMPENSATION_MAP: Record<string, CompensationPattern[]> = {
   deltoid_l: [
@@ -906,4 +950,200 @@ export function computePathologyCompensation(
   result.posturalDeviations = deduplicatePosturalDeviations(result.posturalDeviations);
 
   return result;
+}
+
+// =====================================================================
+// Active-Movement literature overlays
+// =====================================================================
+// Per-pattern literature-derived starting values for active capacity.
+// Looked up by `${groupId}:${pathology}` and merged onto each
+// CompensationPattern at read time so the existing entries stay
+// untouched. Use `getActiveCapacityFromPathologies` to project these
+// across a list of active patterns into a per-joint × per-direction
+// active-capacity profile.
+const LITERATURE_ACTIVE_OVERLAYS: Record<string, {
+  painfulArcs?: PainfulArc[];
+  activeStrengthReductionPercent?: number;
+  painInhibitionFactor?: number;
+}> = {
+  // Frozen shoulder (adhesive capsulitis) — capsular fibrosis around the GH joint.
+  'scapula_l:fibrosis': {
+    painfulArcs: [
+      { joint: 'leftShoulder', movement: 'abduction', startAngle: 60, endAngle: 120, painIntensity: 7 },
+      { joint: 'leftShoulder', movement: 'flexion', startAngle: 90, endAngle: 140, painIntensity: 6 },
+      { joint: 'leftShoulder', movement: 'externalRotation', startAngle: 20, endAngle: 60, painIntensity: 7 },
+    ],
+    activeStrengthReductionPercent: 50,
+    painInhibitionFactor: 0.6,
+  },
+  'scapula_r:fibrosis': {
+    painfulArcs: [
+      { joint: 'rightShoulder', movement: 'abduction', startAngle: 60, endAngle: 120, painIntensity: 7 },
+      { joint: 'rightShoulder', movement: 'flexion', startAngle: 90, endAngle: 140, painIntensity: 6 },
+      { joint: 'rightShoulder', movement: 'externalRotation', startAngle: 20, endAngle: 60, painIntensity: 7 },
+    ],
+    activeStrengthReductionPercent: 50,
+    painInhibitionFactor: 0.6,
+  },
+  // Rotator cuff tendinopathy — classic 60-120° painful arc in abduction.
+  'deltoid_l:tendinopathy': {
+    painfulArcs: [
+      { joint: 'leftShoulder', movement: 'abduction', startAngle: 60, endAngle: 120, painIntensity: 6 },
+    ],
+    activeStrengthReductionPercent: 30,
+    painInhibitionFactor: 0.4,
+  },
+  'deltoid_r:tendinopathy': {
+    painfulArcs: [
+      { joint: 'rightShoulder', movement: 'abduction', startAngle: 60, endAngle: 120, painIntensity: 6 },
+    ],
+    activeStrengthReductionPercent: 30,
+    painInhibitionFactor: 0.4,
+  },
+  // Meniscus tear — painful end-range knee flexion.
+  'quad_l:weakness': {
+    painfulArcs: [
+      { joint: 'leftKnee', movement: 'flexion', startAngle: 90, endAngle: 110, painIntensity: 6 },
+    ],
+    activeStrengthReductionPercent: 25,
+    painInhibitionFactor: 0.4,
+  },
+  'quad_r:weakness': {
+    painfulArcs: [
+      { joint: 'rightKnee', movement: 'flexion', startAngle: 90, endAngle: 110, painIntensity: 6 },
+    ],
+    activeStrengthReductionPercent: 25,
+    painInhibitionFactor: 0.4,
+  },
+  // Achilles tendinopathy — painful at end-range plantarflexion / loaded dorsiflexion.
+  'calf_l:tendinopathy': {
+    painfulArcs: [
+      { joint: 'leftAnkle', movement: 'plantarflexion', startAngle: 30, endAngle: 50, painIntensity: 5 },
+    ],
+    activeStrengthReductionPercent: 30,
+    painInhibitionFactor: 0.3,
+  },
+  'calf_r:tendinopathy': {
+    painfulArcs: [
+      { joint: 'rightAnkle', movement: 'plantarflexion', startAngle: 30, endAngle: 50, painIntensity: 5 },
+    ],
+    activeStrengthReductionPercent: 30,
+    painInhibitionFactor: 0.3,
+  },
+  // Plantar fasciitis — pain at end-range dorsiflexion (windlass tension).
+  'calf_l:fibrosis': {
+    painfulArcs: [
+      { joint: 'leftAnkle', movement: 'dorsiflexion', startAngle: 5, endAngle: 20, painIntensity: 5 },
+    ],
+    activeStrengthReductionPercent: 10,
+    painInhibitionFactor: 0.2,
+  },
+  'calf_r:fibrosis': {
+    painfulArcs: [
+      { joint: 'rightAnkle', movement: 'dorsiflexion', startAngle: 5, endAngle: 20, painIntensity: 5 },
+    ],
+    activeStrengthReductionPercent: 10,
+    painInhibitionFactor: 0.2,
+  },
+  // Acute low-back HNP — guarded lumbar flexion, severe pain inhibition.
+  'spine:spasm': {
+    painfulArcs: [
+      { joint: 'lumbar_spine', movement: 'flexion', startAngle: 20, endAngle: 60, painIntensity: 8 },
+    ],
+    activeStrengthReductionPercent: 60,
+    painInhibitionFactor: 0.7,
+  },
+  'spine:strain': {
+    painfulArcs: [
+      { joint: 'lumbar_spine', movement: 'flexion', startAngle: 25, endAngle: 60, painIntensity: 6 },
+      { joint: 'lumbar_spine', movement: 'extension', startAngle: 10, endAngle: 25, painIntensity: 5 },
+    ],
+    activeStrengthReductionPercent: 35,
+    painInhibitionFactor: 0.5,
+  },
+};
+
+const PASSIVE_ROM_TABLE: Record<string, Record<string, [number, number]>> = {
+  leftShoulder:  { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
+  rightShoulder: { flexion: [0, 180], abduction: [0, 180], extension: [0, 60], internalRotation: [0, 70], externalRotation: [0, 90] },
+  leftHip:       { flexion: [0, 120], extension: [0, 30], abduction: [0, 45], adduction: [0, 30], internalRotation: [0, 45], externalRotation: [0, 45] },
+  rightHip:      { flexion: [0, 120], extension: [0, 30], abduction: [0, 45], adduction: [0, 30], internalRotation: [0, 45], externalRotation: [0, 45] },
+  leftKnee:      { flexion: [0, 140], extension: [0, 0] },
+  rightKnee:     { flexion: [0, 140], extension: [0, 0] },
+  leftAnkle:     { dorsiflexion: [0, 20], plantarflexion: [0, 50], inversion: [0, 35], eversion: [0, 20] },
+  rightAnkle:    { dorsiflexion: [0, 20], plantarflexion: [0, 50], inversion: [0, 35], eversion: [0, 20] },
+  lumbar_spine:  { flexion: [0, 60], extension: [0, 25], rotation: [0, 5], lateralFlexion: [0, 25] },
+  cervical_spine:{ flexion: [0, 50], extension: [0, 60], rotation: [0, 80], lateralFlexion: [0, 45] },
+  thoracic_spine:{ flexion: [0, 40], extension: [0, 20], rotation: [0, 35], lateralFlexion: [0, 25] },
+  leftElbow:     { flexion: [0, 140] },
+  rightElbow:    { flexion: [0, 140] },
+};
+
+export function buildDefaultActiveCapacity(): ActiveCapacityProfile {
+  // Default = passive ROM × 0.85, no painful arc, 100% strength, 0 inhibition.
+  const out: ActiveCapacityProfile = {};
+  for (const [joint, dirs] of Object.entries(PASSIVE_ROM_TABLE)) {
+    for (const [movement, [pmin, pmax]] of Object.entries(dirs)) {
+      const span = pmax - pmin;
+      out[`${joint}:${movement}`] = {
+        joint, movement,
+        passiveRomMin: pmin, passiveRomMax: pmax,
+        activeRomMin: pmin, activeRomMax: pmin + span * 0.85,
+        painfulArc: null,
+        activeStrengthPct: 100,
+        painInhibitionFactor: 0,
+        source: 'pathology-baseline',
+      };
+    }
+  }
+  return out;
+}
+
+/**
+ * Aggregate literature-derived active capacity adjustments across a set
+ * of active pathologies (group + pathology pairs). Returns a profile
+ * built on top of `buildDefaultActiveCapacity`. Used as a deterministic
+ * baseline before AI fills in case-specific values.
+ */
+export function getActiveCapacityFromPathologies(
+  pathologies: Array<{ groupId: string; pathology: PathologyType }>
+): ActiveCapacityProfile {
+  const profile = buildDefaultActiveCapacity();
+  for (const { groupId, pathology } of pathologies) {
+    const overlay = LITERATURE_ACTIVE_OVERLAYS[`${groupId}:${pathology}`];
+    if (!overlay) continue;
+    // Apply painful arcs to matching joint/movement rows.
+    for (const arc of overlay.painfulArcs || []) {
+      const key = `${arc.joint}:${arc.movement}`;
+      const row = profile[key];
+      if (!row) continue;
+      // Take the most painful arc if multiple pathologies overlap.
+      if (!row.painfulArc || row.painfulArc.intensity < arc.painIntensity) {
+        row.painfulArc = { start: arc.startAngle, end: arc.endAngle, intensity: arc.painIntensity };
+      }
+      // Active ROM caps at the painful-arc end if pain ≥ 6 (guarded).
+      if (arc.painIntensity >= 6 && row.activeRomMax > arc.endAngle) {
+        row.activeRomMax = arc.endAngle;
+      }
+    }
+    // Apply per-joint strength + inhibition reductions to every direction
+    // of each joint touched by the overlay's painful arcs.
+    const touchedJoints = new Set((overlay.painfulArcs || []).map(a => a.joint));
+    for (const j of touchedJoints) {
+      for (const key of Object.keys(profile)) {
+        if (!key.startsWith(`${j}:`)) continue;
+        const row = profile[key];
+        if (overlay.activeStrengthReductionPercent !== undefined) {
+          const target = Math.max(0, 100 - overlay.activeStrengthReductionPercent);
+          if (target < row.activeStrengthPct) row.activeStrengthPct = target;
+        }
+        if (overlay.painInhibitionFactor !== undefined) {
+          if (overlay.painInhibitionFactor > row.painInhibitionFactor) {
+            row.painInhibitionFactor = overlay.painInhibitionFactor;
+          }
+        }
+      }
+    }
+  }
+  return profile;
 }

@@ -63,8 +63,19 @@ export interface UnifiedChainPanelProps {
   painTensionContributors: PainTensionContributor[];
   selectedChainId: string | null;
   setSelectedChainId: (fn: (prev: string | null) => string | null) => void;
+  selectedChainSide: 'both' | 'left' | 'right';
+  setSelectedChainSide: (v: 'both' | 'left' | 'right') => void;
   clinicalConsequences: ClinicalConsequenceResult;
 }
+
+const KINETIC_CHAINS_WITH_SIDES = new Set([
+  'posterior_chain',
+  'anterior_chain',
+  'lateral_chain',
+  'spiral_chain',
+  'upper_extremity_chain',
+  'lower_extremity_chain',
+]);
 
 const getIntegrityColor = (score: number) => score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : score >= 40 ? '#f97316' : '#ef4444';
 const getIntegrityLabel = (score: number) => score >= 80 ? 'Good' : score >= 60 ? 'Fair' : score >= 40 ? 'Poor' : 'Critical';
@@ -93,6 +104,8 @@ export default function UnifiedChainPanel({
   painTensionContributors,
   selectedChainId,
   setSelectedChainId,
+  selectedChainSide,
+  setSelectedChainSide,
   clinicalConsequences,
 }: UnifiedChainPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('explorer');
@@ -152,6 +165,8 @@ export default function UnifiedChainPanel({
           correlationResult={correlationResult}
           selectedChainId={selectedChainId}
           setSelectedChainId={setSelectedChainId}
+          selectedChainSide={selectedChainSide}
+          setSelectedChainSide={setSelectedChainSide}
           manualChainTensions={manualChainTensions}
           setManualChainTensions={setManualChainTensions}
           baseTensions={baseTensions}
@@ -213,6 +228,8 @@ function ExplorerTab({
   correlationResult,
   selectedChainId,
   setSelectedChainId,
+  selectedChainSide,
+  setSelectedChainSide,
   manualChainTensions,
   setManualChainTensions,
   baseTensions,
@@ -228,6 +245,8 @@ function ExplorerTab({
   correlationResult: UnifiedChainPanelProps['correlationResult'];
   selectedChainId: string | null;
   setSelectedChainId: (fn: (prev: string | null) => string | null) => void;
+  selectedChainSide: 'both' | 'left' | 'right';
+  setSelectedChainSide: (v: 'both' | 'left' | 'right') => void;
   manualChainTensions: Record<string, number>;
   setManualChainTensions: (fn: (prev: Record<string, number>) => Record<string, number>) => void;
   baseTensions: Record<string, number>;
@@ -288,6 +307,23 @@ function ExplorerTab({
 
               {isSelected && (
                 <div className="px-2 pb-2 space-y-1.5">
+                  {KINETIC_CHAINS_WITH_SIDES.has(chain.id) && (
+                    <div className="flex items-center gap-1.5 p-1 rounded bg-white/5">
+                      <span className="text-[8px] text-gray-400 uppercase tracking-wide">Side</span>
+                      <div className="flex gap-0.5 flex-1">
+                        {(['both', 'left', 'right'] as const).map(side => (
+                          <button
+                            key={side}
+                            className={`flex-1 px-1.5 py-0.5 rounded text-[8px] font-medium transition-colors ${selectedChainSide === side ? 'text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            style={selectedChainSide === side ? { backgroundColor: chain.color + 'cc' } : {}}
+                            onClick={() => setSelectedChainSide(side)}
+                          >
+                            {side === 'both' ? 'L + R' : side === 'left' ? 'L' : 'R'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {chainIntegrityMode && integrity && (
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2 p-1.5 rounded-lg" style={{ backgroundColor: getIntegrityColor(integrityScore) + '15', border: `1px solid ${getIntegrityColor(integrityScore)}30` }}>

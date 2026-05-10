@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { eq, sql, ilike, desc, and } from "drizzle-orm";
-import { storage } from "./storage";
+import { storage, CheckInValidationError } from "./storage";
 import { db } from "./db";
 import { generateSoapNote } from "./openai";
 import { analyzeVirtualPatientCase, findRelevantResearchArticles } from "./virtualPatientOpenai";
@@ -20,6 +20,7 @@ import { grimaldiHipApproaches, grimaldiTreatmentPrinciples } from "./grimaldi-h
 import { bissetElbowApproaches, bissetTreatmentPrinciples } from "./bisset-elbow-library";
 import { generateAICaseStudy, generateDiagnosticFeedback } from "./aiCaseStudyGenerator";
 import { physioGptService } from "./physioGptService";
+import { physioGptStorage } from "./physioGptStorage";
 import { physioGptStreamService } from "./physioGptStreamService";
 import { researchGapAnalysisService } from "./researchGapAnalysis";
 import { researchStorage } from "./researchStorage";
@@ -44,7 +45,8 @@ import { comparativeAnalysisService } from "./ai/comparativeAnalysis";
 import { generateAISuggestions, applySuggestionToSoap, generateEnhancedDifferentials, type EnhancedDifferential, type DifferentialAnalysisResult } from "./services/aiSuggestionsService";
 import { ResearchService } from "./services/researchService";
 
-import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations } from "@shared/schema";
+import type { ProvocationContextPainMarker } from "@shared/jointVocabulary";
+import { soapNoteInputSchema, insertClinicalNoteSchema, insertCommentSchema, updateNoteVisibilitySchema, insertResearchArticleSchema, insertPaymentRecordSchema, insertManualTherapyTechniqueSchema, type ResearchArticle, insertVirtualPatientSchema, bodyPartEnum, sharedCases, caseTagsMapping, caseUpvotes, caseDiscussions, users, researchDiscussions, researchDiscussionVotes, complexCases, competitions, competitionParticipants, soapNotes, insertSoapNoteSchema, bodyScans, insertBodyScanSchema, tournamentParticipants, diagnosisDuelTournaments, gameContent, virtualPatients, patternRecognitionScores, insertCourseSectionNoteSchema, insertCourseSectionDiscussionSchema, insertCourseFlashcardSchema, insertQuizAttemptSchema, patientPresentations, temporarySoapNotes, savedSkeletonConfigurations, physioGptConversations, physioGptCaseSnapshotSchema, type PhysioGptCaseSnapshot } from "@shared/schema";
 import { ZodError, z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
@@ -337,6 +339,111 @@ const upload = multer({
     }
   }
 });
+
+/** Zod shape validation for the AI-driven patient-context payload.
+ *  Caps string lengths to defend against runaway prompt injection.
+ *  We validate the *envelope* here (free_form + an array of unknowns);
+ *  individual answer rows are validated row-by-row inside
+ *  formatPatientContextBlock so a single malformed row is dropped
+ *  silently rather than discarding the whole context payload. */
+const patientContextAnswerSchema = z.object({
+  prompt_id: z.string().max(200).optional(),
+  prompt: z.string().max(500).optional(),
+  answer: z.string().max(2000).optional(),
+  rationale: z.string().max(500).optional(),
+  category: z.string().max(64).optional(),
+});
+const patientContextPayloadSchema = z.object({
+  free_form: z.string().max(4000).optional(),
+  answers: z.array(z.unknown()).max(50).optional(),
+}).strip();
+
+/** Format an AI-driven patient-context payload into a system-prompt
+ *  block so any downstream endpoint (prediction, natural timeline,
+ *  case-specific plan) can quote the clinician's answers verbatim
+ *  when reasoning about THIS patient. Returns an empty string when no
+ *  meaningful context was supplied so we don't waste tokens. */
+function formatPatientContextBlock(
+  raw: unknown,
+  opts: { instruction?: string } = {},
+): string {
+  // Treat null/undefined/empty as "no context" without warning — that
+  // is the steady-state for any pre-prediction request.
+  if (raw === null || raw === undefined) return '';
+  const parsed = patientContextPayloadSchema.safeParse(raw);
+  if (!parsed.success) {
+    // Log a single-line diagnostic so malformed patient_context drops
+    // are visible in production logs (ops/debugging) instead of being
+    // entirely silent — but never throw, since context is optional and
+    // we must keep the downstream AI request working.
+    console.warn(
+      '[patient_context] dropped malformed payload:',
+      parsed.error.issues.slice(0, 3).map(i => `${i.path.join('.') || '<root>'}: ${i.message}`).join('; '),
+    );
+    return '';
+  }
+  const pc = parsed.data;
+  const freeForm = (pc.free_form ?? '').trim();
+  let droppedRows = 0;
+  const answers = (pc.answers ?? [])
+    .map(rawRow => {
+      const row = patientContextAnswerSchema.safeParse(rawRow);
+      if (!row.success) {
+        droppedRows += 1;
+        return null;
+      }
+      return {
+        prompt: (row.data.prompt ?? '').trim(),
+        answer: (row.data.answer ?? '').trim(),
+        rationale: (row.data.rationale ?? '').trim(),
+        category: (row.data.category ?? '').trim(),
+      };
+    })
+    .filter((a): a is { prompt: string; answer: string; rationale: string; category: string } =>
+      !!a && !!a.prompt && !!a.answer);
+  if (droppedRows > 0) {
+    console.warn(`[patient_context] dropped ${droppedRows} malformed answer row(s)`);
+  }
+  if (!freeForm && answers.length === 0) return '';
+  const lines: string[] = [];
+  lines.push('\n\n--- PATIENT CONTEXT (clinician-supplied, AI-curated) ---');
+  if (answers.length > 0) {
+    for (const a of answers) {
+      const cat = a.category ? ` [${a.category}]` : '';
+      lines.push(`Q${cat}: ${a.prompt}`);
+      lines.push(`A: ${a.answer}`);
+      if (a.rationale) lines.push(`Why this matters: ${a.rationale}`);
+      lines.push('');
+    }
+  }
+  if (freeForm) {
+    lines.push('Free-form clinician notes about this patient:');
+    lines.push(freeForm);
+  }
+  lines.push('--- END PATIENT CONTEXT ---');
+  if (opts.instruction) {
+    lines.push(opts.instruction);
+  }
+  return lines.join('\n');
+}
+
+// ---------- Sling Failure Scenario cache ----------
+import type { SlingFailureScenario as SlingFailureScenarioType } from "@shared/schema";
+type CachedSlingFailureEntry = { fingerprint: string; scenarios: SlingFailureScenarioType[]; cachedAt: number };
+const slingFailureCache = new Map<string, CachedSlingFailureEntry>();
+const SLING_FAILURE_CACHE_TTL_MS = 1000 * 60 * 60; // 1 h
+function pruneSlingFailureCache(): void {
+  const now = Date.now();
+  const entries = Array.from(slingFailureCache.entries());
+  for (const [k, v] of entries) {
+    if (now - v.cachedAt > SLING_FAILURE_CACHE_TTL_MS) slingFailureCache.delete(k);
+  }
+  if (slingFailureCache.size > 200) {
+    const sorted = Array.from(slingFailureCache.entries()).sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+    const oldest = sorted[0];
+    if (oldest) slingFailureCache.delete(oldest[0]);
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints for deployment verification (must be early in route registration)
@@ -6471,6 +6578,206 @@ GUIDELINES:
     }
   });
 
+  app.post("/api/loading-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { buildTendinopathyLoadingPlan, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+
+      const loadingRequestSchema = z.object({
+        conditionName: z.string().min(1),
+        site: z.enum(['achilles', 'patellar', 'gluteal', 'proximal_hamstring', 'rotator_cuff', 'lateral_elbow', 'medial_elbow']).optional(),
+        patientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }),
+        }),
+        proposedExercises: z.array(z.object({
+          exerciseId: z.string(),
+          exerciseName: z.string(),
+          category: z.string().optional(),
+          bodyParts: z.array(z.string()).optional(),
+          baseSets: z.number().optional(),
+          baseReps: z.string().optional(),
+        })).default([]),
+        overrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          frequencyPerDay: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+          progression: z.object({ trigger: z.string(), nextStep: z.string(), reviewAfterSessions: z.number() }).optional(),
+          overrideAuthorId: z.string().optional(),
+          overrideAt: z.string().optional(),
+        })).optional(),
+        previousPlan: z.any().optional(),
+        previousPlanHash: z.string().optional(),
+        recomputeReason: z.string().optional(),
+        commitWindowWeeks: z.union([z.literal(1), z.literal(2)]).optional(),
+        horizonWeeks: z.number().optional(),
+      });
+
+      const parsed = loadingRequestSchema.parse(req.body);
+      const { previousPlan, recomputeReason, ...engineReq } = parsed as typeof parsed & { previousPlan?: unknown; recomputeReason?: string };
+      const response = buildTendinopathyLoadingPlan(engineReq as Parameters<typeof buildTendinopathyLoadingPlan>[0]);
+
+      if (previousPlan && response.plan.applicability === 'tendinopathy') {
+        try {
+          response.diff = diffPlans(previousPlan as Parameters<typeof diffPlans>[0], response.plan, recomputeReason ?? 'Manual recompute');
+        } catch (e) {
+          // ignore diff errors — diff is non-critical
+        }
+      }
+
+      res.json(response);
+    } catch (error: unknown) {
+      console.error("Loading engine generate error:", error);
+      const msg = error instanceof Error ? error.message : "Failed to generate loading plan";
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  // -------- Loading Engine context store endpoints (Task #231) --------
+  // Backend persistence for the Optimal Loading Engine clinician workflow:
+  // structured patient factors + per-(exerciseId, weekIndex) overrides.
+  // Replaces fragile localStorage so overrides persist across recomputes,
+  // page reloads, and devices for the same authenticated clinician.
+  app.get("/api/loading-context/:conditionName", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { getLoadingContext } = await import("./services/loadingContextStore");
+      const userId = req.user!.id;
+      const sessionPrescriptionNum = req.query.sessionPrescriptionNum ? Number(req.query.sessionPrescriptionNum) : undefined;
+      const ctx = getLoadingContext(userId, req.params.conditionName, sessionPrescriptionNum);
+      res.json(ctx);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to load context" });
+    }
+  });
+
+  app.put("/api/loading-context/:conditionName", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { setLoadingPatientFactors } = await import("./services/loadingContextStore");
+      const schema = z.object({
+        sessionPrescriptionNum: z.number().optional(),
+        patientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.format() });
+      const userId = req.user!.id;
+      setLoadingPatientFactors(userId, req.params.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.patientFactors);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to save factors" });
+    }
+  });
+
+  app.put("/api/loading-context/:conditionName/overrides", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { z } = await import("zod");
+      const { upsertLoadingOverride } = await import("./services/loadingContextStore");
+      const schema = z.object({
+        sessionPrescriptionNum: z.number().optional(),
+        override: z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        }),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.format() });
+      const userId = req.user!.id;
+      const saved = upsertLoadingOverride(userId, req.params.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.override);
+      res.json({ ok: true, override: saved });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to save override" });
+    }
+  });
+
+  app.delete("/api/loading-context/:conditionName/overrides/:exerciseId/:weekIndex", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { deleteLoadingOverride } = await import("./services/loadingContextStore");
+      const userId = req.user!.id;
+      const sessionPrescriptionNum = req.query.sessionPrescriptionNum ? Number(req.query.sessionPrescriptionNum) : undefined;
+      const ok = deleteLoadingOverride(userId, req.params.conditionName, sessionPrescriptionNum, req.params.exerciseId, Number(req.params.weekIndex));
+      res.json({ ok });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to delete override" });
+    }
+  });
+
   app.post("/api/treatment-plan/generate", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const { z } = await import("zod");
@@ -6559,6 +6866,42 @@ GUIDELINES:
             })).optional(),
           })).optional(),
         }).optional(),
+        // Loading-engine inputs (Task #231) — when conditionName resolves
+        // to a tendinopathy site, the loading engine becomes the dosage
+        // source of truth for exercises in every phase of the plan.
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
       });
 
       const parsed = treatmentPlanInputSchema.safeParse(req.body);
@@ -6567,7 +6910,119 @@ GUIDELINES:
       }
 
       const result = generateTreatmentPlan(parsed.data);
-      res.json(result);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      // Replace dosages within phases with engine-prescribed loads, so
+      // PlanTab presents the loading engine as the single dosage source
+      // of truth for tendinopathy patients.
+      let augmentedResult: typeof result & {
+        loadingPlan?: import('@shared/schema').TendinopathyLoadingPlan;
+        loadingEngine?: { applicable: boolean; reason?: string; site?: import('@shared/schema').TendinopathySite };
+      } = result;
+      if (parsed.data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(parsed.data.conditionName);
+        if (!site) {
+          augmentedResult = {
+            ...result,
+            loadingEngine: {
+              applicable: false,
+              reason: `Optimal Loading Engine isn't applicable to "${parsed.data.conditionName}" — load modulation isn't the primary lever for this condition. Standard treatment-plan dosing applies.`,
+            },
+          };
+        } else {
+          // Tendinopathy → engine is the single source of truth.
+          // No silent fallback: any failure here surfaces as an explicit
+          // 502 so clinicians never see generic dosing labelled as
+          // engine-prescribed.
+          try {
+            const persisted = getLoadingContext(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum);
+            // Persist incoming factors so the next recompute sees them.
+            if (parsed.data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum, parsed.data.loadingPatientFactors);
+            }
+            const factors = parsed.data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            // Flatten exercises across all phases for negotiation.
+            const flat: Array<{ p: number; e: number; ex: typeof result.phases[number]['exercises'][number] }> = [];
+            result.phases.forEach((ph, pi) => ph.exercises.forEach((ex, ei) => flat.push({ p: pi, e: ei, ex })));
+            const proposed = flat.map((row, i) => ({
+              exerciseId: row.ex.id || `tp_${i}_${(row.ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: row.ex.name,
+              category: row.ex.category,
+              bodyParts: row.ex.targetRegions,
+              baseSets: row.ex.sets,
+              baseReps: row.ex.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: parsed.data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+
+            if (negotiated.plan.applicability === 'tendinopathy') {
+              const byEx = new Map(negotiated.plan.committed.map(p => [p.exerciseId, p]));
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+              const phasesAug = result.phases.map(ph => ({ ...ph, exercises: ph.exercises.map(ex => ({ ...ex })) }));
+              flat.forEach((row, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                const target = phasesAug[row.p].exercises[row.e] as typeof phasesAug[number]['exercises'][number] & {
+                  optimalLoad?: import('@shared/schema').OptimalLoadPrescription;
+                  swapNotice?: { from: string; reason: string };
+                };
+                if (swap) {
+                  target.name = finalEx.exerciseName;
+                  target.id = exId;
+                  target.swapNotice = { from: swap.from.exerciseName, reason: swap.reason };
+                  target.rationale = `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" by the Optimal Loading Engine because: ${swap.reason}`;
+                }
+                if (opt) {
+                  target.sets = opt.sets;
+                  target.reps = opt.reps;
+                  target.frequency = `${opt.daysPerWeek}×/wk${opt.frequencyPerDay && opt.frequencyPerDay > 1 ? ` × ${opt.frequencyPerDay}/day` : ''}`;
+                  target.intensity = opt.intensity.label;
+                  target.painCeiling = `NRS ≤ ${opt.painCeilingNrs}/10`;
+                  target.optimalLoad = opt;
+                }
+              });
+              // Server-side diff against the previously-stored plan.
+              const prev = getLastLoadingPlan(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum) ?? null;
+              const loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+              setLastLoadingPlan(req.user!.id, parsed.data.conditionName, parsed.data.sessionPrescriptionNum, negotiated.plan);
+              augmentedResult = {
+                ...result,
+                phases: phasesAug,
+                loadingPlan: negotiated.plan,
+                loadingEngine: { applicable: true, site },
+                loadingDiff,
+              } as typeof augmentedResult & { loadingDiff?: import('@shared/schema').LoadingPlanDiff };
+            } else {
+              // Engine ran but produced a non-tendinopathy plan — explicit
+              // failure for a tendinopathy condition. No silent fallback.
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${parsed.data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /treatment-plan/generate:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+      res.json(augmentedResult);
     } catch (error: any) {
       console.error("Treatment plan generator error:", error);
       res.status(500).json({ error: "Failed to generate treatment plan" });
@@ -6632,6 +7087,56 @@ GUIDELINES:
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        // Loading-engine inputs (Task #231) — optional; when conditionName
+        // resolves to a tendinopathy, the loading engine becomes the
+        // dosage source of truth for the generated plan.
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
+        loadingOverrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        })).optional(),
       });
 
       const parsed = exerciseInputSchema.safeParse(req.body);
@@ -6810,7 +7315,130 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      // Make the loading engine the dosage source of truth for tendinopathy
+      // patients in the main prescription pipeline as well, not just custom.
+      let loadingPlan: import("@shared/schema").TendinopathyLoadingPlan | undefined;
+      let loadingEngineMeta: { applicable: boolean; reason?: string; site?: import("@shared/schema").TendinopathySite } | undefined;
+      let exerciseGroups = validated.data.exerciseGroups as Array<typeof validated.data.exerciseGroups[number] & {
+        exercises: Array<typeof validated.data.exerciseGroups[number]['exercises'][number] & {
+          exerciseId?: string;
+          optimalLoad?: import("@shared/schema").OptimalLoadPrescription;
+          loadingProjection?: import("@shared/schema").OptimalLoadPrescription[];
+          swapNotice?: { from: string; reason: string };
+        }>;
+      }>;
+
+      let loadingDiff: import("@shared/schema").LoadingPlanDiff | undefined;
+      if (data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors, upsertLoadingOverride } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(data.conditionName);
+        if (!site) {
+          loadingEngineMeta = {
+            applicable: false,
+            reason: `Optimal Loading Engine isn't applicable to "${data.conditionName}" — load modulation isn't the primary lever for this condition. Standard exercise prescription applies.`,
+          };
+        } else {
+          // Tendinopathy → engine is single source of truth. Failures
+          // surface as 502; no silent generic-dose fallback.
+          try {
+            // Persist incoming factors + overrides into the durable store.
+            if (data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, data.conditionName, data.sessionPrescriptionNum, data.loadingPatientFactors);
+            }
+            if (Array.isArray(data.loadingOverrides)) {
+              for (const o of data.loadingOverrides) upsertLoadingOverride(req.user!.id, data.conditionName, data.sessionPrescriptionNum, o);
+            }
+            const persisted = getLoadingContext(req.user!.id, data.conditionName, data.sessionPrescriptionNum);
+            const factors = data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            // Flatten exercises across groups so the engine sees the full plan,
+            // tracking (groupIdx, exerciseIdx) so we can write results back.
+            const flat: Array<{ g: number; e: number; ex: typeof exerciseGroups[number]['exercises'][number] }> = [];
+            exerciseGroups.forEach((g, gi) => g.exercises.forEach((ex, ei) => flat.push({ g: gi, e: ei, ex })));
+            const proposed = flat.map((row, i) => ({
+              exerciseId: `gen_${i}_${(row.ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: row.ex.name,
+              category: row.ex.targetStructure,
+              bodyParts: row.ex.targetStructure ? [row.ex.targetStructure] : undefined,
+              baseSets: parseInt(row.ex.sets, 10) || undefined,
+              baseReps: row.ex.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+
+            if (negotiated.plan.applicability === 'tendinopathy') {
+              loadingPlan = negotiated.plan;
+              loadingEngineMeta = { applicable: true, site };
+
+              const byEx = new Map<string, import("@shared/schema").OptimalLoadPrescription>();
+              const projByEx = new Map<string, import("@shared/schema").OptimalLoadPrescription[]>();
+              for (const p of loadingPlan.committed) byEx.set(p.exerciseId, p);
+              for (const p of loadingPlan.projected) {
+                if (!projByEx.has(p.exerciseId)) projByEx.set(p.exerciseId, []);
+                projByEx.get(p.exerciseId)!.push(p);
+              }
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+
+              flat.forEach((row, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                const target = exerciseGroups[row.g].exercises[row.e];
+                if (swap) {
+                  // Swap-safe semantics: replace identity AND blank
+                  // execution-specific text inherited from the original
+                  // exercise so clinicians don't see mismatched details.
+                  target.name = finalEx.exerciseName;
+                  target.exerciseId = exId;
+                  target.swapNotice = { from: swap.from.exerciseName, reason: swap.reason };
+                  target.loadGuidance = 'Refer to "Why this dose" — engine-prescribed load.';
+                  target.rationale = `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" because: ${swap.reason}`;
+                  target.progression = 'Progression governed by Optimal Loading Engine projection (see weeks 2–10).';
+                  target.contraindications = target.contraindications || 'See engine pain ceiling.';
+                } else {
+                  target.exerciseId = exId;
+                }
+                if (opt) {
+                  target.sets = String(opt.sets);
+                  target.reps = opt.reps;
+                  target.tempo = `${opt.tempo.eccentricSec}-${opt.tempo.isometricSec}-${opt.tempo.concentricSec}`;
+                  target.optimalLoad = opt;
+                  target.loadingProjection = projByEx.get(exId) ?? [];
+                }
+              });
+
+              const prev = getLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum) ?? null;
+              loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+              setLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum, negotiated.plan);
+            } else {
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /exercise-engine/generate:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+
+      res.json({ ...validated.data, exerciseGroups, loadingPlan, loadingEngine: loadingEngineMeta, loadingDiff });
     } catch (error: unknown) {
       console.error("Exercise engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -6884,6 +7512,54 @@ Based on this clinical data, generate a comprehensive, prioritized exercise pres
           clinical: z.string().optional(),
         })).optional().default([]),
         goalTargets: z.string().optional().default(""),
+        // ---- Loading Engine (Task #231) handshake inputs ----
+        conditionName: z.string().optional(),
+        sessionPrescriptionNum: z.number().optional(),
+        loadingPatientFactors: z.object({
+          age: z.number().optional(),
+          irritability: z.enum(['low', 'moderate', 'high']).optional(),
+          recoveryPhase: z.enum(['reactive', 'disrepair', 'remodelling', 'return_to_sport']).optional(),
+          history: z.object({
+            medications: z.array(z.string()).optional(),
+            medicationFlags: z.object({
+              statins: z.boolean().optional(),
+              fluoroquinolones: z.boolean().optional(),
+              corticosteroids: z.boolean().optional(),
+              aromataseInhibitors: z.boolean().optional(),
+            }).optional(),
+            metabolicConditions: z.object({
+              diabetes: z.boolean().optional(),
+              thyroid: z.boolean().optional(),
+              hypercholesterolaemia: z.boolean().optional(),
+              obesity: z.boolean().optional(),
+            }).optional(),
+            hormonalStatus: z.object({
+              sex: z.enum(['male', 'female', 'other']).optional(),
+              menopauseStatus: z.enum(['premenopausal', 'perimenopausal', 'postmenopausal', 'na']).optional(),
+              onHrt: z.boolean().optional(),
+            }).optional(),
+            priorInjurySameSite: z.boolean().optional(),
+            trainingHistory: z.object({
+              weeklyLoadingHours: z.number().optional(),
+              recentLoadSpikePct: z.number().optional(),
+              deconditioned: z.boolean().optional(),
+            }).optional(),
+          }).default({}),
+        }).optional(),
+        loadingOverrides: z.array(z.object({
+          exerciseId: z.string(),
+          weekIndex: z.number(),
+          sets: z.number().optional(),
+          reps: z.string().optional(),
+          intensity: z.object({
+            value: z.union([z.number(), z.string()]),
+            unit: z.enum(['%1RM', '%MVC', 'RIR', 'pain_monitored', 'isometric_hold', 'bodyweight']),
+            label: z.string(),
+          }).optional(),
+          tempo: z.object({ eccentricSec: z.number(), isometricSec: z.number(), concentricSec: z.number() }).optional(),
+          daysPerWeek: z.number().optional(),
+          painCeilingNrs: z.number().optional(),
+        })).optional(),
       });
 
       const parsed = customExerciseInputSchema.safeParse(req.body);
@@ -7109,7 +7785,137 @@ Based on this clinical data, DESIGN novel biomechanical exercises from first pri
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+
+      // -------- Loading Engine handshake (Task #231) --------
+      let loadingPlan: import("@shared/schema").TendinopathyLoadingPlan | undefined;
+      let loadingEngineMeta: { applicable: boolean; reason?: string; site?: import("@shared/schema").TendinopathySite } | undefined;
+      let loadingDiff: import("@shared/schema").LoadingPlanDiff | undefined;
+      let exercisesWithLoad = validated.data.customExercises as Array<
+        typeof validated.data.customExercises[number] & {
+          exerciseId?: string;
+          optimalLoad?: import("@shared/schema").OptimalLoadPrescription;
+          loadingProjection?: import("@shared/schema").OptimalLoadPrescription[];
+        }
+      >;
+      if (data.conditionName) {
+        const { detectTendinopathySite, negotiateLoadingPlan, pickFallbackAlternative, diffPlans } = await import("./services/tendinopathyLoadingEngine");
+        const { getLoadingContext, getLastLoadingPlan, setLastLoadingPlan, setLoadingPatientFactors, upsertLoadingOverride } = await import("./services/loadingContextStore");
+        const site = detectTendinopathySite(data.conditionName);
+        if (!site) {
+          loadingEngineMeta = {
+            applicable: false,
+            reason: `Optimal Loading Engine isn't applicable to "${data.conditionName}" — load modulation isn't the primary lever for this condition. Standard exercise prescription applies.`,
+          };
+        } else {
+          // Tendinopathy → engine is single source of truth. Failures
+          // surface as 502; no silent generic-dose fallback.
+          try {
+            if (data.loadingPatientFactors) {
+              setLoadingPatientFactors(req.user!.id, data.conditionName, data.sessionPrescriptionNum, data.loadingPatientFactors);
+            }
+            if (Array.isArray(data.loadingOverrides)) {
+              for (const o of data.loadingOverrides) upsertLoadingOverride(req.user!.id, data.conditionName, data.sessionPrescriptionNum, o);
+            }
+            const persisted = getLoadingContext(req.user!.id, data.conditionName, data.sessionPrescriptionNum);
+            const factors = data.loadingPatientFactors ?? persisted.patientFactors ?? { history: {} };
+            const proposed = exercisesWithLoad.map((ex, i) => ({
+              exerciseId: `ex_${i}_${(ex.name || 'unnamed').toLowerCase().replace(/\W+/g, '_').slice(0, 40)}`,
+              exerciseName: ex.name,
+              category: ex.targetSystem,
+              bodyParts: ex.clinicalTarget ? [ex.clinicalTarget] : undefined,
+              baseSets: parseInt(ex.dosage.sets, 10) || undefined,
+              baseReps: ex.dosage.reps,
+            }));
+            const negotiated = await negotiateLoadingPlan({
+              conditionName: data.conditionName,
+              site,
+              patientFactors: factors,
+              proposedExercises: proposed,
+              overrides: persisted.overrides,
+              commitWindowWeeks: 1,
+              horizonWeeks: 10,
+            }, async (swap) => pickFallbackAlternative(site, swap));
+            if (negotiated.plan.applicability !== 'tendinopathy') {
+              return res.status(502).json({
+                error: 'loading_engine_failed',
+                site,
+                message: `Optimal Loading Engine could not produce a tendinopathy plan for "${data.conditionName}". Resolve missing patient factors and retry, or override the prescription manually.`,
+              });
+            }
+            loadingPlan = negotiated.plan;
+            loadingEngineMeta = { applicable: true, site };
+            const prev = getLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum) ?? null;
+            loadingDiff = diffPlans(prev, negotiated.plan, prev ? 'Loading inputs changed' : 'Initial plan');
+            setLastLoadingPlan(req.user!.id, data.conditionName, data.sessionPrescriptionNum, negotiated.plan);
+            {
+              const byEx = new Map<string, import("@shared/schema").OptimalLoadPrescription>();
+              const projByEx = new Map<string, import("@shared/schema").OptimalLoadPrescription[]>();
+              for (const p of loadingPlan.committed) byEx.set(p.exerciseId, p);
+              for (const p of loadingPlan.projected) {
+                if (!projByEx.has(p.exerciseId)) projByEx.set(p.exerciseId, []);
+                projByEx.get(p.exerciseId)!.push(p);
+              }
+              const swapByIndex = new Map(negotiated.swapLog.map(s => [s.index, s]));
+              exercisesWithLoad = exercisesWithLoad.map((ex, i) => {
+                const finalEx = negotiated.finalExercises[i];
+                const exId = finalEx?.exerciseId ?? proposed[i].exerciseId;
+                const opt = byEx.get(exId);
+                const swap = swapByIndex.get(i);
+                // Swap-safe semantics: when the engine replaces an exercise,
+                // also blank execution-specific text inherited from the
+                // original (movementInstructions, activationPattern,
+                // designRationale, progressions, equipmentNeeded) so the card
+                // does not present mismatched identity vs execution details.
+                const base = swap
+                  ? {
+                      ...ex,
+                      name: finalEx.exerciseName,
+                      exerciseId: exId,
+                      swapNotice: { from: swap.from.exerciseName, reason: swap.reason },
+                      movementInstructions: [
+                        `Replaces "${swap.from.exerciseName}".`,
+                        `Reason: ${swap.reason}`,
+                        `Refer to the "Why this dose" section for engine-prescribed loading parameters.`,
+                      ],
+                      activationPattern: [],
+                      designRationale: `Swapped from "${swap.from.exerciseName}" to "${finalEx.exerciseName}" by the Optimal Loading Engine because: ${swap.reason}`,
+                      progressionPath: 'Progression governed by Optimal Loading Engine projection (weeks 2–10).',
+                      equipmentNeeded: [],
+                    }
+                  : { ...ex, exerciseId: exId };
+                if (!opt) return base;
+                return {
+                  ...base,
+                  dosage: {
+                    ...ex.dosage,
+                    sets: String(opt.sets),
+                    reps: opt.reps,
+                    tempo: `${opt.tempo.eccentricSec}-${opt.tempo.isometricSec}-${opt.tempo.concentricSec}`,
+                    frequency: `${opt.daysPerWeek}×/wk${opt.frequencyPerDay && opt.frequencyPerDay > 1 ? ` × ${opt.frequencyPerDay}/day` : ''}`,
+                  },
+                  optimalLoad: opt,
+                  loadingProjection: projByEx.get(exId) ?? [],
+                };
+              });
+            }
+          } catch (e) {
+            console.error("Loading engine handshake failed in /design-custom:", e);
+            return res.status(502).json({
+              error: 'loading_engine_failed',
+              site,
+              message: e instanceof Error ? e.message : 'Optimal Loading Engine threw an unexpected error.',
+            });
+          }
+        }
+      }
+
+      res.json({
+        ...validated.data,
+        customExercises: exercisesWithLoad,
+        loadingPlan,
+        loadingEngine: loadingEngineMeta,
+        loadingDiff,
+      });
     } catch (error: unknown) {
       console.error("Custom exercise design error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -8407,11 +9213,38 @@ Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"
           dysfunction: z.string().optional(),
           clinical: z.string().optional(),
         })).optional().default([]),
+        condition: z.string().trim().max(200).optional().default(""),
+        stage: z.union([z.enum(['acute', 'subacute', 'chronic']), z.literal("")]).optional().default(""),
+        irritability: z.union([z.enum(['low', 'moderate', 'high']), z.literal("")]).optional().default(""),
+        tissueType: z.string().trim().max(100).optional().default(""),
+        primaryGoal: z.union([z.enum(['pain', 'healing', 'loading', 'mobility', 'activation']), z.literal("")]).optional().default(""),
+        contraindicationFlags: z.array(z.enum([
+          'pregnancy', 'pacemaker', 'metal_implant', 'malignancy', 'open_wound',
+          'active_infection', 'dvt', 'hemorrhage', 'sensory_deficit', 'epilepsy', 'skin_breakdown'
+        ])).optional().default([]),
+        // Optional saved-preset id whose lastUsedAt should be bumped
+        // server-side whenever the clinician (re)generates a plan with it.
+        presetId: z.number().int().positive().optional(),
       });
 
       const parsed = electroInputSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      // Server-side "last used" bump for any active preset attached to this
+      // generation. Ownership-checked: only touch presets owned by the
+      // requester so a malicious client can't update someone else's preset.
+      if (parsed.data.presetId) {
+        try {
+          const userId = req.user!.id;
+          const existing = await storage.getElectroConditionPreset(parsed.data.presetId);
+          if (existing && existing.userId === userId) {
+            await storage.touchElectroConditionPreset(existing.id);
+          }
+        } catch (e) {
+          console.warn('Non-fatal: failed to touch electro preset on generate:', e);
+        }
       }
 
       const data = parsed.data;
@@ -8460,101 +9293,128 @@ Return JSON: {"conditionId":"ai_generated_<snake_case>","conditionName":string,"
           ).join('\n')
         : 'None identified';
 
+      const conditionDriven = !!data.condition;
+      const contraindicationLabels: Record<string, string> = {
+        pregnancy: 'Pregnancy',
+        pacemaker: 'Cardiac pacemaker / implanted electronic device',
+        metal_implant: 'Metal implant in treatment area',
+        malignancy: 'Active malignancy in/near treatment area',
+        open_wound: 'Open wound / broken skin',
+        active_infection: 'Active local infection',
+        dvt: 'DVT / thromboembolic risk',
+        hemorrhage: 'Active hemorrhage / bleeding disorder',
+        sensory_deficit: 'Impaired sensation in treatment area',
+        epilepsy: 'Epilepsy / seizure disorder',
+        skin_breakdown: 'Fragile skin / skin breakdown',
+      };
+      const contraindicationText = data.contraindicationFlags.length > 0
+        ? data.contraindicationFlags.map(f => `- ${contraindicationLabels[f] || f}`).join('\n')
+        : 'None reported';
+
       const OpenAI = (await import("openai")).default;
       const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
       const aiClient = new OpenAI({ apiKey, baseURL });
 
-      const systemPrompt = `You are an expert musculoskeletal physiotherapist and electrophysical agents specialist with comprehensive training across ALL electrophysical and physical agent modalities used in modern physiotherapy practice. You are given detailed biomechanical analysis data from a clinical assessment.
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist and Electrophysical Agents (EPA) specialist. EPA = modalities that deliver ENERGY (electrical, acoustic, light, thermal, electromagnetic, radiofrequency) to tissues for therapeutic effect. You are given detailed biomechanical analysis data from a clinical assessment.
 
-Your task is to reason through ALL clinical data and generate a highly specific, prioritized electrophysical agents prescription that addresses the patient's underlying dysfunctions using the most appropriate modalities from the FULL range available.
+CONDITION-FIRST MODE: If a specific condition (diagnosis) is supplied in the user input, you MUST reason CONDITION-FIRST. That means:
+- Pick the EPA modalities with the strongest published research support for THAT diagnosis at THAT stage/irritability/goal.
+- Give condition-specific dosages drawn from the published literature (e.g. ESWT for plantar fasciitis ≈ 0.20 mJ/mm², 2000 impulses, 3 sessions weekly; LLLT for Achilles tendinopathy ≈ 904nm, 60 mW, 5.4 J/point, 6 points, 3×/wk × 4–6 wks; etc.). Doses MUST be plausible and match what is reported in the cited literature.
+- Explicitly grade the evidence per modality (A = high-quality systematic review/meta-analysis or multiple RCTs; B = ≥1 RCT or strong cohort; C = limited/expert opinion / mechanistic only).
+- For each modality, return 1–3 REAL citations the clinician can verify. Use real titles, real journals, real years, and real, verifiable URLs (PubMed pmid links, Cochrane URLs, clinical practice guideline URLs, Physiopedia URLs). Do NOT invent citations. If you cannot recall a real, specific citation for a recommendation, return citations: [] and lower the evidenceGrade accordingly. Never fabricate.
+- Add a top-level "topPicks" array of the 2–4 highest-evidence, most condition-specific modalities for this diagnosis with a one-line "why this for {condition}" rationale.
+- Rank modalities within each group with the best-evidence and most condition-specific FIRST.
 
-AVAILABLE MODALITY CATEGORIES (choose from ANY of these — you are NOT limited to a subset):
+CONTRAINDICATION HANDLING: If the user supplies contraindication flags, for any modality that is contraindicated by those flags either OMIT it entirely OR include it with notAdvisedReason set to a clear one-sentence explanation, no parameters block (parameters: ""), and evidenceGrade: "C". Do not invent dosages for contraindicated modalities.
 
-ELECTROTHERAPY — PAIN MODULATION:
-- TENS (Transcutaneous Electrical Nerve Stimulation): modes (conventional/acupuncture-like/burst/brief-intense), frequency, pulse width, electrode placement
-- IFT (Interferential Current Therapy): carrier frequency, beat frequency (AMF), sweep range, electrode config (bipolar/quadripolar), treatment time
-- Diadynamic Currents (Bernard's Currents): waveform type (DF/MF/CP/LP/RS), intensity, treatment time per waveform
-- Premodulated Current: frequency, pulse width, intensity, electrode placement, treatment time
-- H-Wave Stimulation: frequency (low 2Hz / high 60Hz), intensity, electrode placement, treatment time
-- PENS (Percutaneous Electrical Nerve Stimulation): needle gauge, frequency, intensity, depth, duration
+Your task is to generate a prioritized Electrophysical Agents prescription using ONLY modalities from the EPA catalog below. For every recommendation you must reason in 4 dimensions (mechanism · target tissue · desired effect · evidence strength) and return a structured dosing block.
 
-ELECTROTHERAPY — MUSCLE ACTIVATION:
-- EMS/NMES (Electrical Muscle Stimulation): frequency, on:off ratio, ramp time, contraction type (isometric/isotonic), number of contractions
-- Russian Stimulation: carrier frequency (2500Hz), burst frequency (50Hz), duty cycle, intensity, treatment time
-- FES (Functional Electrical Stimulation): frequency, pulse width, on:off ratio, functional task integrated with, number of repetitions
-- EMG Biofeedback: electrode placement, target muscle, threshold settings, training protocol, session duration
+==========================================================
+EPA CATALOG — choose only from these 6 categories
+==========================================================
 
-ELECTROTHERAPY — TISSUE HEALING:
-- Microcurrent (MENS): frequency (0.1-1000μA), waveform, intensity, electrode placement, treatment time
-- HVGS (High-Voltage Galvanic Stimulation): polarity (positive for healing/negative for edema), pulse rate, intensity, treatment time
+1) ELECTRICAL STIMULATION
+- TENS (Transcutaneous Electrical Nerve Stimulation): mode (conventional / acupuncture-like / burst / brief-intense), frequency, pulse width, intensity, electrode placement
+- NMES / EMS (Neuromuscular / Muscle Electrical Stim): frequency, on:off ratio, ramp, contraction count
+- IFT (Interferential Current): carrier freq, beat freq (AMF), sweep, electrode config (bipolar / quadripolar)
+- Russian Stimulation: 2500 Hz carrier, 50 Hz burst, duty cycle, intensity
+- HVPC (High-Voltage Pulsed Current): polarity, pulse rate, intensity
+- Microcurrent / MENS: μA range, waveform, polarity, electrode placement
+- FES (Functional Electrical Stim): freq, pulse width, on:off, functional task, reps
+- Premodulated Current, Diadynamic Currents (DF/MF/CP/LP), H-Wave, EMG Biofeedback, Iontophoresis (drug, polarity, mA·min)
 
-ULTRASOUND & ACOUSTIC:
-- Therapeutic Ultrasound: frequency (1MHz deep / 3MHz superficial), intensity (W/cm²), duty cycle (continuous vs pulsed %), ERA, treatment time
-- Phonophoresis: coupling agent/drug, ultrasound parameters, treatment area, duration
-- Shockwave Therapy (ESWT): type (focused/radial), energy flux density (mJ/mm²), frequency (Hz), number of impulses, pressure (bar)
+2) ACOUSTIC / MECHANICAL ENERGY
+- Therapeutic Ultrasound: 1 MHz / 3 MHz, W/cm², duty cycle (continuous vs pulsed %), ERA, time
+- Phonophoresis: coupling agent / drug, US params, time
+- Shockwave Therapy (ESWT): focused or radial, energy flux density (mJ/mm²), Hz, impulses, bar
+- Local / Percussive Vibration: frequency (Hz), amplitude, application site, duration per point
+- Whole-Body Vibration: frequency, amplitude, stance, duration, sets
 
-LIGHT & RADIATION THERAPY:
-- LLLT/PBM (Low-Level Laser / Photobiomodulation): wavelength (nm), power (mW), energy density (J/cm²), spot size, treatment time per point
-- HILT (High-Intensity Laser Therapy): wavelength, peak power (W), average power, energy density, scan/point technique, treatment time
-- Infrared Therapy: wavelength, power, distance from skin, treatment time
-- Ultraviolet Therapy: UV type (UVA/UVB/UVC), dose (MED), distance, treatment time, skin type consideration
+3) LIGHT-BASED THERAPY
+- LLLT / Photobiomodulation: wavelength (nm), power (mW), energy density (J/cm²), spot size, time per point
+- Class IV Laser: wavelength, average power (W), energy density, technique
+- HILT (High-Intensity Laser Therapy): wavelength, peak/average power, energy density, scan/point technique
+- Infrared Therapy: wavelength, power, distance, time
+- LED Photobiomodulation: wavelength, irradiance, dose
+- UV Therapy (limited use): UV type (UVA/UVB), MED dose, distance
 
-ELECTROMAGNETIC & FIELD THERAPY:
-- PEMF (Pulsed Electromagnetic Field): frequency, intensity (Gauss/Tesla), pulse duration, treatment time, coil type
-- Magnetotherapy: field strength, frequency, continuous vs pulsed, treatment duration
-- Radiofrequency Therapy: frequency (MHz), power, monopolar vs bipolar, treatment time, tissue depth
-- TECAR Therapy (Capacitive & Resistive Energy Transfer): mode (capacitive for superficial/resistive for deep), frequency, power level, treatment time per area
+4) THERMAL AGENTS (basic but EPA)
+- Hot Pack / Moist Heat: temperature, layers, duration, region
+- Paraffin Wax: temperature, technique (dip-wrap / immersion), coats, duration
+- Fluidotherapy: temperature, agitation level, duration, body part
+- Contrast Bath: hot/cold temps, time ratios (e.g. 4:1), cycles, total duration
+- Ice Pack / Cold Pack: temperature, duration, barrier thickness
+- Ice Massage: technique, duration, area
+- Cryocompression (e.g. Game Ready): temperature, compression mmHg, cycle times
+- Vapocoolant Spray: technique (spray-and-stretch), passes
 
-THERMAL AGENTS:
-- Shortwave Diathermy: mode (continuous/pulsed), frequency, power, electrode placement (condenser/induction), treatment time
-- Microwave Diathermy: frequency (915MHz/2450MHz), power, distance, applicator type, treatment time
-- Hot Packs/Moist Heat: temperature, number of layers, duration, body region
-- Paraffin Wax: temperature, method (dip-wrap/immersion), number of coats, duration
-- Fluidotherapy: temperature, duration, agitation level, body part
-- Contrast Baths: hot/cold temperatures, time ratios (e.g. 4:1 or 3:1), total cycles, total duration
+5) ELECTROMAGNETIC / FIELD-BASED
+- PEMF (Pulsed Electromagnetic Field): frequency, intensity (Gauss / Tesla), pulse duration, time, coil type
+- Shortwave Diathermy: continuous vs pulsed, frequency, power, electrode placement (condenser / induction), time
+- Microwave Diathermy: 915 MHz / 2450 MHz, power, distance, applicator, time
+- Magnetotherapy: field strength, frequency, continuous vs pulsed, duration
 
-CRYOTHERAPY:
-- Ice Packs/Cold Packs: temperature, duration, application method, barrier thickness
-- Ice Massage: duration, technique, treatment area
-- Cryocompression (e.g. Game Ready): temperature, compression level (mmHg), cycle times, total duration
-- Vapocoolant Spray: spray type, technique (spray-and-stretch), number of passes
+6) ADVANCED / RADIOFREQUENCY
+- TECAR / INDIBA (Capacitive-Resistive Energy Transfer): mode (capacitive vs resistive), frequency (MHz), power, time per area
+- Capacitive-Resistive RF Transfer (generic device equivalents)
+- EMTT (Extracorporeal Magnetotransduction Therapy): frequency, intensity, pulses, applicator, time
+- HILT may also be considered Advanced when used at high energy densities
 
-MECHANICAL AGENTS:
-- Machine Traction (Cervical/Lumbar): type (intermittent/sustained/positional), force (kg or % body weight), hold/rest times, angle, total treatment time
-- Pneumatic Compression: pressure (mmHg), inflation/deflation cycle, treatment time, limb positioning
-- Whole-Body Vibration: frequency (Hz), amplitude (mm), stance position, duration, sets
-- Focal/Local Vibration: frequency, amplitude, application site, duration per point
-- Cupping/Vacuum Therapy: cup size, suction level, technique (stationary/sliding/flash), duration per area
-
-NEEDLING & ACUPUNCTURE:
-- Dry Needling: needle gauge (e.g. 0.25×40mm), technique (pistoning/fan/superficial), target muscle/trigger point, depth guidance
-- Acupuncture (Western Medical): point selection rationale, needle gauge, depth, retention time, manual stimulation technique
-- Electroacupuncture: frequency, intensity, waveform (continuous/alternating), needle points, treatment time
-
-SOFT TISSUE MODALITIES:
-- IASTM (Instrument-Assisted Soft Tissue Mobilization): tool type, technique (sweeping/strumming/fanning), pressure, strokes, target tissue
-- Iontophoresis: drug/ion, polarity, current density (mA/cm²), electrode size, treatment time, total dose (mA·min)
-
-COMBINED/ADVANCED:
-- Blood Flow Restriction (BFR): cuff width, limb occlusion pressure (%), exercise protocol, sets/reps, duration
-- Cryoneurolysis: target nerve, temperature, probe specifications, treatment duration
-
-TAPING & BRACING:
-- Rigid/Athletic Taping: tape type (zinc oxide/rigid sports tape), width (25mm/38mm/50mm), anchors and lock strips, direction of pull, tension (maximal/firm), number of layers, skin prep (underwrap/adhesive spray), wear time (during activity only, typically 2-4 hours), taping technique (e.g. closed basket weave for ankle, figure-of-8 for wrist)
-- Kinesiology Taping (Kinesio Tex / RockTape / K-Tape): tape brand/type, cut shape (I/Y/X/fan/web), anchor placement, application direction (origin-to-insertion for facilitation / insertion-to-origin for inhibition), stretch percentage (0-75% paper-off tension), body position during application, skin prep (clean/dry/shaved if needed), wear time (typically 3-5 days)
-- Dynamic Tape (Biomechanical Tape): tape type (Dynamic Tape Beige/Black/ECO), application technique (multi-directional biomechanical), anchor placement, direction of pull, degree of resistance/tension, body position, functional movement targeted, skin prep (clean/dry), wear time (3-5 days)
-- McConnell Taping: target joint (typically patellofemoral), tape type (rigid Endura Fix + Fixomull), anchor/base tape, glide direction (medial/lateral/superior/inferior tilt/rotation), tension (firm sustained correction), skin prep (Fixomull hypoallergenic base), reassessment asterisk sign, wear time (during activity, remove if skin irritation), skin care
-- Mulligan Taping (Mobilisation with Movement Tape): joint targeted, direction of sustained glide replicated, tape type (rigid or elastic), anchor placement, direction of pull, tension (moderate to replicate MWM glide), number of strips, patient position during application, skin prep (underwrap if sensitive), wear time (24-48 hours), functional reassessment movement
-- Elastic Therapeutic Taping (Leukotape / Cover-Roll): tape type and width, anchor placement, correction technique (mechanical/functional/fascial/space/lymphatic), direction of pull, tension applied, layering with hypoallergenic base (Cover-Roll), skin prep (clean/dry), wear time (up to 5-7 days)
+==========================================================
+EXCLUDED — these are NOT EPAs and MUST NOT appear in any modality you recommend (they belong to the Adjunct Therapies engine):
+- Dry Needling
+- Acupuncture (any form)
+- Electroacupuncture
+- Cupping / Vacuum Therapy
+- Gua Sha
+- Mechanical Traction (cervical / lumbar)
+- Pneumatic Compression
+==========================================================
 
 CLINICAL REASONING RULES:
-1. Be SPECIFIC with modality parameters — e.g. "TENS: conventional mode, 80-120Hz, 60-200μs pulse width, sensory-level intensity, 30 min" NOT just "TENS"
-2. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations
-3. Each modality MUST include a clear rationale linking it to a SPECIFIC finding from the data
-4. Include contraindications, expected physiological effect, and reassessment criteria
-5. For each modality, provide a plain-language educational description explaining WHAT it is and HOW it works — written for clinicians who may be unfamiliar with the modality
-6. For each modality, provide 1-3 resource links to reputable clinical education sources (Physiopedia, PubMed, clinical practice guidelines, manufacturer clinical guides, or peer-reviewed articles) where the clinician can learn more
+1. Be SPECIFIC with modality parameters — e.g. "TENS: conventional mode, 80-120Hz, 60-200μs pulse width, sensory-level intensity, 30 min" NOT just "TENS".
+2. Consider tissue irritability — use lower-intensity/pulsed modes for acute/irritable presentations.
+3. Each modality MUST include a clear rationale linking it to a SPECIFIC finding from the data.
+4. Include contraindications, expected physiological effect, and reassessment criteria.
+5. For each modality, provide a plain-language educational description explaining WHAT it is and HOW it works.
+6. For each modality, provide 1-3 resource links to reputable clinical education sources.
+
+REQUIRED 4-DIMENSION REASONING — for EVERY modality you must populate:
+- mechanism (string enum): "electrical" | "acoustic" | "thermal" | "photonic" | "electromagnetic" | "radiofrequency"
+- targetTissue (string enum): "muscle" | "tendon" | "nerve" | "bone" | "joint" | "skin_fascia"
+- desiredEffect (string enum): "pain_reduction" | "healing_stimulation" | "muscle_activation" | "swelling_reduction" | "tissue_extensibility" | "bone_healing"
+- evidenceStrength (string enum): "strong" | "moderate" | "weak"
+
+REQUIRED STRUCTURED DOSING — for EVERY modality you must populate a "dosing" object using ONLY the fields that apply to THAT modality. Omit (do not include) any field that is irrelevant — e.g. a hot pack has no pulse_width_us or frequency_hz; a TENS card has no temperature.
+Allowed dosing fields:
+- intensity        (string)  — e.g. "sensory", "motor", "0.4 mJ/mm²", "1.5 W/cm²", "60 mW", "moist heat 70°C"
+- frequency_hz     (number)  — pulse rate / acoustic frequency / EM frequency in Hz (or use intensity for non-Hz frequencies)
+- pulse_width_us   (number)  — microseconds (electrical-stim only)
+- duration_min     (number)  — minutes per session
+- sessions_per_week(number)
+- total_sessions   (number)  — total across the course
+- placement        (string)  — electrode / applicator / coupling-medium placement
 
 RESPONSE FORMAT — return valid JSON with this exact structure:
 {
@@ -8566,10 +9426,15 @@ RESPONSE FORMAT — return valid JSON with this exact structure:
       "priority": number (1 = highest),
       "modalities": [
         {
-          "modality": "string — specific modality name (e.g. 'Therapeutic Ultrasound — Pulsed 1MHz', 'Radial Shockwave Therapy', 'TECAR — Resistive Mode')",
+          "modality": "string — specific EPA modality name (e.g. 'Therapeutic Ultrasound — Pulsed 1MHz', 'Radial Shockwave Therapy', 'TECAR — Resistive Mode'). NEVER include dry needling, acupuncture, electroacupuncture, cupping, gua sha, IASTM, or massage-gun work — those are NOT EPA.",
           "targetStructure": "string — which muscle/joint/nerve/tissue this targets",
           "targetFinding": "string — the SPECIFIC clinical finding this addresses",
-          "parameters": "string — exact dosage parameters (frequency, intensity, duration, waveform, etc.)",
+          "mechanism": "electrical | acoustic | thermal | photonic | electromagnetic | radiofrequency",
+          "targetTissue": "muscle | tendon | nerve | bone | joint | skin_fascia",
+          "desiredEffect": "pain_reduction | healing_stimulation | muscle_activation | swelling_reduction | tissue_extensibility | bone_healing",
+          "evidenceStrength": "strong | moderate | weak",
+          "dosing": { "intensity": "string?", "frequency_hz": "number?", "pulse_width_us": "number?", "duration_min": "number?", "sessions_per_week": "number?", "total_sessions": "number?", "placement": "string?" },
+          "parameters": "string — short human-readable dosage summary (kept for backward compatibility / clinician notes; the structured dosing block above is authoritative)",
           "patientPosition": "string — exact patient position",
           "rationale": "string — clinical reasoning for WHY this modality was chosen over alternatives",
           "contraindications": "string — absolute and relative contraindications for this modality in this context",
@@ -8581,13 +9446,24 @@ RESPONSE FORMAT — return valid JSON with this exact structure:
               "title": "string — descriptive title for the resource (e.g. 'Physiopedia: TENS Overview', 'PubMed: PEMF for Bone Healing')",
               "url": "string — full URL to the resource"
             }
-          ]
+          ],
+          "evidenceGrade": "A | B | C  (A = SR/meta-analysis or multiple RCTs; B = ≥1 RCT or strong cohort; C = limited / mechanistic / expert opinion)",
+          "evidenceJustification": "string — one line explaining why this grade was assigned for this condition+stage",
+          "stageAppropriateness": "string — which stage / irritability this fits best (e.g. 'Best for chronic, low-irritability presentations; avoid in acute reactive tendinopathy')",
+          "citations": [
+            { "title": "string — real article/guideline title", "source": "PubMed | Cochrane | CPG | Physiopedia | Journal name", "year": 2023, "url": "string — verifiable URL (PubMed pmid link, DOI, Cochrane URL, etc.)" }
+          ],
+          "notAdvisedReason": "string — only set if a contraindication flag rules this modality out; in that case parameters MUST be empty and citations MAY be empty"
         }
       ]
     }
   ],
   "clinicalNotes": "string — overall clinical reasoning summary, treatment sequencing rationale, and modality interaction considerations",
-  "irritabilityConsiderations": "string — tissue irritability assessment, how it influenced modality selection and dosing, and safety precautions"
+  "irritabilityConsiderations": "string — tissue irritability assessment, how it influenced modality selection and dosing, and safety precautions",
+  "topPicks": [
+    { "modality": "string — modality name (must match one in modalityGroups)", "why": "string — one-line 'why this for {condition}' rationale", "evidenceGrade": "A | B | C" }
+  ],
+  "conditionEcho": "string — echo back the condition you reasoned about (or empty if no condition was supplied)"
 }`;
 
       const userPrompt = `CLINICAL ASSESSMENT DATA:
@@ -8618,6 +9494,22 @@ ${slingText}
 PAIN MARKERS:
 ${painText}
 
+${conditionDriven
+  ? `CLINICIAN-ENTERED CONDITION (PRIMARY DRIVER):
+- Condition / diagnosis: ${data.condition}
+- Stage: ${data.stage || 'not specified'}
+- Irritability: ${data.irritability || 'not specified'}
+- Tissue type focus: ${data.tissueType || 'not specified'}
+- Primary clinical goal: ${data.primaryGoal || 'not specified'}
+- Patient contraindication flags:
+${contraindicationText}
+
+You MUST reason CONDITION-FIRST per the system prompt. Use the biomechanical analysis above as supporting context only. Return condition-specific dosages with real citations and evidence grades, plus a topPicks array for "${data.condition}".`
+  : `No specific condition was entered by the clinician — drive the plan from the biomechanical analysis above. Patient contraindication flags:
+${contraindicationText}
+
+You may still optionally return a topPicks array for the most clinically central pattern you infer.`}
+
 Based on this clinical data, generate a comprehensive, prioritized electrophysical agents prescription. Think through the tissue states (acute vs chronic, superficial vs deep), pain mechanisms (nociceptive/neuropathic/central), tissue healing phases, and functional deficits. Prescribe specific modalities with precise parameters that address the underlying dysfunction pattern.`;
 
       const response = await aiClient.chat.completions.create({
@@ -8646,21 +9538,50 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
             modality: z.string(),
             targetStructure: z.string(),
             targetFinding: z.string(),
-            parameters: z.string(),
+            mechanism: z.enum(['electrical', 'acoustic', 'thermal', 'photonic', 'electromagnetic', 'radiofrequency']).optional(),
+            targetTissue: z.enum(['muscle', 'tendon', 'nerve', 'bone', 'joint', 'skin_fascia']).optional(),
+            desiredEffect: z.enum(['pain_reduction', 'healing_stimulation', 'muscle_activation', 'swelling_reduction', 'tissue_extensibility', 'bone_healing']).optional(),
+            evidenceStrength: z.enum(['strong', 'moderate', 'weak']).optional(),
+            dosing: z.object({
+              intensity: z.string().optional(),
+              frequency_hz: z.number().optional(),
+              pulse_width_us: z.number().optional(),
+              duration_min: z.number().optional(),
+              sessions_per_week: z.number().optional(),
+              total_sessions: z.number().optional(),
+              placement: z.string().optional(),
+            }).partial().optional(),
+            parameters: z.string().default(''),
             patientPosition: z.string().default('Supine'),
             rationale: z.string(),
             contraindications: z.string().default('None'),
-            expectedPhysiologicalEffect: z.string(),
-            reassessmentCriteria: z.string(),
-            modalityDescription: z.string().min(1),
+            expectedPhysiologicalEffect: z.string().default(''),
+            reassessmentCriteria: z.string().default(''),
+            modalityDescription: z.string().default(''),
             resourceLinks: z.array(z.object({
               title: z.string(),
               url: z.string().url(),
-            })).min(1).max(5).default([]),
+            })).max(5).default([]),
+            evidenceGrade: z.enum(['A', 'B', 'C']).optional(),
+            evidenceJustification: z.string().optional().default(''),
+            stageAppropriateness: z.string().optional().default(''),
+            citations: z.array(z.object({
+              title: z.string(),
+              source: z.string().optional().default(''),
+              year: z.union([z.number(), z.string()]).optional(),
+              url: z.string().optional().default(''),
+            })).optional().default([]),
+            notAdvisedReason: z.string().optional().default(''),
           })),
         })),
         clinicalNotes: z.string().default(''),
         irritabilityConsiderations: z.string().default(''),
+        topPicks: z.array(z.object({
+          modality: z.string(),
+          why: z.string().default(''),
+          evidenceGrade: z.enum(['A', 'B', 'C']).optional(),
+        })).optional().default([]),
+        conditionEcho: z.string().optional().default(''),
       });
 
       const raw = JSON.parse(content);
@@ -8672,11 +9593,1529 @@ Based on this clinical data, generate a comprehensive, prioritized electrophysic
           validationErrors: validated.error.format(),
         });
       }
-      res.json(validated.data);
+      // Server-side guard: filter out any modality whose name matches a
+      // non-EPA technique (these belong in the Adjunct Therapies engine).
+      // This protects the UI from a stray AI response leaking non-EPA items
+      // into EPA cards even though the prompt explicitly forbids them.
+      const NON_EPA_REGEX = /\b(dry\s*needl|acupunctur|electroacupunctur|cupping|gua\s*sha|mechanical\s+traction|pneumatic\s+compression)\b/i;
+      const ACU_LIKE_TENS_EXCEPTION = /\b(tens|nerve\s*stim|electrical\s*stim)\b.*acupuncture[-\s]?like|acupuncture[-\s]?like\b.*\b(tens|mode|stim)\b/i;
+      const isNonEpa = (name: string) =>
+        NON_EPA_REGEX.test(name) && !ACU_LIKE_TENS_EXCEPTION.test(name);
+      const GRADE_TO_STRENGTH: Record<string, 'strong' | 'moderate' | 'weak'> = { A: 'strong', B: 'moderate', C: 'weak' };
+      const normalized = {
+        ...validated.data,
+        modalityGroups: validated.data.modalityGroups.map(g => ({
+          ...g,
+          modalities: g.modalities
+            .filter(m => !isNonEpa(m.modality))
+            .map(m => {
+              // Backfill evidenceStrength from legacy evidenceGrade if missing.
+              const evidenceStrength = m.evidenceStrength
+                ?? (m.evidenceGrade ? GRADE_TO_STRENGTH[m.evidenceGrade] : undefined);
+              const next = { ...m, evidenceStrength } as typeof m;
+              return m.notAdvisedReason && m.notAdvisedReason.trim().length > 0
+                ? { ...next, parameters: '' }
+                : next;
+            }),
+        })),
+      };
+      res.json(normalized);
     } catch (error: unknown) {
       console.error("Electrophysical engine generation error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({ error: "Failed to generate electrophysical plan", details: message });
+    }
+  });
+
+  // -----------------------------------------------------------------
+  // Electrophysical Engine — saved Condition + context presets
+  // -----------------------------------------------------------------
+  const electroPresetBodySchema = z.object({
+    patientId: z.union([z.number().int().positive(), z.null()]).optional().default(null),
+    name: z.string().trim().min(1).max(80),
+    condition: z.string().trim().max(200).optional().default(""),
+    stage: z.union([z.enum(['acute', 'subacute', 'chronic']), z.literal("")]).optional().default(""),
+    irritability: z.union([z.enum(['low', 'moderate', 'high']), z.literal("")]).optional().default(""),
+    tissueType: z.string().trim().max(100).optional().default(""),
+    primaryGoal: z.union([z.enum(['pain', 'healing', 'loading', 'mobility', 'activation']), z.literal("")]).optional().default(""),
+    contraindicationFlags: z.array(z.enum([
+      'pregnancy', 'pacemaker', 'metal_implant', 'malignancy', 'open_wound',
+      'active_infection', 'dvt', 'hemorrhage', 'sensory_deficit', 'epilepsy', 'skin_breakdown'
+    ])).optional().default([]),
+  });
+
+  // Verifies that the supplied patientId (a physiogpt_conversations.id) is
+  // owned by the authenticated user. Returns true if ownership is valid OR
+  // if patientId is null (user-global scope).
+  const verifyPatientOwnership = async (userId: number, patientId: number | null): Promise<boolean> => {
+    if (patientId == null) return true;
+    const rows = await db
+      .select({ id: physioGptConversations.id, userId: physioGptConversations.userId })
+      .from(physioGptConversations)
+      .where(eq(physioGptConversations.id, patientId))
+      .limit(1);
+    return !!rows[0] && rows[0].userId === userId;
+  };
+
+  app.get("/api/electrophysical-engine/presets", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const raw = req.query.patientId;
+      let patientId: number | null = null;
+      if (raw != null && raw !== '' && raw !== 'null') {
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          return res.status(400).json({ error: 'Invalid patientId' });
+        }
+        patientId = parsed;
+      }
+      if (!(await verifyPatientOwnership(userId, patientId))) {
+        return res.status(403).json({ error: 'Forbidden: patient does not belong to this user' });
+      }
+      const presets = await storage.listElectroConditionPresets(userId, patientId);
+      res.json(presets);
+    } catch (error: unknown) {
+      console.error('List electro presets error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to list presets', details: message });
+    }
+  });
+
+  app.post("/api/electrophysical-engine/presets", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const parsed = electroPresetBodySchema.parse(req.body);
+      if (!(await verifyPatientOwnership(userId, parsed.patientId ?? null))) {
+        return res.status(403).json({ error: 'Forbidden: patient does not belong to this user' });
+      }
+      const saved = await storage.upsertElectroConditionPreset({
+        userId,
+        patientId: parsed.patientId ?? null,
+        name: parsed.name,
+        condition: parsed.condition,
+        stage: parsed.stage,
+        irritability: parsed.irritability,
+        tissueType: parsed.tissueType,
+        primaryGoal: parsed.primaryGoal,
+        contraindicationFlags: parsed.contraindicationFlags,
+      });
+      res.json(saved);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('Save electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to save preset', details: message });
+    }
+  });
+
+  app.patch("/api/electrophysical-engine/presets/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid preset id' });
+      }
+      const existing = await storage.getElectroConditionPreset(id);
+      if (!existing) return res.status(404).json({ error: 'Preset not found' });
+      if (existing.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
+      const body = z.object({
+        name: z.string().trim().min(1).max(80).optional(),
+        touch: z.boolean().optional(),
+      }).parse(req.body);
+
+      let updated = existing;
+      if (body.name && body.name !== existing.name) {
+        try {
+          updated = await storage.renameElectroConditionPreset(id, body.name);
+        } catch (e: unknown) {
+          const code = (e as { code?: string }).code;
+          if (code === 'PRESET_NAME_CONFLICT' || (e instanceof Error && /duplicate key|unique/i.test(e.message))) {
+            return res.status(409).json({ error: 'A preset with that name already exists for this patient' });
+          }
+          throw e;
+        }
+      }
+      if (body.touch) {
+        await storage.touchElectroConditionPreset(id);
+        updated = (await storage.getElectroConditionPreset(id)) ?? updated;
+      }
+      res.json(updated);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('Update electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to update preset', details: message });
+    }
+  });
+
+  app.delete("/api/electrophysical-engine/presets/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ error: 'Invalid preset id' });
+      }
+      const existing = await storage.getElectroConditionPreset(id);
+      if (!existing) return res.status(404).json({ error: 'Preset not found' });
+      if (existing.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+      await storage.deleteElectroConditionPreset(id);
+      res.json({ success: true });
+    } catch (error: unknown) {
+      console.error('Delete electro preset error:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to delete preset', details: message });
+    }
+  });
+
+  // ─── Recovery Simulator weekly check-ins (Task #241) ────────────
+  // Stored per (caseId, week). Read-only by anyone authenticated for
+  // their own case workspace; the caseId is a free-form clinician-
+  // generated key (e.g. patient hash + condition slug). No cross-user
+  // ownership model in v1 — out-of-scope per the task brief.
+  // All check-in operations are scoped by the authenticated user's id.
+  // The caseId is a free-form clinician-provided slug, so without
+  // userId scoping any logged-in user could read/modify another's
+  // check-ins by guessing the slug. userId comes from the session and
+  // is never trusted from the client payload.
+  app.get("/api/recovery-weekly-check-ins/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const rows = await storage.listRecoveryWeeklyCheckIns(req.user!.id, caseId);
+      res.json(rows);
+    } catch (error: unknown) {
+      console.error("List recovery weekly check-ins error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to load check-ins", details: message });
+    }
+  });
+
+  app.post("/api/recovery-weekly-check-ins", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { insertRecoveryWeeklyCheckInSchema } = await import("@shared/schema");
+      const parsed = insertRecoveryWeeklyCheckInSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid check-in payload", details: parsed.error.flatten() });
+      }
+      const row = await storage.upsertRecoveryWeeklyCheckIn(req.user!.id, parsed.data);
+      res.json(row);
+    } catch (error: unknown) {
+      // Storage's defensive guards throw CheckInValidationError when an
+      // invalid value would otherwise reach Postgres. Surface those as
+      // a 400 with the field name so the clinician sees a meaningful
+      // toast instead of an opaque Postgres "invalid input syntax" 500.
+      if (error instanceof CheckInValidationError) {
+        return res.status(400).json({
+          error: "Invalid check-in payload",
+          field: error.field,
+          message: error.message,
+        });
+      }
+      console.error("Upsert recovery weekly check-in error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to save check-in", details: message });
+    }
+  });
+
+  app.delete("/api/recovery-weekly-check-ins/:caseId/:week", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      const week = Number(req.params.week);
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      if (!Number.isFinite(week) || week < 0) return res.status(400).json({ error: "Invalid week" });
+      await storage.deleteRecoveryWeeklyCheckIn(req.user!.id, caseId, week);
+      res.json({ success: true });
+    } catch (error: unknown) {
+      console.error("Delete recovery weekly check-in error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to delete check-in", details: message });
+    }
+  });
+
+  // ─── Case-Aware Research Engine v1 (Task #281) ─────────────────
+  // POST runs the engine end-to-end: AI variable inference → tiered
+  // multi-source retrieval → synthesis. Result is upserted per (user,
+  // caseId). On a hit with the same contentHash we return the cached
+  // row instead of re-running, unless `?refresh=1` is passed (or
+  // refresh:true in the body). GET is a pure cache read.
+  app.get("/api/case-research/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const row = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (!row) return res.status(404).json({ error: "No synthesis cached for this case" });
+      res.json(row);
+    } catch (error: unknown) {
+      console.error("Get case-research synthesis error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to load synthesis", details: message });
+    }
+  });
+
+  app.post("/api/case-research/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { caseResearchRequestSchema } = await import("@shared/schema");
+      const parsed = caseResearchRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request payload", details: parsed.error.flatten() });
+      }
+      const { caseSummary, condition, contentHash, phenotypeOverride, caseContext } = parsed.data;
+      // A phenotype override always forces a fresh run — the clinician
+      // explicitly asked to re-search with their edited interpretation.
+      const refresh = parsed.data.refresh === true || String(req.query.refresh || "") === "1" || !!phenotypeOverride;
+
+      // Cache hit if hash matches and not forcing refresh.
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (existing && existing.contentHash === contentHash && !refresh) {
+        return res.json({ ...existing, cached: true });
+      }
+
+      const { runCaseResearch } = await import("./services/research/caseResearchEngine");
+      const outcome = await runCaseResearch(condition, caseSummary, { phenotypeOverride, caseContext });
+
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash,
+        condition,
+        caseSummary,
+        phenotype: outcome.phenotype,
+        inferredVariables: outcome.inferredVariables,
+        queriesRan: outcome.queriesRan,
+        seedBroadenings: outcome.seedBroadenings,
+        retrievedPapers: outcome.retrievedPapers,
+        retrievedTrials: outcome.retrievedTrials,
+        synthesizedAnswer: outcome.synthesizedAnswer,
+        confidence: outcome.confidence,
+        confidenceReason: outcome.confidenceReason,
+        droppedVariables: outcome.droppedVariables,
+        researchTreatmentPlan: outcome.researchTreatmentPlan,
+      });
+      res.json({ ...saved, cached: false });
+    } catch (error: unknown) {
+      console.error("Run case-research engine error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to run case research", details: message });
+    }
+  });
+
+  app.get("/api/treatment-hypotheses/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const rows = await storage.listTreatmentHypotheses(req.user!.id, caseId);
+      res.json(rows);
+    } catch (error: unknown) {
+      console.error("List treatment hypotheses error:", error);
+      res.status(500).json({ error: "Failed to list treatment hypotheses" });
+    }
+  });
+
+  app.post("/api/treatment-hypotheses/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { insertTreatmentHypothesisSchema } = await import("@shared/schema");
+      const parsed = insertTreatmentHypothesisSchema.safeParse({
+        ...req.body,
+        userId: req.user!.id,
+        caseId,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid hypothesis payload", details: parsed.error.flatten() });
+      }
+      const saved = await storage.createTreatmentHypothesis(parsed.data);
+      res.json(saved);
+    } catch (error: unknown) {
+      console.error("Create treatment hypothesis error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to save hypothesis", details: message });
+    }
+  });
+
+  app.delete("/api/treatment-hypotheses/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+      await storage.deleteTreatmentHypothesis(req.user!.id, id);
+      res.json({ ok: true });
+    } catch (error: unknown) {
+      console.error("Delete treatment hypothesis error:", error);
+      res.status(500).json({ error: "Failed to delete hypothesis" });
+    }
+  });
+
+  // ─── Active Movement Mode capacities (Task #301) ───────────────────
+  // POST generates / refreshes the per-joint active-capacity profile
+  // for a case using the literature priors + GPT-4o synthesis. PATCH
+  // applies a per-row manual override from the clinician. Both persist
+  // the result onto the same case_research_syntheses row so the
+  // capacity profile lives alongside the case research synthesis.
+  app.post("/api/active-capacity/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const refresh = req.body?.refresh === true || String(req.query.refresh || "") === "1";
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (existing?.activeCapacities && !refresh) {
+        return res.json({ ...existing, cached: true });
+      }
+      const inferredFromExisting = (existing?.inferredVariables || {}) as Record<string, unknown>;
+      const phenotypeFromExisting = (existing?.phenotype || {}) as Record<string, unknown>;
+      const body = (req.body || {}) as Record<string, unknown>;
+      const condition = (body.condition as string | undefined) || existing?.condition || "Unspecified";
+      const caseSummary = (body.caseSummary as string | undefined) || existing?.caseSummary || "";
+      const ageRaw = (body.age ?? inferredFromExisting.age ?? phenotypeFromExisting.age) as number | string | undefined;
+      const sexRaw = (body.sex ?? inferredFromExisting.sex ?? phenotypeFromExisting.sex) as string | undefined;
+      const pathologiesRaw = body.pathologies ?? inferredFromExisting.pathologies ?? phenotypeFromExisting.pathologies ?? [];
+      const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
+        ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
+      // Accept optional pain markers + intake context so the AI can infer
+      // painful arcs for any plausible diagnosis. Validated leniently.
+      const painMarkersRaw = body.painMarkers;
+      const painMarkers = Array.isArray(painMarkersRaw)
+        ? (painMarkersRaw as unknown[]).filter((m): m is Record<string, unknown> => !!m && typeof m === 'object').map(m => ({
+            location: typeof m.location === 'string' ? m.location : (typeof m.anatomicalLabel === 'string' ? m.anatomicalLabel : (typeof m.nearestBone === 'string' ? m.nearestBone : '')),
+            type: typeof m.type === 'string' ? m.type : undefined,
+            symptomType: typeof m.symptomType === 'string' ? m.symptomType : undefined,
+            description: typeof m.description === 'string' ? m.description : undefined,
+            subjectiveHistory: typeof m.subjectiveHistory === 'string' ? m.subjectiveHistory : undefined,
+            painMechanism: typeof m.painMechanism === 'string' ? m.painMechanism : undefined,
+            nerveRoot: typeof m.nerveRoot === 'string' ? m.nerveRoot : undefined,
+            severity: typeof m.severity === 'number' ? m.severity : undefined,
+          })).filter(m => m.location)
+        : undefined;
+      const intakeRaw = body.intakeContext;
+      const intakeContext = (intakeRaw && typeof intakeRaw === 'object' && !Array.isArray(intakeRaw))
+        ? (intakeRaw as Record<string, string | number | boolean | undefined>)
+        : undefined;
+      const { generateActiveCapacities } = await import("./services/activeCapacityService");
+      const profile = await generateActiveCapacities({
+        condition,
+        caseSummary,
+        literatureSummary: existing?.synthesizedAnswer,
+        age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
+        sex: typeof sexRaw === 'string' ? sexRaw : undefined,
+        inferredPathologies,
+        painMarkers,
+        intakeContext,
+      });
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing?.contentHash || `active-capacity:${caseId}`,
+        condition,
+        caseSummary,
+        phenotype: existing?.phenotype ?? null,
+        inferredVariables: existing?.inferredVariables ?? { age: ageRaw, sex: sexRaw, pathologies: inferredPathologies },
+        queriesRan: existing?.queriesRan ?? [],
+        seedBroadenings: existing?.seedBroadenings ?? [],
+        retrievedPapers: existing?.retrievedPapers ?? [],
+        retrievedTrials: existing?.retrievedTrials ?? [],
+        synthesizedAnswer: existing?.synthesizedAnswer ?? "",
+        confidence: existing?.confidence ?? "unknown",
+        confidenceReason: existing?.confidenceReason ?? null,
+        droppedVariables: existing?.droppedVariables ?? [],
+        activeCapacities: profile,
+        researchTreatmentPlan: existing?.researchTreatmentPlan ?? null,
+      });
+      res.json({ ...saved, cached: false });
+    } catch (error: unknown) {
+      console.error("Generate active capacities error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate active capacities", details: message });
+    }
+  });
+
+  // Dedicated re-inference endpoint: always regenerates with the latest
+  // pain markers + intake context.
+  const refreshActiveCapacityHandler = async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      const inferredFromExisting = (existing?.inferredVariables || {}) as Record<string, unknown>;
+      const phenotypeFromExisting = (existing?.phenotype || {}) as Record<string, unknown>;
+      const body = (req.body || {}) as Record<string, unknown>;
+      const condition = (body.condition as string | undefined) || existing?.condition || "Unspecified";
+      const caseSummary = (body.caseSummary as string | undefined) || existing?.caseSummary || "";
+      const ageRaw = (body.age ?? inferredFromExisting.age ?? phenotypeFromExisting.age) as number | string | undefined;
+      const sexRaw = (body.sex ?? inferredFromExisting.sex ?? phenotypeFromExisting.sex) as string | undefined;
+      const pathologiesRaw = body.pathologies ?? inferredFromExisting.pathologies ?? phenotypeFromExisting.pathologies ?? [];
+      const inferredPathologies: string[] = Array.isArray(pathologiesRaw)
+        ? (pathologiesRaw as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
+      const painMarkersRaw = body.painMarkers;
+      const painMarkers = Array.isArray(painMarkersRaw)
+        ? (painMarkersRaw as unknown[]).filter((m): m is Record<string, unknown> => !!m && typeof m === 'object').map(m => ({
+            location: typeof m.location === 'string' ? m.location : (typeof m.anatomicalLabel === 'string' ? m.anatomicalLabel : (typeof m.nearestBone === 'string' ? m.nearestBone : '')),
+            type: typeof m.type === 'string' ? m.type : undefined,
+            symptomType: typeof m.symptomType === 'string' ? m.symptomType : undefined,
+            description: typeof m.description === 'string' ? m.description : undefined,
+            subjectiveHistory: typeof m.subjectiveHistory === 'string' ? m.subjectiveHistory : undefined,
+            painMechanism: typeof m.painMechanism === 'string' ? m.painMechanism : undefined,
+            nerveRoot: typeof m.nerveRoot === 'string' ? m.nerveRoot : undefined,
+            severity: typeof m.severity === 'number' ? m.severity : undefined,
+          })).filter(m => m.location)
+        : undefined;
+      const intakeRaw = body.intakeContext;
+      const intakeContext = (intakeRaw && typeof intakeRaw === 'object' && !Array.isArray(intakeRaw))
+        ? (intakeRaw as Record<string, string | number | boolean | undefined>)
+        : undefined;
+      // Server-side cache short-circuit: if the incoming context signature
+      // matches the persisted profile, skip the AI call entirely.
+      const { computeAiContextSignature } = await import("../shared/aiContextSignature");
+      const incomingSig = computeAiContextSignature(painMarkers, intakeContext);
+      const existingProfile = (existing?.activeCapacities ?? null) as { aiContextSignature?: string } | null;
+      if (existingProfile && existingProfile.aiContextSignature === incomingSig) {
+        return res.json({ ...existing, cached: true, refreshed: false });
+      }
+      const { generateActiveCapacities } = await import("./services/activeCapacityService");
+      const profile = await generateActiveCapacities({
+        condition,
+        caseSummary,
+        literatureSummary: existing?.synthesizedAnswer,
+        age: typeof ageRaw === 'number' ? ageRaw : (typeof ageRaw === 'string' ? parseInt(ageRaw, 10) || undefined : undefined),
+        sex: typeof sexRaw === 'string' ? sexRaw : undefined,
+        inferredPathologies,
+        painMarkers,
+        intakeContext,
+      });
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing?.contentHash || `active-capacity:${caseId}`,
+        condition,
+        caseSummary,
+        phenotype: existing?.phenotype ?? null,
+        inferredVariables: existing?.inferredVariables ?? { age: ageRaw, sex: sexRaw, pathologies: inferredPathologies },
+        queriesRan: existing?.queriesRan ?? [],
+        seedBroadenings: existing?.seedBroadenings ?? [],
+        retrievedPapers: existing?.retrievedPapers ?? [],
+        retrievedTrials: existing?.retrievedTrials ?? [],
+        synthesizedAnswer: existing?.synthesizedAnswer ?? "",
+        confidence: existing?.confidence ?? "unknown",
+        confidenceReason: existing?.confidenceReason ?? null,
+        droppedVariables: existing?.droppedVariables ?? [],
+        activeCapacities: profile,
+        researchTreatmentPlan: existing?.researchTreatmentPlan ?? null,
+      });
+      res.json({ ...saved, cached: false, refreshed: true });
+    } catch (error: unknown) {
+      console.error("Refresh active capacities from context error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to refresh active capacities", details: message });
+    }
+  };
+  app.post("/api/case-research/:caseId/active-capacities/refresh-from-context", ensureAuthenticated, refreshActiveCapacityHandler);
+
+  app.patch("/api/active-capacity/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const overrideSchema = z.object({
+        joint: z.string().min(1),
+        movement: z.string().min(1),
+        activeRomMin: z.number().optional(),
+        activeRomMax: z.number().optional(),
+        painfulArc: z.union([
+          z.null(),
+          z.object({
+            start: z.number(),
+            end: z.number(),
+            intensity: z.number(),
+            direction: z.enum(['ascending', 'descending', 'either']).optional(),
+            loadingMode: z.enum(['concentric', 'eccentric', 'isometric', 'any']).optional(),
+            label: z.string().max(80).optional(),
+          }),
+        ]).optional(),
+        activeStrengthPct: z.number().optional(),
+        painInhibitionFactor: z.number().optional(),
+      });
+      const parsed = overrideSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid override payload", details: parsed.error.flatten() });
+      }
+      const existing = await storage.getCaseResearchSynthesis(req.user!.id, caseId);
+      if (!existing) return res.status(404).json({ error: "No case research synthesis found." });
+      if (!existing.activeCapacities) return res.status(400).json({ error: "No active capacities to override — generate first." });
+      const svc = await import("./services/activeCapacityService");
+      const profile = existing.activeCapacities as unknown as import("./services/activeCapacityService").ActiveCapacityProfile;
+      const overridePatch: import("./services/activeCapacityService").ActiveCapacityOverridePatch = parsed.data;
+      const updated = svc.applyManualOverride(profile, overridePatch);
+      const saved = await storage.upsertCaseResearchSynthesis({
+        caseId,
+        userId: req.user!.id,
+        contentHash: existing.contentHash,
+        condition: existing.condition,
+        caseSummary: existing.caseSummary,
+        phenotype: existing.phenotype,
+        inferredVariables: existing.inferredVariables,
+        queriesRan: existing.queriesRan,
+        seedBroadenings: existing.seedBroadenings,
+        retrievedPapers: existing.retrievedPapers,
+        retrievedTrials: existing.retrievedTrials,
+        synthesizedAnswer: existing.synthesizedAnswer,
+        confidence: existing.confidence,
+        confidenceReason: existing.confidenceReason,
+        droppedVariables: existing.droppedVariables,
+        activeCapacities: updated,
+        researchTreatmentPlan: existing.researchTreatmentPlan ?? null,
+      });
+      res.json(saved);
+    } catch (error: unknown) {
+      console.error("Override active capacity error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to override active capacity", details: message });
+    }
+  });
+
+  // ==========================================================
+  // Task #376 — Treatment Mode persistent state endpoints.
+  // Deterministic CRUD; no AI calls. The treatment state is folded
+  // into the same case_research_syntheses row used by other case
+  // engines so a single GET fetches the whole patient picture.
+  // ==========================================================
+  app.get("/api/treatment-state/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const state = await storage.getTreatmentState(req.user!.id, caseId);
+      res.json({ state: state ?? { accessoryMobilityMm: {}, capsularExtensibility: {}, log: [] } });
+    } catch (error: unknown) {
+      console.error("Get treatment state error:", error);
+      res.status(500).json({ error: "Failed to fetch treatment state" });
+    }
+  });
+
+  app.patch("/api/treatment-state/:caseId", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { treatmentStateSchema } = await import("@shared/schema");
+      const parsed = treatmentStateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid treatment state", details: parsed.error.flatten() });
+      }
+      const saved = await storage.updateTreatmentState(req.user!.id, caseId, parsed.data);
+      res.json({ state: saved });
+    } catch (error: unknown) {
+      console.error("Update treatment state error:", error);
+      res.status(500).json({ error: "Failed to update treatment state" });
+    }
+  });
+
+  app.post("/api/treatment-state/:caseId/log", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const caseId = String(req.params.caseId || "").trim();
+      if (!caseId) return res.status(400).json({ error: "Missing caseId" });
+      const { treatmentLogEntrySchema } = await import("@shared/schema");
+      const parsed = treatmentLogEntrySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid log entry", details: parsed.error.flatten() });
+      }
+      const current = (await storage.getTreatmentState(req.user!.id, caseId)) ?? {
+        accessoryMobilityMm: {}, capsularExtensibility: {}, log: [],
+      };
+      const next = { ...current, log: [...current.log, parsed.data] };
+      const saved = await storage.updateTreatmentState(req.user!.id, caseId, next);
+      res.json({ state: saved });
+    } catch (error: unknown) {
+      console.error("Append treatment log error:", error);
+      res.status(500).json({ error: "Failed to append treatment log" });
+    }
+  });
+
+  app.post("/api/movement-findings/summarise", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const findingSchema = z.object({
+        condition: z.string().min(1).max(500),
+        caseSummaryShort: z.string().max(2000).optional(),
+        joint: z.string().min(1).max(60),
+        movement: z.string().min(1).max(60),
+        achievedAngle: z.number(),
+        activeRomMax: z.number(),
+        passiveRomMax: z.number(),
+        inPainfulArc: z.boolean(),
+        exceededActiveLimit: z.boolean(),
+        compensationsTriggered: z.array(z.string().max(80)).max(8),
+      });
+      const parsed = findingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid finding payload", details: parsed.error.flatten() });
+      }
+      const { summariseMovementFinding } = await import("./services/movementFindingsService");
+      const sentence = await summariseMovementFinding(parsed.data);
+      res.json({ sentence });
+    } catch (error: unknown) {
+      console.error("Movement findings summarise error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to summarise movement finding", details: message });
+    }
+  });
+
+  // ───────────────────────────────────────────────────────
+  // Movement-Mode AI Simulator (Task #343)
+  // Predicts downstream outcome of clinician-composed interventions for the
+  // active patient/pathology. Bounded targets (engine MUSCLE_TARGETS /
+  // JOINT_TARGETS / SlingId), Zod-validated I/O, deterministic-hash cached
+  // in-process, returns one structured prediction object.
+  // ───────────────────────────────────────────────────────
+  const movementSimAllowedMuscles = new Set<string>([
+    'glute_l','glute_r','core','quad_l','quad_r','hamstring_l','hamstring_r',
+    'hip_flexor_l','hip_flexor_r','adductor_l','adductor_r','piriformis_l','piriformis_r',
+    'calf_l','calf_r','peroneal_l','peroneal_r','tib_post_l','tib_post_r',
+    'scapula_l','scapula_r','rotator_cuff_l','rotator_cuff_r','deltoid_l','deltoid_r',
+    'spine','neck','chest','bicep_l','bicep_r','tricep_l','tricep_r',
+    'wrist_flex_l','wrist_flex_r','wrist_ext_l','wrist_ext_r',
+    'scm','suboccipitals','levator_scapulae','scalenes','shin_l','shin_r',
+  ]);
+  const movementSimAllowedJoints = new Set<string>([
+    'leftAnkle','rightAnkle','leftKnee','rightKnee','leftHip','rightHip',
+    'spine','leftShoulder','rightShoulder','leftElbow','rightElbow',
+    'leftWrist','rightWrist','neck',
+  ]);
+  const movementSimAllowedSlings = new Set<string>([
+    'posterior_oblique','anterior_oblique','lateral','deep_longitudinal','scapular_shoulder',
+  ]);
+  const movementSimCache = new Map<string, unknown>();
+  const MOVEMENT_SIM_CACHE_MAX = 200;
+
+  app.post("/api/movement-sim/predict", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const interventionSchema = z.object({
+        kind: z.enum(['strengthen','inhibit','lengthen','shorten','restoreROM','restrictROM','changeSling','other']),
+        target: z.string().max(80).optional(),
+        romDirection: z.string().max(40).optional(),
+        slingDirection: z.enum(['increase','decrease']).optional(),
+        magnitude: z.number().min(-100).max(100).optional(),
+        unit: z.string().max(8).optional(),
+        slingId: z.string().max(60).optional(),
+        freeText: z.string().max(280).optional(),
+      });
+      const inputSchema = z.object({
+        condition: z.string().max(500).default(''),
+        caseSummary: z.string().max(2000).default(''),
+        painfulTissues: z.array(z.object({
+          label: z.string().min(1).max(120),
+          severity: z.number().optional(),
+          type: z.string().max(60).optional(),
+          irritability: z.enum(['low','moderate','high']).optional(),
+        })).max(20).default([]),
+        interventions: z.array(interventionSchema).min(1).max(6),
+        postureDeviations: z.array(z.string().max(160)).max(20).default([]),
+        slingActivations: z.array(z.object({
+          slingId: z.string().max(60),
+          activation: z.number(),
+        })).max(10).default([]),
+        hudForceSummary: z.string().max(1000).default(''),
+        activeCapacityProfile: z.array(z.object({
+          joint: z.string().max(40),
+          movement: z.string().max(40),
+          activeRom: z.tuple([z.number(), z.number()]).optional(),
+          painfulArc: z.tuple([z.number(), z.number()]).optional(),
+          activeStrengthPct: z.number().optional(),
+        })).max(40).default([]),
+      });
+      const parsed = inputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
+      }
+      const data = parsed.data;
+
+      const deidentify = (s: string): string => {
+        if (!s) return s;
+        let out = s;
+        out = out.replace(/\b\d{1,3}\s*(?:[-/]\s*\d{1,3})\s*(?:[-/]\s*\d{2,4})\b/g, '[date]');
+        out = out.replace(/\b(?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12]\d|3[01])[\/\-]\d{2,4}\b/g, '[date]');
+        out = out.replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4}\b/gi, '[date]');
+        out = out.replace(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{2,4}\b/gi, '[date]');
+        out = out.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]');
+        out = out.replace(/(?:\+?\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, '[phone]');
+        out = out.replace(/\bMRN[:\s#]*\d+\b/gi, '[mrn]');
+        out = out.replace(/\b(?:patient|pt|client|mr\.?|mrs\.?|ms\.?|miss|dr\.?)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g, (m) => m.split(/\s+/)[0] + ' [name]');
+        out = out.replace(/\bnamed\s+[A-Z][a-z]+\b/g, 'named [name]');
+        out = out.replace(/\b(\d{1,3})\s*(?:y\.?o\.?|years? old|yo)\b/gi, (_m, n) => {
+          const a = parseInt(n, 10);
+          if (Number.isNaN(a)) return '[age]';
+          if (a < 18) return 'under 18';
+          if (a < 30) return '18-29 yo';
+          if (a < 40) return '30-39 yo';
+          if (a < 50) return '40-49 yo';
+          if (a < 60) return '50-59 yo';
+          if (a < 70) return '60-69 yo';
+          return '70+ yo';
+        });
+        out = out.replace(/\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Ln|Lane|Dr|Drive)\.?\b/g, '[address]');
+        return out;
+      };
+
+      const safeCondition = deidentify(data.condition);
+      const safeCaseSummary = deidentify(data.caseSummary);
+      const safeInterventions = data.interventions.map(i => ({
+        ...i,
+        freeText: i.freeText ? deidentify(i.freeText) : i.freeText,
+      }));
+
+      for (const i of safeInterventions) {
+        if (i.kind === 'changeSling') {
+          if (!i.slingId || !movementSimAllowedSlings.has(i.slingId)) {
+            return res.status(400).json({ error: `Unknown sling id: ${i.slingId ?? '(missing)'}` });
+          }
+          if (!i.slingDirection) {
+            return res.status(400).json({ error: 'Sling intervention requires direction (increase|decrease).' });
+          }
+        } else if (i.kind === 'restoreROM' || i.kind === 'restrictROM') {
+          const root = i.target ? i.target.split('.')[0] : '';
+          if (!root || !movementSimAllowedJoints.has(root)) {
+            return res.status(400).json({ error: `Unknown joint target for ROM intervention: ${i.target ?? '(missing)'}` });
+          }
+        } else if (i.kind === 'strengthen' || i.kind === 'inhibit' || i.kind === 'lengthen' || i.kind === 'shorten') {
+          if (!i.target || !movementSimAllowedMuscles.has(i.target)) {
+            return res.status(400).json({ error: `Unknown muscle target: ${i.target ?? '(missing)'}` });
+          }
+        } else if (i.kind === 'other') {
+          if (!i.freeText || !i.freeText.trim()) {
+            return res.status(400).json({ error: 'Free-text intervention requires a description.' });
+          }
+        }
+      }
+
+      const crypto = await import("crypto");
+      const normalized = JSON.stringify({
+        c: safeCondition.trim().toLowerCase(),
+        s: safeCaseSummary.trim().toLowerCase().slice(0, 800),
+        t: [...data.painfulTissues.map(t =>
+          `${t.label.toLowerCase()}|sev=${typeof t.severity === 'number' ? Math.round(t.severity) : '_'}|ty=${(t.type || '').toLowerCase()}|ir=${t.irritability || '_'}`
+        )].sort(),
+        i: safeInterventions.map(i => ({
+          k: i.kind,
+          t: (i.target || '').toLowerCase(),
+          rd: (i.romDirection || '').toLowerCase(),
+          sd: i.slingDirection || '',
+          m: typeof i.magnitude === 'number' ? Math.round(i.magnitude) : null,
+          u: i.unit || '',
+          s: i.slingId || '',
+          f: (i.freeText || '').trim().toLowerCase().slice(0, 200),
+        })),
+        p: [...data.postureDeviations].sort(),
+        sl: data.slingActivations.map(s => `${s.slingId}:${Math.round(s.activation)}`).sort(),
+        h: data.hudForceSummary.slice(0, 400),
+        ac: data.activeCapacityProfile.map(r => `${r.joint}.${r.movement}:${r.activeRom?.[0] ?? '_'}/${r.activeRom?.[1] ?? '_'}@${Math.round(r.activeStrengthPct ?? 0)}`).sort(),
+      });
+      const cacheKey = crypto.createHash('sha256').update(normalized).digest('hex');
+      const cached = movementSimCache.get(cacheKey);
+      if (cached) return res.json({ ...(cached as Record<string, unknown>), cached: true });
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const tissuesText = data.painfulTissues.length
+        ? data.painfulTissues.map(t => `- ${t.label}${typeof t.severity === 'number' ? ` (severity ${t.severity}/10)` : ''}${t.type ? ` [${t.type}]` : ''}${t.irritability ? ` · ${t.irritability} irritability` : ''}`).join('\n')
+        : '(none recorded — infer 1–3 primary symptomatic tissues from the diagnosis)';
+      const interventionsText = safeInterventions.map((i, idx) => {
+        const parts = [`${idx + 1}. ${i.kind}`];
+        if (i.target) parts.push(`target=${i.target}`);
+        if (i.romDirection) parts.push(`direction=${i.romDirection}`);
+        if (typeof i.magnitude === 'number') parts.push(`magnitude=${i.magnitude}${i.unit || ''}`);
+        if (i.slingId) parts.push(`sling=${i.slingId}`);
+        if (i.slingDirection) parts.push(`slingDirection=${i.slingDirection}`);
+        if (i.freeText) parts.push(`note="${i.freeText}"`);
+        return parts.join(' · ');
+      }).join('\n');
+      const slingText = data.slingActivations.length
+        ? data.slingActivations.map(s => `- ${s.slingId}: ${Math.round(s.activation)}%`).join('\n')
+        : '(no sling activation data)';
+      const postureText = data.postureDeviations.length
+        ? data.postureDeviations.map(p => `- ${p}`).join('\n')
+        : '(no posture deviations recorded)';
+      const capacityText = data.activeCapacityProfile.length
+        ? data.activeCapacityProfile.map(r => {
+            const rom = r.activeRom ? `active ROM ${r.activeRom[0]}°…${r.activeRom[1]}°` : 'ROM n/a';
+            const arc = r.painfulArc ? `, painful arc ${r.painfulArc[0]}°…${r.painfulArc[1]}°` : '';
+            const str = typeof r.activeStrengthPct === 'number' ? `, active strength ${Math.round(r.activeStrengthPct)}%` : '';
+            return `- ${r.joint} ${r.movement}: ${rom}${arc}${str}`;
+          }).join('\n')
+        : '(no active capacity profile available)';
+
+      const systemPrompt = `You are a senior musculoskeletal physiotherapist running a clinical thought-experiment for ONE specific patient.
+
+Given the patient's pathology, current biomechanical state, and the proposed clinician intervention(s), predict the DOWNSTREAM outcome:
+- biomechanicalChanges: specific joints/segments that will move/load differently, with magnitude+direction
+- slingRebalancing: which functional slings up- or down-regulate, by approximately how many percentage points, and the load-redistribution consequence
+- compensationShift: compensations that will resolve, persist, or newly appear
+- tissueLoadImpact: per painful tissue — load direction (up/down/neutral), magnitude band (small <10% / moderate 10–25% / large >25%), symptom direction (improve/worsen/neutral) and the mechanism. You MUST include EVERY painful tissue listed in the input. Use the listed irritability to temper the symptom direction — high-irritability tissues should not be predicted to improve under added load. If the input lists no painful tissues, infer the 1–3 primary symptomatic tissues directly from the diagnosis (e.g. plantar fasciitis → plantar fascia; lateral epicondylalgia → common extensor tendon).
+- netVerdict: helpful | mixed | harmful | neutral, with a one-sentence rationale
+- confidence: low | moderate | high, with a one-sentence reason
+- caveats: short bullets — overload risk, dose dependency, contraindications, tissue-irritability concerns, missing data
+
+RULES:
+- Stay grounded in the named pathology and the provided assessment context. Do not invent findings.
+- Be concrete and clinically specific. Avoid generic platitudes.
+- Load direction and symptom direction are NOT always the same: protective offloading reduces load AND improves symptoms; therapeutic tendon loading may increase load yet improve symptoms long-term — call this out in 'mechanism'.
+- If interventions are clinically nonsensical or contraindicated for this pathology, set verdict='harmful' or 'mixed' and explain in caveats.
+- Return ONLY valid JSON matching the requested schema. No prose outside JSON.`;
+
+      const userPrompt = `WORKING DIAGNOSIS: ${safeCondition || 'Unspecified'}
+
+CASE SUMMARY (de-identified):
+${safeCaseSummary || '(not provided)'}
+
+PAINFUL TISSUES:
+${tissuesText}
+
+CURRENT POSTURE DEVIATIONS:
+${postureText}
+
+CURRENT SLING ACTIVATION:
+${slingText}
+
+ACTIVE CAPACITY PROFILE:
+${capacityText}
+
+LIVE FORCE / BIOMECHANICS SUMMARY:
+${data.hudForceSummary || '(not provided)'}
+
+PROPOSED INTERVENTION(S):
+${interventionsText}
+
+Respond with JSON of EXACT shape:
+{
+  "biomechanicalChanges": ["string", ...],
+  "slingRebalancing": [{"slingId": "string", "directionPct": number, "note": "string"}, ...],
+  "compensationShift": ["string", ...],
+  "tissueLoadImpact": [{"tissue": "string", "loadDirection": "up"|"down"|"neutral", "magnitude": "small"|"moderate"|"large", "symptomDirection": "improve"|"worsen"|"neutral", "mechanism": "string"}, ...],
+  "netVerdict": "helpful"|"mixed"|"harmful"|"neutral",
+  "verdictRationale": "string",
+  "confidence": "low"|"moderate"|"high",
+  "confidenceReason": "string",
+  "caveats": ["string", ...]
+}`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 1800,
+        temperature: 0.4,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return res.status(502).json({ error: "AI returned empty response" });
+
+      const responseSchema = z.object({
+        biomechanicalChanges: z.array(z.string()).default([]),
+        slingRebalancing: z.array(z.object({
+          slingId: z.string(),
+          directionPct: z.number().default(0),
+          note: z.string().default(''),
+        })).default([]),
+        compensationShift: z.array(z.string()).default([]),
+        tissueLoadImpact: z.array(z.object({
+          tissue: z.string(),
+          loadDirection: z.enum(['up','down','neutral']).default('neutral'),
+          magnitude: z.preprocess(
+            (v) => (v === 'mild' ? 'small' : v),
+            z.enum(['small','moderate','large']).default('small')
+          ),
+          symptomDirection: z.enum(['improve','worsen','neutral']).default('neutral'),
+          mechanism: z.string().default(''),
+        })).default([]),
+        netVerdict: z.enum(['helpful','mixed','harmful','neutral']).default('neutral'),
+        verdictRationale: z.string().default(''),
+        confidence: z.enum(['low','moderate','high']).default('moderate'),
+        confidenceReason: z.string().default(''),
+        caveats: z.array(z.string()).default([]),
+      });
+      let raw: unknown;
+      try { raw = JSON.parse(content); } catch {
+        return res.status(502).json({ error: "AI returned non-JSON content" });
+      }
+      const validated = responseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Movement sim response validation failed:", validated.error.format());
+        return res.status(502).json({ error: "AI response did not match expected format", details: validated.error.format() });
+      }
+
+      validated.data.slingRebalancing = validated.data.slingRebalancing.filter(
+        s => movementSimAllowedSlings.has(s.slingId)
+      );
+
+      // Backfill any painful tissue the AI omitted so the UI ALWAYS shows a
+      // row per recorded painful tissue (per spec: plantar fascia must show
+      // in plantar fasciitis example).
+      const tissueMap = new Map(validated.data.tissueLoadImpact.map(t => [t.tissue.toLowerCase(), t]));
+      for (const t of data.painfulTissues) {
+        if (!tissueMap.has(t.label.toLowerCase())) {
+          validated.data.tissueLoadImpact.push({
+            tissue: t.label,
+            loadDirection: 'neutral',
+            magnitude: 'small',
+            symptomDirection: 'neutral',
+            mechanism: 'No specific prediction returned for this tissue.',
+          });
+        }
+      }
+
+      const result = { ...validated.data, hash: cacheKey, cached: false };
+      movementSimCache.set(cacheKey, result);
+      if (movementSimCache.size > MOVEMENT_SIM_CACHE_MAX) {
+        const firstKey = movementSimCache.keys().next().value;
+        if (firstKey) movementSimCache.delete(firstKey);
+      }
+      res.json(result);
+    } catch (error: unknown) {
+      console.error("Movement sim predict error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to predict movement-sim outcome", details: message });
+    }
+  });
+
+  app.post("/api/adjunct-therapies-engine/generate", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const adjunctInputSchema = z.object({
+        mechanismSummary: z.string().optional().default(""),
+        diagnosis: z.string().optional().default(""),
+        recoveryPhase: z.string().optional().default(""),
+        irritability: z.string().optional().default(""),
+        causalChains: z.array(z.array(z.object({
+          step: z.number(),
+          structure: z.string(),
+          finding: z.string(),
+          mechanism: z.string().optional(),
+          category: z.string().optional(),
+          severity: z.string().optional(),
+        }))).optional().default([]),
+        compensationCards: z.array(z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          severity: z.string().optional(),
+          primaryRegion: z.string().optional(),
+          compensatingRegion: z.string().optional(),
+        })).optional().default([]),
+        loadRedistribution: z.array(z.object({
+          joint: z.string(),
+          change: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+        painMarkers: z.array(z.object({
+          label: z.string(),
+          severity: z.number().optional(),
+          type: z.string().optional(),
+        })).optional().default([]),
+        topContributors: z.array(z.string()).optional().default([]),
+        kineticChainDysfunctions: z.array(z.object({
+          chain: z.string().optional(),
+          dysfunction: z.string().optional(),
+          clinical: z.string().optional(),
+        })).optional().default([]),
+      });
+
+      const parsed = adjunctInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
+      }
+
+      const data = parsed.data;
+
+      const causalChainText = data.causalChains.length > 0
+        ? data.causalChains.map((chain, i) =>
+            `Chain ${i + 1}: ${chain.map(s => `${s.structure} (${s.finding})`).join(' → ')}`
+          ).join('\n')
+        : 'None identified';
+
+      const compensationText = data.compensationCards.length > 0
+        ? data.compensationCards.map(c =>
+            `- ${c.title}: ${c.description || ''} [${c.severity || 'unknown'}]`
+          ).join('\n')
+        : 'None identified';
+
+      const loadText = data.loadRedistribution.length > 0
+        ? data.loadRedistribution.map(l => `- ${l.joint}: ${l.change || ''} — ${l.clinical || ''}`).join('\n')
+        : 'None identified';
+
+      const painText = data.painMarkers.length > 0
+        ? data.painMarkers.map(p => `- ${p.label} (severity: ${p.severity ?? '?'}, type: ${p.type ?? 'point'})`).join('\n')
+        : 'None';
+
+      const contributorsText = data.topContributors.length > 0 ? data.topContributors.join(', ') : 'None identified';
+
+      const kineticText = data.kineticChainDysfunctions.length > 0
+        ? data.kineticChainDysfunctions.map(k => `- ${k.chain || 'Chain'}: ${k.dysfunction || ''} — ${k.clinical || ''}`).join('\n')
+        : 'None identified';
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const systemPrompt = `You are an expert musculoskeletal physiotherapist with broad training in evidence-informed complementary, adjunct and integrative therapies that physiotherapists routinely discuss with patients or refer out to qualified practitioners. Physiotherapists cannot prescribe medications, but a wide spectrum of adjunct therapies sits alongside physiotherapy care.
+
+Your task is to generate a prioritized list of evidence-informed ADJUNCT THERAPIES tailored to the patient's diagnosis, recovery phase, tissue irritability and causal chains. These are SUGGESTIONS for the clinician to discuss with the patient or refer to a qualified practitioner — NOT medical prescriptions.
+
+BROADENED THERAPY CATALOG — you may pick ANY of the following categories (and only these), choosing whichever genuinely fit this case. Group your recommendations under these category labels EXACTLY as written:
+
+NEEDLE / PRESSURE-POINT MODALITIES
+- "Acupuncture" — classical TCM points, electroacupuncture, auricular acupuncture; needle gauge, depth, retention time, manual/electrical stimulation
+- "Dry Needling" — trigger-point dry needling, peri-tendinous needling, fast-in/fast-out vs winding; needle size, number of insertions, response sought (LTR)
+- "Acupressure / Shiatsu" — sustained finger/thumb pressure on TCM points or meridian lines; pressure level, hold time, sequence
+- "Reflexology" — foot/hand reflex zone work mapped to body regions; zones targeted, technique, session length
+
+CHINESE / EAST ASIAN BODYWORK
+- "Tui Na" — gun-fa rolling, an-fa pressing, mo-fa rubbing, na-fa grasping, tui-fa pushing; meridian lines, region, duration
+- "Gua Sha" — instrument-assisted scraping along meridians/myofascial lines; tool, lubricant, stroke direction, intensity, area
+- "Cupping Therapy" — stationary, sliding, flash or wet cupping; cup size/material, suction level, dwell time, number of cups
+- "Moxibustion" — direct/indirect/stick/cone/warm needle; points, distance from skin, number of cones, total duration
+- "Thai Therapeutic Massage" — assisted stretching and Sen-line compression; positions, sequence, hold times
+
+WESTERN MANUAL / BODYWORK ADJUNCTS
+- "Bowen Therapy" — specific procedures (e.g. BRM1 lower back, BRM2 upper back, BRM3 neck, knee/shoulder procedures), pause intervals, body position
+- "Myofascial Release Adjuncts" — cross-hand release, skin rolling, fascial unwinding, indirect/direct fascial techniques; area, hold time
+- "Instrument-Assisted Soft Tissue Mobilisation" (IASTM / Graston / FAKTR) — tool, stroke pattern, intensity, treatment time, sweep direction
+- "Craniosacral Therapy" — light-touch holds at cranium/sacrum; positions, hold duration
+- "Lymphatic Drainage" (manual lymphatic drainage) — gentle directional strokes, sequence (proximal to distal clearing), session duration
+
+NEEDLELESS PHYSICAL ADJUNCTS
+- "Kinesiotaping" — facilitation/inhibition/decompression/proprioceptive applications; tape cut, anchor, tension %, wear time
+- "Cold Laser / Photobiomodulation" — wavelength (e.g. 808 nm), dose (J/cm²), spot size, contact technique, points/area
+- "Hydrotherapy / Aquatic Therapy" — pool temperature, water depth, exercises/movements, session length, buoyancy/resistance use
+- "Thermotherapy / Cryotherapy Adjuncts" — local heat packs, contrast bathing, ice massage, whole-body or local cryotherapy; dose and timing relative to phase
+
+MOVEMENT & MIND-BODY METHODS
+- "Yoga Therapy" — specific asana, pranayama, restorative props; dosage, intensity, contraindicated postures
+- "Pilates-Based Adjuncts" — mat or reformer-style integrative work alongside physio; cueing focus, progressions
+- "Alexander Technique" — postural re-education lessons; primary control, inhibition/direction; expected number of lessons
+- "Feldenkrais Method" — Awareness Through Movement / Functional Integration lessons; theme, cognitive-motor focus
+- "Tai Chi / Qigong" — specific forms or short sets; duration, intensity, group vs solo
+- "Breathwork" — diaphragmatic, slow nasal, box breathing, buteyko-style reduced breathing; ratios, daily dose
+- "Mindfulness / Relaxation Training" — mindfulness-based stress reduction, body-scan, progressive muscle relaxation, guided imagery; format, frequency
+
+LIFESTYLE / EDUCATION-BASED ADJUNCTS
+- "Nutrition / Anti-Inflammatory Guidance" — general anti-inflammatory dietary patterns, hydration, protein adequacy for healing; framed as discussion + referral to dietitian where appropriate
+- "Sleep Hygiene Adjuncts" — sleep position, wind-down routine, light hygiene; framed as adjunct education
+- "Herbal / Topical Adjuncts" — topical analgesics, arnica gel, capsaicin, magnesium-based topicals (NOT ingested supplements or systemic herbal medicine); referred-out where prescribing is required
+- "Aromatherapy" — topical/diffused essential oils for pain perception or relaxation (no ingestion); oil, dilution, mode of use
+- "Energy-Based Therapies" — Reiki, Therapeutic Touch, Healing Touch (only when patient specifically values them and benefit may be via relaxation/placebo pathway); session length, framing
+- "Other Evidence-Informed Adjuncts" — fallback bucket for anything that genuinely fits the case but doesn't map cleanly to the above (use sparingly and explain clearly)
+
+EXPLICITLY EXCLUDED (do NOT include these): ingested herbal medicines or oral supplements, homeopathy, prescription-style topicals, anything requiring a medical prescription.
+
+SELECTION RULES — READ CAREFULLY:
+1. Before choosing, MENTALLY SCAN THE FULL CATALOG above and consider which categories genuinely fit this patient's diagnosis, phase, irritability and causal chains. Do NOT default to the same handful of TCM-style modalities (Acupuncture / Tui Na / Bowen / Cupping / Moxibustion / Myofascial Release) unless they are objectively the best fits.
+2. Aim for diversity across the catalog where clinically justified. A typical good output covers 4–7 DIFFERENT categories spanning at least two of: needle/pressure-point, bodywork, needleless physical adjuncts, movement/mind-body, lifestyle/education. Avoid stacking 3+ TCM modalities when other categories would serve the patient better.
+3. Match each therapy to the patient's CURRENT recovery phase and tissue irritability — favour gentler, lower-stimulation approaches (light stationary cupping, indirect moxibustion, Bowen, craniosacral, lymphatic drainage, breathwork, mindfulness, kinesiotaping for decompression) for acute/highly irritable presentations; deeper or more vigorous techniques (sliding cupping, deep tui na, electroacupuncture, IASTM, dry needling, Thai massage, vigorous yoga) only for subacute/chronic low-irritability presentations.
+4. Each recommendation MUST justify why this category was picked over alternatives in 'clinicalRationale', linking to a SPECIFIC finding from the data (causal chain, compensation, kinetic dysfunction, or pain marker). Reference the phase and irritability explicitly.
+5. Provide CONCRETE technique parameters: for acupuncture/dry needling — point/region, needle gauge, retention; for Tui Na — named techniques and meridian; for Bowen — actual procedure name (e.g. BRM1); for cupping/moxa — cup type/suction or moxa form; for laser — wavelength + J/cm²; for tape — cut + tension; for movement methods — specific asana/lesson focus + dose; for breathwork/mindfulness — protocol + daily minutes.
+6. ALWAYS list contraindications and safety notes specific to that technique and patient (anticoagulants, pregnancy, skin integrity, fragile skin in elderly, infection, malignancy in area, deep vein thrombosis, undiagnosed lumps, photosensitising medication for laser, cardiac/respiratory limits for hydrotherapy, etc.).
+7. Provide an evidenceLevel rating ('A' strong / 'B' moderate / 'C' limited / 'D' anecdotal) honestly reflecting the current research base for that therapy in that condition. Energy-based, craniosacral, reflexology, aromatherapy will typically be C–D; exercise-based methods (yoga, Pilates, tai chi, hydrotherapy) and mainstream physical adjuncts (laser, kinesiotape, IASTM, dry needling) range B–A in many MSK conditions; acupuncture varies A–C by condition. Do not inflate grades.
+8. For any modality OUTSIDE physiotherapy scope of practice (Acupuncture, Dry Needling unless locally permitted, Tui Na, Bowen, Cupping, Moxibustion, Gua Sha, Thai Massage, Craniosacral, Reflexology, Alexander, Feldenkrais, Yoga Therapy, Pilates instruction, Reiki, Aromatherapy as a primary intervention, dietetics, prescribing of topicals), make 'referralGuidance' explicitly state "REFERRAL REQUIRED" and describe what kind of qualified, registered practitioner to look for.
+9. Frame everything as ADJUNCT suggestions for clinician discussion or referral — never as a prescription.
+
+RESPONSE FORMAT — return valid JSON with this exact structure:
+{
+  "therapyGroups": [
+    {
+      "groupId": "string",
+      "therapyCategory": "string — MUST exactly match one of the category labels listed above",
+      "categoryDescription": "string — brief description of what this therapy category is and why it is being suggested for this presentation",
+      "priority": number (1 = highest),
+      "recommendations": [
+        {
+          "therapyName": "string — specific named technique (e.g. 'Acupuncture — Local + Distal Points for Lateral Epicondylalgia', 'Cold Laser 808 nm to Achilles', 'Yoga Therapy — Restorative Hip Sequence')",
+          "techniqueDetails": "string — exact technique, points/sequence, dosage parameters (needle gauge & retention, cup type/suction, moxa form/duration, Bowen procedure name, Tui Na technique sequence, laser dose, tape cut/tension, asana/lesson focus, breath protocol, etc.)",
+          "targetStructure": "string — anatomical/meridian region or tissue targeted",
+          "targetFinding": "string — the SPECIFIC clinical finding from the assessment data this addresses",
+          "clinicalRationale": "string — clinical reasoning linking this therapy to the patient's condition, phase and irritability, AND why it was chosen over other categories",
+          "expectedBenefit": "string — what the patient is realistically expected to experience and over what time frame",
+          "contraindications": "string — absolute and relative contraindications and safety considerations specific to this technique and patient",
+          "evidenceLevel": "A | B | C | D",
+          "evidenceSummary": "string — 1-2 sentence summary of the current evidence base for this therapy in this condition (cite study type if known, e.g. 'Cochrane review supports modest short-term effect')",
+          "referralGuidance": "string — whether this is within physiotherapy scope to discuss/perform, or should be REFERRED out; if referral, state 'REFERRAL REQUIRED' and describe the qualified practitioner type and what credentials/registration to look for"
+        }
+      ]
+    }
+  ],
+  "overallRationale": "string — overall reasoning for the selected mix of adjunct therapies given this patient's phase and irritability, including why these categories rather than others",
+  "safetyConsiderations": "string — overall safety considerations across all recommended therapies (red flags, when to defer, interactions with current physiotherapy plan)",
+  "clinicianDisclaimer": "string — explicit disclaimer that these are adjunct suggestions for clinician discussion / referral and not a medical prescription, and that any practitioner referral should be to a qualified, registered provider in the relevant modality"
+}`;
+
+      const userPrompt = `CLINICAL ASSESSMENT DATA:
+
+WORKING DIAGNOSIS: ${data.diagnosis || 'Not specified'}
+RECOVERY PHASE: ${data.recoveryPhase || 'Not specified'}
+TISSUE IRRITABILITY: ${data.irritability || 'Not specified'}
+
+OVERALL MECHANISM SUMMARY:
+${data.mechanismSummary || 'Not available'}
+
+CAUSAL CHAINS (root cause → symptom):
+${causalChainText}
+
+TOP CONTRIBUTORS:
+${contributorsText}
+
+COMPENSATION PATTERNS:
+${compensationText}
+
+LOAD REDISTRIBUTION:
+${loadText}
+
+KINETIC CHAIN DYSFUNCTIONS:
+${kineticText}
+
+PAIN MARKERS:
+${painText}
+
+Based on this data, generate a prioritized, evidence-informed adjunct natural therapies plan with concrete techniques, specific points/sequences, clear safety notes, and explicit clinician/referral framing.`;
+
+      const response = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 8000,
+        temperature: 0.5,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: "AI returned empty response" });
+      }
+
+      const adjunctResponseSchema = z.object({
+        therapyGroups: z.array(z.object({
+          groupId: z.string(),
+          therapyCategory: z.string(),
+          categoryDescription: z.string(),
+          priority: z.number(),
+          recommendations: z.array(z.object({
+            therapyName: z.string(),
+            techniqueDetails: z.string(),
+            targetStructure: z.string().default(''),
+            targetFinding: z.string().default(''),
+            clinicalRationale: z.string(),
+            expectedBenefit: z.string(),
+            contraindications: z.string().default('None identified'),
+            evidenceLevel: z.enum(['A', 'B', 'C', 'D']).or(z.string()).default('C'),
+            evidenceSummary: z.string().default(''),
+            referralGuidance: z.string().default(''),
+          })),
+        })),
+        overallRationale: z.string().default(''),
+        safetyConsiderations: z.string().default(''),
+        clinicianDisclaimer: z.string().default('These are adjunct suggestions for clinician discussion or referral to a qualified practitioner. They are not a medical prescription.'),
+      });
+
+      const raw = JSON.parse(content);
+      const validated = adjunctResponseSchema.safeParse(raw);
+      if (!validated.success) {
+        console.error("Adjunct therapies engine response validation failed:", validated.error.format());
+        return res.status(502).json({
+          error: "AI response did not match expected format",
+          validationErrors: validated.error.format(),
+        });
+      }
+      res.json(validated.data);
+    } catch (error: unknown) {
+      console.error("Adjunct therapies engine generation error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to generate adjunct therapies plan", details: message });
+    }
+  });
+
+  app.post("/api/adjunct-therapies-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const evidenceInputSchema = z.object({
+        recommendations: z.array(z.object({
+          key: z.string(),
+          therapyName: z.string(),
+          therapyCategory: z.string().optional().default(''),
+          targetStructure: z.string().optional().default(''),
+          targetFinding: z.string().optional().default(''),
+        })).min(1).max(40),
+        region: z.string().optional().default(''),
+        condition: z.string().optional().default(''),
+      });
+
+      const parsed = evidenceInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.format() });
+      }
+      const { recommendations, region, condition } = parsed.data;
+
+      const { fetchMultiSourceEvidence } = await import("./services/clinicalEvidenceService");
+
+      const STOPWORDS = new Set([
+        'the','and','for','with','from','that','this','not','but','are','was','were','been','has','had','have','will','can',
+        'pain','therapy','treatment','muscle','tissue','joint','left','right','bilateral','acute','chronic','mild','moderate','severe',
+        'a','an','of','in','on','to','or','at','by','as','is','it','be','via','using','use','due','per','non',
+      ]);
+      const tokenize = (s: string): string[] => s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2 && !STOPWORDS.has(t));
+
+      const matchedTermsIn = (hay: string, raw: string): string[] => {
+        const tokens = tokenize(raw);
+        const found: string[] = [];
+        for (const t of tokens) {
+          if (hay.includes(t) && !found.includes(t)) found.push(t);
+          if (found.length >= 3) break;
+        }
+        return found;
+      };
+
+      const buildConclusion = (abstract?: string): string => {
+        if (!abstract || abstract === 'No abstract available.') return '';
+        const cleaned = abstract.replace(/\s+/g, ' ').trim();
+        const lower = cleaned.toLowerCase();
+        const conclusionIdx = Math.max(
+          lower.indexOf('conclusion'),
+          lower.indexOf('conclusions'),
+          lower.indexOf('findings:'),
+          lower.indexOf('results:'),
+        );
+        let segment = cleaned;
+        if (conclusionIdx >= 0) {
+          segment = cleaned.slice(conclusionIdx);
+          segment = segment.replace(/^(conclusions?|findings|results)\s*[:\-]\s*/i, '');
+        }
+        const sentenceMatch = segment.match(/[^.!?]+[.!?]/);
+        const sentence = sentenceMatch ? sentenceMatch[0].trim() : segment.slice(0, 220).trim();
+        return sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
+      };
+
+      const deriveTreatmentTerm = (therapyName: string, therapyCategory: string): string => {
+        const cat = (therapyCategory || '').trim();
+        const name = (therapyName || '').trim();
+        if (cat && name) {
+          const catLower = cat.toLowerCase();
+          const nameLower = name.toLowerCase();
+          if (nameLower.includes(catLower)) return name;
+          return `${cat} ${name}`;
+        }
+        return name || cat;
+      };
+
+      const results = await Promise.all(recommendations.map(async (r) => {
+        try {
+          const treatment = deriveTreatmentTerm(r.therapyName, r.therapyCategory);
+          const cond = condition || r.targetFinding || '';
+          const reg = region || r.targetStructure || '';
+          const evidence = await fetchMultiSourceEvidence(reg, cond, treatment);
+
+          const top = (evidence.papers || []).slice(0, 4).map(p => {
+            const hay = `${p.title} ${p.abstract || ''}`.toLowerCase();
+            const matchedOn = {
+              modality: matchedTermsIn(hay, treatment),
+              region: matchedTermsIn(hay, `${reg} ${r.targetStructure || ''}`),
+              condition: matchedTermsIn(hay, `${cond} ${r.targetFinding || ''}`),
+            };
+            return {
+              title: p.title,
+              authors: p.authors,
+              journal: p.journal,
+              year: p.year,
+              pmid: p.pmid || '',
+              doi: p.doi,
+              studyType: p.studyType,
+              evidenceGrade: p.evidenceGrade,
+              pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
+              openAccessUrl: p.openAccessUrl,
+              sources: p.sources || [],
+              conclusion: buildConclusion(p.abstract),
+              matchedOn,
+            };
+          });
+
+          const gradeRank: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+          const bestGrade = top.length > 0
+            ? top.reduce((best, a) => ((gradeRank[a.evidenceGrade] ?? 3) < (gradeRank[best] ?? 3) ? a.evidenceGrade : best), top[0].evidenceGrade)
+            : evidence.overallGrade;
+
+          return [r.key, {
+            articles: top,
+            overallGrade: bestGrade,
+            confidence: evidence.confidence,
+            source: evidence.source,
+            searchQuery: evidence.searchQuery,
+            fallbackReason: evidence.source === 'fallback' ? 'No live results returned; showing curated fallback library.' : undefined,
+          }] as const;
+        } catch (err) {
+          console.error(`Adjunct evidence fetch failed for "${r.therapyName}":`, err);
+          return [r.key, {
+            articles: [],
+            overallGrade: 'D' as const,
+            confidence: 'Very Low' as const,
+            source: 'fallback' as const,
+            searchQuery: '',
+            fallbackReason: err instanceof Error ? err.message : 'Failed to fetch evidence',
+          }] as const;
+        }
+      }));
+
+      const evidenceByRecommendation: Record<string, unknown> = {};
+      for (const [key, payload] of results) {
+        evidenceByRecommendation[key] = payload;
+      }
+
+      res.json({ evidenceByRecommendation });
+    } catch (error: unknown) {
+      console.error("Adjunct therapies evidence error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to fetch evidence", details: message });
+    }
+  });
+
+  app.post("/api/electrophysical-engine/evidence", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const evidenceInputSchema = z.object({
+        modalities: z.array(z.object({
+          key: z.string(),
+          modality: z.string(),
+          targetStructure: z.string().optional().default(''),
+          targetFinding: z.string().optional().default(''),
+          goalTitle: z.string().optional().default(''),
+        })).min(1).max(40),
+        region: z.string().optional().default(''),
+        condition: z.string().optional().default(''),
+      });
+
+      const parsed = evidenceInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.format() });
+      }
+      const { modalities, region, condition } = parsed.data;
+
+      const { fetchMultiSourceEvidence } = await import("./services/clinicalEvidenceService");
+
+      const STOPWORDS = new Set([
+        'the','and','for','with','from','that','this','not','but','are','was','were','been','has','had','have','will','can',
+        'pain','therapy','treatment','muscle','tissue','joint','left','right','bilateral','acute','chronic','mild','moderate','severe',
+        'a','an','of','in','on','to','or','at','by','as','is','it','be','via','using','use','due','per','non',
+      ]);
+      const tokenize = (s: string): string[] => s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 2 && !STOPWORDS.has(t));
+
+      const matchedTermsIn = (hay: string, raw: string): string[] => {
+        const tokens = tokenize(raw);
+        const found: string[] = [];
+        for (const t of tokens) {
+          if (hay.includes(t) && !found.includes(t)) found.push(t);
+          if (found.length >= 3) break;
+        }
+        return found;
+      };
+
+      const buildConclusion = (abstract?: string): string => {
+        if (!abstract || abstract === 'No abstract available.') return '';
+        const cleaned = abstract.replace(/\s+/g, ' ').trim();
+        const lower = cleaned.toLowerCase();
+        const conclusionIdx = Math.max(
+          lower.indexOf('conclusion'),
+          lower.indexOf('conclusions'),
+          lower.indexOf('findings:'),
+          lower.indexOf('results:'),
+        );
+        let segment = cleaned;
+        if (conclusionIdx >= 0) {
+          segment = cleaned.slice(conclusionIdx);
+          segment = segment.replace(/^(conclusions?|findings|results)\s*[:\-]\s*/i, '');
+        }
+        const sentenceMatch = segment.match(/[^.!?]+[.!?]/);
+        const sentence = sentenceMatch ? sentenceMatch[0].trim() : segment.slice(0, 220).trim();
+        return sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
+      };
+
+      const results = await Promise.all(modalities.map(async (m) => {
+        try {
+          const treatment = m.modality;
+          const cond = condition || m.targetFinding || m.goalTitle || '';
+          const reg = region || m.targetStructure || '';
+          const evidence = await fetchMultiSourceEvidence(reg, cond, treatment);
+
+          const top = (evidence.papers || []).slice(0, 4).map(p => {
+            const hay = `${p.title} ${p.abstract || ''}`.toLowerCase();
+            const matchedOn = {
+              modality: matchedTermsIn(hay, treatment),
+              region: matchedTermsIn(hay, `${reg} ${m.targetStructure || ''}`),
+              condition: matchedTermsIn(hay, `${cond} ${m.targetFinding || ''}`),
+            };
+            return {
+              title: p.title,
+              authors: p.authors,
+              journal: p.journal,
+              year: p.year,
+              pmid: p.pmid || '',
+              doi: p.doi,
+              studyType: p.studyType,
+              evidenceGrade: p.evidenceGrade,
+              pubmedUrl: p.pubmedUrl || (p.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${p.pmid}/` : (p.doi ? `https://doi.org/${p.doi}` : '')),
+              openAccessUrl: p.openAccessUrl,
+              sources: p.sources || [],
+              conclusion: buildConclusion(p.abstract),
+              matchedOn,
+            };
+          });
+
+          const gradeRank: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
+          const bestGrade = top.length > 0
+            ? top.reduce((best, a) => ((gradeRank[a.evidenceGrade] ?? 3) < (gradeRank[best] ?? 3) ? a.evidenceGrade : best), top[0].evidenceGrade)
+            : evidence.overallGrade;
+
+          return [m.key, {
+            articles: top,
+            overallGrade: bestGrade,
+            confidence: evidence.confidence,
+            source: evidence.source,
+            searchQuery: evidence.searchQuery,
+            fallbackReason: evidence.source === 'fallback' ? 'No live results returned; showing curated fallback library.' : undefined,
+          }] as const;
+        } catch (err) {
+          console.error(`Electro evidence fetch failed for modality "${m.modality}":`, err);
+          return [m.key, {
+            articles: [],
+            overallGrade: 'D' as const,
+            confidence: 'Very Low' as const,
+            source: 'fallback' as const,
+            searchQuery: '',
+            fallbackReason: err instanceof Error ? err.message : 'Failed to fetch evidence',
+          }] as const;
+        }
+      }));
+
+      const evidenceByModality: Record<string, unknown> = {};
+      for (const [key, payload] of results) {
+        evidenceByModality[key] = payload;
+      }
+
+      res.json({ evidenceByModality });
+    } catch (error: unknown) {
+      console.error("Electrophysical evidence error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to fetch evidence", details: message });
     }
   });
 
@@ -9559,6 +11998,374 @@ Guidelines:
     }
   });
 
+  app.post("/api/physiogpt/hypothesis-chat/refine", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesis, messages, subjectiveHistory, skeletonData } = req.body || {};
+      if (!hypothesis || !hypothesis.condition) {
+        return res.status(400).json({ error: "Original hypothesis is required" });
+      }
+      if (!Array.isArray(messages) || messages.length < 2) {
+        return res.status(400).json({ error: "A discussion transcript is required to refine" });
+      }
+
+      const { z } = await import("zod");
+      const RefinedSchema = z.object({
+        condition: z.string().min(2).max(160),
+        confidenceSuggestion: z.coerce.number().min(0).max(100),
+        rationale: z.string().min(5).max(600),
+        keyFindings: z.array(z.string().min(2).max(280)).min(2).max(8),
+        distinguishingFeatures: z.array(z.string().min(2).max(280)).max(8).default([]),
+        changedFromOriginal: z.string().min(3).max(400),
+        sameAsOriginal: z.boolean().optional().default(false),
+      });
+
+      const OpenAI = (await import("openai")).default;
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const transcript = (messages as Array<{ role: string; content: string }>)
+        .filter(m => m && typeof m.content === "string" && m.content.trim().length > 0)
+        .map(m => `${m.role === "user" ? "Clinician" : "Assistant"}: ${m.content.trim()}`)
+        .join("\n\n");
+
+      const evidenceList = Array.isArray(hypothesis.supportingEvidence) ? hypothesis.supportingEvidence : [];
+      const ruleOutList = Array.isArray(hypothesis.rulingOutFactors) ? hypothesis.rulingOutFactors : [];
+
+      const skeletonSummary = skeletonData ? [
+        skeletonData.painMarkers?.length ? `Pain markers: ${skeletonData.painMarkers.slice(0,8).map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone} (${p.type || 'pain'} ${p.severity ?? ''})`).join('; ')}` : '',
+        skeletonData.forces?.length ? `Forces: ${skeletonData.forces.slice(0,6).map((f: any) => `${f.label}=${f.status}`).join('; ')}` : '',
+        skeletonData.muscles?.length ? `Muscle status: ${skeletonData.muscles.slice(0,8).map((m: any) => `${m.name}=${m.status}`).join('; ')}` : '',
+      ].filter(Boolean).join('\n') : '';
+
+      const systemPrompt = `You are a senior physiotherapy diagnostician. The clinician has been discussing a working hypothesis with an AI assistant. Your job: read the transcript and decide whether the discussion has refined, redirected, or confirmed the original hypothesis. Return ONLY a single JSON object with these exact keys:
+{
+  "condition": "the most likely condition name AFTER the discussion (may be the same as original if no shift occurred)",
+  "confidenceSuggestion": "integer 0-100 representing your post-discussion confidence",
+  "rationale": "one or two sentence clinical rationale grounded in what was discussed",
+  "keyFindings": ["3-6 short bullets of findings from the transcript that support this refined view"],
+  "distinguishingFeatures": ["0-5 short bullets describing how this differs from the original hypothesis (empty array if same)"],
+  "changedFromOriginal": "one short sentence summarising what changed (or 'No change — discussion confirmed original')",
+  "sameAsOriginal": true/false
+}
+Rules: Stay grounded in the transcript and clinical context — do not invent findings. If the discussion did not meaningfully shift the diagnosis, set sameAsOriginal=true and keep the original condition name. Use everyday physio terminology. Return JSON only.`;
+
+      const userPrompt = `ORIGINAL HYPOTHESIS
+Condition: ${hypothesis.condition}
+Confidence: ${hypothesis.confidence ?? '—'}%
+Supporting evidence: ${evidenceList.length ? evidenceList.join(' | ') : 'none recorded'}
+Ruling-out factors: ${ruleOutList.length ? ruleOutList.join(' | ') : 'none recorded'}
+${hypothesis.structuredContext ? `Structured context: ${JSON.stringify(hypothesis.structuredContext)}` : ''}
+
+${subjectiveHistory ? `SUBJECTIVE HISTORY\n${subjectiveHistory}\n\n` : ''}${skeletonSummary ? `CURRENT SKELETON SNAPSHOT\n${skeletonSummary}\n\n` : ''}DISCUSSION TRANSCRIPT
+${transcript}
+
+Now produce the refined hypothesis JSON.`;
+
+      const completion = await aiClient.chat.completions.create({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 900,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || "{}";
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: "AI returned malformed JSON" });
+      }
+
+      const validated = RefinedSchema.safeParse(parsed);
+      if (!validated.success) {
+        console.error("Refine hypothesis validation error:", validated.error.flatten());
+        return res.status(502).json({ error: "AI response did not match expected schema" });
+      }
+
+      const data = validated.data;
+      data.confidenceSuggestion = Math.round(data.confidenceSuggestion);
+      const sameByName = data.condition.trim().toLowerCase() === String(hypothesis.condition).trim().toLowerCase();
+      data.sameAsOriginal = data.sameAsOriginal || sameByName;
+
+      res.json({ refined: data });
+    } catch (error: any) {
+      console.error("Hypothesis refine error:", error?.message || error);
+      const status = error?.status === 429 ? 429 : 500;
+      res.status(status).json({ error: error?.status === 429 ? "AI quota exceeded — try again shortly." : "Unable to refine hypothesis" });
+    }
+  });
+
+  // Sling Failure Movement Visualizer — one SlingFailureScenario per
+  // compromised sling via GPT-4o; deterministic server-side fallback
+  // when AI is unavailable. Cached by (caseId + fingerprint).
+  app.post("/api/sling-failure-scenarios", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { slingFailureScenarioRequestSchema } = await import("@shared/schema");
+      // Defensive truncation: older clients (or future drift) may send more
+      // than 12 pain markers, which would otherwise fail strict validation.
+      // Keep the top-12 by severity so the AI call still proceeds.
+      const rawBody = (req.body && typeof req.body === 'object') ? req.body as Record<string, unknown> : {};
+      const rawMarkers = Array.isArray(rawBody.markers) ? rawBody.markers as Array<Record<string, unknown>> : null;
+      if (rawMarkers && rawMarkers.length > 12) {
+        const trimmed = [...rawMarkers]
+          .sort((a, b) => {
+            const sa = typeof a?.severity === 'number' ? a.severity : 0;
+            const sb = typeof b?.severity === 'number' ? b.severity : 0;
+            return sb - sa;
+          })
+          .slice(0, 12);
+        req.body = { ...rawBody, markers: trimmed };
+      }
+      const parsed = slingFailureScenarioRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+      }
+      const body = parsed.data;
+      const cacheKey = `${body.caseId}::${body.fingerprint}`;
+
+      pruneSlingFailureCache();
+      if (!body.refresh) {
+        const hit = slingFailureCache.get(cacheKey);
+        if (hit && hit.fingerprint === body.fingerprint) {
+          return res.json({ scenarios: hit.scenarios, cached: true, source: 'ai' });
+        }
+      }
+
+      const compromised = body.slings.filter(s => s.status !== 'normal');
+      if (compromised.length === 0) {
+        return res.json({ scenarios: [], cached: false, source: 'local' });
+      }
+
+      const TRIGGER_HINTS: Record<string, { id: string; label: string; failureFrame: number }> = {
+        deep_longitudinal:  { id: 'sfv_single_leg_calf_raise', label: 'Single-leg calf raise',           failureFrame: 0.6 },
+        lateral:            { id: 'sfv_single_leg_stance',     label: 'Single-leg stance (Trendelenburg)', failureFrame: 0.5 },
+        scapular_shoulder:  { id: 'sfv_overhead_reach',        label: 'Overhead reach',                  failureFrame: 0.7 },
+        anterior_oblique:   { id: 'sfv_forward_lunge',         label: 'Forward lunge with rotation',     failureFrame: 0.55 },
+        posterior_oblique:  { id: 'sfv_gait_stance_push_off',  label: 'Gait stance push-off',            failureFrame: 0.65 },
+      };
+
+      const REROUTE_BY_SLING: Record<string, { muscle: string; bones: string[] }> = {
+        deep_longitudinal:  { muscle: 'lateral_gastrocnemius / IT band',   bones: ['Knee_L', 'HipPart1_L'] },
+        lateral:            { muscle: 'quadratus_lumborum',                bones: ['Spine1_M', 'RootPart1_M'] },
+        scapular_shoulder:  { muscle: 'upper_trapezius',                   bones: ['Neck_M', 'Shoulder_L'] },
+        anterior_oblique:   { muscle: 'rectus_abdominis / hip flexors',    bones: ['Chest_M', 'Hip_R'] },
+        posterior_oblique:  { muscle: 'lumbar_erector_spinae',             bones: ['Spine1_M', 'RootPart2_M'] },
+      };
+      const DELTA_TEMPLATES: Record<string, Array<{ joint: string; axis: string; deg: number; description: string }>> = {
+        deep_longitudinal: [
+          { joint: 'spine',     axis: 'flexion',         deg:  6, description: 'Trunk hinges forward to compensate for failed posterior chain force transfer' },
+          { joint: 'leftKnee',  axis: 'flexion',         deg:  8, description: 'Knee softens because hamstring drive cannot complete plantarflexion' },
+          { joint: 'leftAnkle', axis: 'plantarflexion',  deg: -10, description: 'Reduced peak plantarflexion height' },
+        ],
+        lateral: [
+          { joint: 'rightHip',  axis: 'abduction',       deg: -8, description: 'Contralateral pelvic drop — Trendelenburg sign' },
+          { joint: 'spine',     axis: 'lateralFlexion',  deg:  6, description: 'Lateral trunk lean over the stance leg' },
+          { joint: 'leftKnee',  axis: 'varus',           deg:  6, description: 'Knee drifts into dynamic valgus during stance' },
+        ],
+        scapular_shoulder: [
+          { joint: 'leftScapula',  axis: 'upwardRotation', deg: -15, description: 'Scapular dyskinesis — insufficient upward rotation' },
+          { joint: 'leftShoulder', axis: 'flexion',        deg: -25, description: 'Loss of overhead reach as scapulothoracic rhythm fails' },
+          { joint: 'spine',        axis: 'extension',      deg:   5, description: 'Lumbar extension compensates for missing shoulder range' },
+        ],
+        anterior_oblique: [
+          { joint: 'spine',     axis: 'thoracicRotation', deg: -8, description: 'Trunk rotation falls short — adductor / oblique chain cannot drive' },
+          { joint: 'rightHip',  axis: 'flexion',          deg: 10, description: 'Hip flexes deeper to compensate for missing rotational power' },
+          { joint: 'rightKnee', axis: 'varus',            deg:  5, description: 'Knee drops medially as adductor sling collapses' },
+        ],
+        posterior_oblique: [
+          { joint: 'spine',         axis: 'thoracicRotation', deg:  6, description: 'Compensatory trunk rotation hunting for posterior chain power' },
+          { joint: 'leftHip',       axis: 'extension',        deg: -7, description: 'Reduced hip extension at push-off — glute max underdrives' },
+          { joint: 'rightShoulder', axis: 'flexion',          deg: -10, description: 'Contralateral arm swing dampens — lat/glute couple disconnected' },
+        ],
+      };
+
+      const buildLocalFallback = (): SlingFailureScenarioType[] => {
+        return compromised.map(s => {
+          const hint = TRIGGER_HINTS[s.slingId] ?? TRIGGER_HINTS.lateral;
+          const pathway = Array.isArray(s.bonePathway) ? s.bonePathway : [];
+          const weakLink = s.weakLinks?.[0];
+          let weakBones: string[] = [];
+          const indices = (weakLink as unknown as { boneSegmentIndices?: number[] } | undefined)?.boneSegmentIndices;
+          if (Array.isArray(indices) && indices.length > 0) {
+            weakBones = indices
+              .map(i => pathway[i])
+              .filter((b): b is string => typeof b === 'string');
+          }
+          if (weakBones.length === 0 && pathway.length > 0) {
+            const mid = Math.floor(pathway.length / 2);
+            weakBones = pathway.slice(Math.max(0, mid - 1), mid + 2);
+          }
+          const reroute = REROUTE_BY_SLING[s.slingId] ?? { muscle: 'compensating synergist', bones: pathway.slice(0, 2) };
+          const templates = DELTA_TEMPLATES[s.slingId] ?? [];
+          const severity = Math.max(0.4, Math.min(1.4, (100 - Math.min(s.activationScore, 100)) / 50));
+          const jointDeltas = templates.map(t => ({
+            joint: t.joint,
+            axis: t.axis,
+            intendedDeg: 0,
+            actualDeg: Math.round(t.deg * severity * 10) / 10,
+            description: t.description,
+          }));
+          return {
+            slingId: s.slingId,
+            slingLabel: s.slingLabel,
+            triggerMovementId: hint.id,
+            triggerMovementLabel: hint.label,
+            triggerReason: 'Maximally loads this sling under closed-chain demand.',
+            failureFrame: hint.failureFrame,
+            weakSegmentMuscle: weakLink?.muscle ?? 'sling weak link',
+            weakSegmentBones: weakBones,
+            rerouteTargetMuscle: reroute.muscle,
+            rerouteTargetBones: reroute.bones,
+            jointDeltas,
+            narration: `${hint.label}: chain stalls at ${weakLink?.muscle ?? 'the weakest link'} (${weakLink?.activationPct ?? 0}% activation); force reroutes into ${reroute.muscle}.`,
+            confidence: 0.55,
+            source: 'local' as const,
+          };
+        });
+      };
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        const fallback = buildLocalFallback();
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+        return res.json({ scenarios: fallback, cached: false, source: 'local' });
+      }
+      const openai = new OpenAI({ apiKey });
+
+      const prompt = `You are a senior physiotherapist building movement-failure scenarios for a 3D skeleton visualizer.
+For each compromised sling listed below, return a JSON object describing how its failure would look on a movement test.
+
+Patient context:
+- Condition: ${body.condition ?? 'unspecified'}
+- Patient factors: ${(body.patientFactors ?? []).join(', ') || 'none'}
+- Pain markers: ${JSON.stringify((body.markers ?? []).slice(0, 8))}
+
+Compromised slings:
+${compromised.map(s => `- ${s.slingId} (${s.status}, activation ${s.activationScore}%, weak: ${s.weakLinks.map(w => `${w.muscle}@${w.activationPct}%`).join('; ') || 'n/a'})`).join('\n')}
+
+Pick the SINGLE most loaded test movement per sling using these canonical ids only:
+${Object.entries(TRIGGER_HINTS).map(([k, v]) => `  ${k} → "${v.id}" (${v.label}, failureFrame ${v.failureFrame})`).join('\n')}
+
+For joint deltas use joints from {leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftShoulder, rightShoulder, leftScapula, rightScapula, spine} and axes from {flexion, extension, abduction, lateralFlexion, plantarflexion, varus, thoracicRotation, upwardRotation}. intendedDeg is healthy reference (often 0). actualDeg is the deviated value (signed). Keep |actualDeg - intendedDeg| <= 25.
+
+Return STRICT JSON of shape:
+{ "scenarios": [ { "slingId": "...", "slingLabel": "...", "triggerMovementId": "...", "triggerMovementLabel": "...", "triggerReason": "...", "failureFrame": 0..1, "weakSegmentMuscle": "...", "weakSegmentBones": ["..."], "rerouteTargetMuscle": "...", "rerouteTargetBones": ["..."], "jointDeltas": [{"joint":"...","axis":"...","intendedDeg":0,"actualDeg":6,"description":"..."}], "narration": "<= 3 sentences", "confidence": 0..1 } ] }`;
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o",
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: "You are an expert physiotherapist. Always return valid JSON matching the requested schema." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.4,
+          max_tokens: 1800,
+        });
+
+        const raw = completion.choices[0]?.message?.content ?? "{}";
+        const parsedJson = JSON.parse(raw) as { scenarios?: unknown };
+        const rawScenarios: unknown[] = Array.isArray(parsedJson?.scenarios) ? parsedJson.scenarios : [];
+
+        const { slingFailureScenarioSchema } = await import("@shared/schema");
+        const validated = rawScenarios
+          .map(r => {
+            const rec = (r ?? {}) as Record<string, unknown>;
+            const slingId = typeof rec.slingId === 'string' ? rec.slingId : '';
+            const hint = TRIGGER_HINTS[slingId];
+            const candidate = {
+              ...rec,
+              source: 'ai' as const,
+              triggerMovementId: hint?.id ?? (typeof rec.triggerMovementId === 'string' ? rec.triggerMovementId : 'sfv_single_leg_stance'),
+              triggerMovementLabel: hint?.label ?? (typeof rec.triggerMovementLabel === 'string' ? rec.triggerMovementLabel : 'Single-leg stance'),
+              failureFrame: typeof rec.failureFrame === 'number' ? Math.max(0, Math.min(1, rec.failureFrame)) : (hint?.failureFrame ?? 0.5),
+              weakSegmentBones: Array.isArray(rec.weakSegmentBones) ? rec.weakSegmentBones.slice(0, 8) : [],
+              rerouteTargetBones: Array.isArray(rec.rerouteTargetBones) ? rec.rerouteTargetBones.slice(0, 8) : [],
+              jointDeltas: Array.isArray(rec.jointDeltas) ? rec.jointDeltas.slice(0, 12) : [],
+              confidence: typeof rec.confidence === 'number' ? Math.max(0, Math.min(1, rec.confidence)) : 0.7,
+            };
+            const result = slingFailureScenarioSchema.safeParse(candidate);
+            return result.success ? result.data : null;
+          })
+          .filter((s): s is NonNullable<typeof s> => !!s);
+
+        if (validated.length === 0) {
+          const fallback = buildLocalFallback();
+          slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+          return res.json({ scenarios: fallback, cached: false, source: 'local' });
+        }
+
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: validated, cachedAt: Date.now() });
+        return res.json({ scenarios: validated, cached: false, source: 'ai' });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[sling-failure-scenarios] OpenAI error:", msg);
+        const fallback = buildLocalFallback();
+        slingFailureCache.set(cacheKey, { fingerprint: body.fingerprint, scenarios: fallback, cachedAt: Date.now() });
+        return res.json({ scenarios: fallback, cached: false, source: 'local' });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[sling-failure-scenarios] error:", msg);
+      return res.status(500).json({ error: "Internal error" });
+    }
+  });
+
+  app.post("/api/diagnosis-provocations/compose", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesisId, condition, supportingEvidence, rulingOutFactors, region, painMarkers } = req.body || {};
+      if (!hypothesisId || typeof hypothesisId !== "string") {
+        return res.status(400).json({ error: "hypothesisId is required" });
+      }
+      if (!condition || typeof condition !== "string") {
+        return res.status(400).json({ error: "condition is required" });
+      }
+      const isMarkerLike = (v: unknown): v is Record<string, unknown> =>
+        !!v && typeof v === "object" && !Array.isArray(v);
+      const sanitizedMarkers: ProvocationContextPainMarker[] | undefined = Array.isArray(painMarkers)
+        ? (painMarkers as unknown[])
+            .filter(isMarkerLike)
+            .slice(0, 24)
+            .map((m) => ({
+              region: typeof m.region === "string" ? m.region : undefined,
+              anatomicalLabel: typeof m.anatomicalLabel === "string" ? m.anatomicalLabel : undefined,
+              symptomType: typeof m.symptomType === "string" ? m.symptomType : undefined,
+              severity: typeof m.severity === "number" ? m.severity : undefined,
+              description: typeof m.description === "string" ? m.description : undefined,
+            }))
+        : undefined;
+      const { composeProvocationMovements } = await import("./diagnosisProvocationGenerator");
+      const movements = await composeProvocationMovements({
+        hypothesisId,
+        condition,
+        supportingEvidence: Array.isArray(supportingEvidence) ? supportingEvidence : undefined,
+        rulingOutFactors: Array.isArray(rulingOutFactors) ? rulingOutFactors : undefined,
+        region: typeof region === "string" ? region : undefined,
+        painMarkers: sanitizedMarkers,
+      });
+      res.json({ movements });
+    } catch (error) {
+      const errStatus =
+        error && typeof error === "object" && "status" in error && typeof (error as { status: unknown }).status === "number"
+          ? (error as { status: number }).status
+          : undefined;
+      const errMessage = error instanceof Error ? error.message : String(error);
+      console.error("Compose provocation error:", errMessage);
+      const status = errStatus === 429 ? 429 : 500;
+      res.status(status).json({
+        error:
+          errStatus === 429
+            ? "AI quota exceeded — try again shortly."
+            : errMessage || "Unable to compose provocation movements",
+      });
+    }
+  });
+
   app.get("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
     try {
       const conversations = await physioGptService.getUserConversations(req.user!.id);
@@ -9608,6 +12415,103 @@ Guidelines:
     } catch (error) {
       console.error("Error deleting conversation:", error);
       res.status(500).json({ error: "Unable to delete conversation" });
+    }
+  });
+
+  const createConversationBodySchema = z.object({
+    title: z.string().trim().min(1).max(120).optional(),
+    caseSnapshot: physioGptCaseSnapshotSchema,
+    initialMessage: z
+      .object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(8000),
+      })
+      .nullable()
+      .optional(),
+  });
+
+  app.post("/api/physiogpt/conversations", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const parsedBody = createConversationBodySchema.safeParse(req.body ?? {});
+      if (!parsedBody.success) {
+        return res.status(400).json({ error: "Invalid request body", details: parsedBody.error.flatten() });
+      }
+      const { title, caseSnapshot, initialMessage } = parsedBody.data;
+      const snap = caseSnapshot as PhysioGptCaseSnapshot;
+
+      const pickString = (value: unknown, max: number): string => {
+        if (typeof value !== "string") return "";
+        const trimmed = value.trim();
+        return trimmed.length === 0 ? "" : trimmed.slice(0, max);
+      };
+      const extraction = snap.extractionResult;
+      const mainComplaint =
+        extraction && typeof extraction === "object" && extraction !== null
+          ? pickString((extraction as { mainComplaint?: unknown }).mainComplaint, 60)
+          : "";
+      const parseResult = snap.lastClinicalParseResult;
+      const originalDescription =
+        parseResult && typeof parseResult === "object" && parseResult !== null
+          ? pickString((parseResult as { original_description?: unknown }).original_description, 60)
+          : "";
+      const subjectiveTitle = pickString(snap.subjectiveHistoryInput, 60);
+      const derivedTitle =
+        (title ? title.slice(0, 60) : "") ||
+        mainComplaint ||
+        originalDescription ||
+        subjectiveTitle ||
+        "Untitled case";
+
+      const conversation = await physioGptStorage.createConversation({
+        userId: req.user!.id,
+        title: derivedTitle,
+        caseSnapshot: snap,
+      });
+
+      if (initialMessage) {
+        try {
+          await physioGptStorage.addMessage({
+            conversationId: conversation.id,
+            role: initialMessage.role,
+            content: initialMessage.content,
+          });
+        } catch (msgErr) {
+          console.error("Failed to save initial message for conversation:", conversation.id, msgErr);
+        }
+      }
+
+      res.status(201).json(conversation);
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      res.status(500).json({ error: "Unable to create conversation" });
+    }
+  });
+
+  app.patch("/api/physiogpt/conversations/:id", ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      const { caseSnapshot } = req.body ?? {};
+      const parsed = physioGptCaseSnapshotSchema.safeParse(caseSnapshot);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid caseSnapshot payload" });
+      }
+
+      const updated = await physioGptService.updateCaseSnapshot(
+        conversationId,
+        req.user!.id,
+        parsed.data as PhysioGptCaseSnapshot,
+      );
+      if (!updated) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating case snapshot:", error);
+      res.status(500).json({ error: "Unable to update case snapshot" });
     }
   });
 
@@ -12460,7 +15364,7 @@ Important:
   
   app.post('/api/clinical-text/parse', ensureAuthenticated, async (req: Request, res: Response) => {
     try {
-      const { text, context } = req.body;
+      const { text, context, patient_context } = req.body;
       if (!text || typeof text !== 'string' || text.trim().length < 3) {
         return res.status(400).json({ error: 'Clinical description text is required (minimum 3 characters)' });
       }
@@ -12479,6 +15383,12 @@ Important:
           qaContext.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
           '\n--- END FOLLOW-UP ANSWERS ---\n\nUse these answers to REFINE your predictions. Reduce follow_up_questions to only those still unanswered. Increase confidence for findings confirmed by the answers.';
       }
+
+      const patientContextBlock = formatPatientContextBlock(patient_context, {
+        instruction:
+          'IMPORTANT: Re-run your prediction WITH this patient in mind. Adjust findings, confidence, postural drivers, and red flags so they reflect THIS patient (e.g. add diabetes-related stiffness for frozen shoulder + diabetic, raise red-flag screening if they are on steroids or anticoagulants, downgrade aggressive loading if they are deconditioned).',
+      });
+      if (patientContextBlock) contextBlock += patientContextBlock;
 
       const response = await replitOpenai.chat.completions.create({
         model: "gpt-4o",
@@ -12578,6 +15488,609 @@ EXAMPLES of good predictions:
       console.error('Error parsing clinical text:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       res.status(500).json({ error: 'Failed to parse clinical text', details: message });
+    }
+  });
+
+  // GPT-backed follow-up answer matcher — tier-3 fallback after
+  // option-includes and keyword-density matchers. Cheap model
+  // (gpt-4o-mini) because it fires per silence/pulse trigger.
+  app.post('/api/clinical-text/answer-followup', ensureAuthenticated, async (req: Request, res: Response) => {
+    type RawFollowupQuestion = {
+      id?: unknown;
+      question?: unknown;
+      options?: unknown;
+    };
+    type SanitizedFollowupQuestion = {
+      id: string;
+      question: string;
+      options?: string[];
+    };
+    type RawFollowupMatch = {
+      questionId?: unknown;
+      answer?: unknown;
+      confidence?: unknown;
+      reason?: unknown;
+    };
+    type FollowupMatch = {
+      questionId: string;
+      answer: string;
+      confidence: number;
+      reason: string;
+    };
+    type FollowupResponse = {
+      answered: boolean;
+      answer: string | null;
+      confidence: number;
+      matches: FollowupMatch[];
+    };
+
+    const empty: FollowupResponse = { answered: false, answer: null, confidence: 0, matches: [] };
+    try {
+      const body = (req.body ?? {}) as {
+        utterance?: unknown;
+        questions?: unknown;
+        activeQuestionId?: unknown;
+      };
+      const utterance = typeof body.utterance === 'string' ? body.utterance : '';
+      const activeQuestionId = typeof body.activeQuestionId === 'string' ? body.activeQuestionId : null;
+
+      if (!utterance || utterance.trim().length < 4) return res.json(empty);
+      if (!Array.isArray(body.questions) || body.questions.length === 0) return res.json(empty);
+
+      const sanitized: SanitizedFollowupQuestion[] = (body.questions as RawFollowupQuestion[])
+        .filter((q): q is RawFollowupQuestion => !!q && typeof q.id === 'string' && typeof q.question === 'string')
+        .slice(0, 8)
+        .map((q) => {
+          const opts = Array.isArray(q.options)
+            ? (q.options as unknown[])
+                .filter((o): o is string | number => typeof o === 'string' || typeof o === 'number')
+                .slice(0, 8)
+                .map((o) => String(o).slice(0, 60))
+            : undefined;
+          return {
+            id: String(q.id),
+            question: String(q.question).slice(0, 220),
+            ...(opts && opts.length > 0 ? { options: opts } : {}),
+          };
+        });
+      if (sanitized.length === 0) return res.json(empty);
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const sys = `You match a clinician's spoken utterance to one or more open follow-up questions and return the most likely answer for each.
+
+Rules:
+- Only return an answer if you are at least 70% confident the utterance contains the answer to that question. Otherwise omit the question entirely.
+- If the question has "options", you MUST return one of the options EXACTLY as written (string match).
+- If the question has no options, return a SHORT clinical phrase (≤ 40 chars) the clinician actually said or paraphrased (e.g. "3 weeks", "after a deadlift", "no leg symptoms").
+- Never invent clinical findings the utterance doesn't contain.
+- Output JSON ONLY: { "matches": [ { "questionId": "q1", "answer": "Subacute (2-6 weeks)", "confidence": 0.82, "reason": "said 'about three weeks'" } ] }
+- Empty matches array if nothing in the utterance answers any of the open questions.`;
+
+      const usr = `Open follow-up questions${activeQuestionId ? ` (active = ${activeQuestionId})` : ''}:
+${sanitized.map(q => `- id="${q.id}" question="${q.question}"${q.options ? ` options=[${q.options.map((o) => `"${o}"`).join(', ')}]` : ''}`).join('\n')}
+
+Clinician utterance:
+"""${utterance.slice(0, 1200)}"""
+
+Match now.`;
+
+      const r = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: usr },
+        ],
+        temperature: 0.1,
+        max_tokens: 400,
+        response_format: { type: 'json_object' },
+      });
+
+      let parsed: { matches?: unknown } = {};
+      try {
+        const raw = JSON.parse(r.choices?.[0]?.message?.content || '{}') as unknown;
+        if (raw && typeof raw === 'object') parsed = raw as { matches?: unknown };
+      } catch { parsed = {}; }
+
+      const validIds = new Set(sanitized.map(q => q.id));
+      const optionsById = new Map<string, string[] | undefined>(sanitized.map(q => [q.id, q.options]));
+      const rawMatches: RawFollowupMatch[] = Array.isArray(parsed.matches)
+        ? (parsed.matches as RawFollowupMatch[])
+        : [];
+
+      const matches: FollowupMatch[] = rawMatches
+        .map((m): FollowupMatch | null => {
+          if (!m || typeof m.questionId !== 'string' || !validIds.has(m.questionId)) return null;
+          if (typeof m.answer !== 'string' || m.answer.trim().length === 0) return null;
+          const confidence = typeof m.confidence === 'number' ? m.confidence : 0.7;
+          if (confidence < 0.7) return null;
+
+          let answer = m.answer.trim().slice(0, 80);
+          const opts = optionsById.get(m.questionId);
+          if (opts && opts.length > 0) {
+            const lower = answer.toLowerCase();
+            const exact = opts.find(o => o.toLowerCase() === lower);
+            if (exact) {
+              answer = exact;
+            } else {
+              const fuzzy = opts.find(o =>
+                lower.includes(o.toLowerCase()) || o.toLowerCase().includes(lower),
+              );
+              if (fuzzy) answer = fuzzy;
+              else return null; // Optioned question with no snap → discard.
+            }
+          }
+
+          return {
+            questionId: m.questionId,
+            answer,
+            confidence,
+            reason: typeof m.reason === 'string' ? m.reason.slice(0, 160) : '',
+          };
+        })
+        .filter((m): m is FollowupMatch => m !== null)
+        .slice(0, 5);
+
+      // Surface the active-question result at the top level so callers
+      // expecting the single-question contract still work unchanged.
+      const activeMatch = activeQuestionId
+        ? matches.find(m => m.questionId === activeQuestionId)
+        : matches[0];
+      const response: FollowupResponse = {
+        answered: !!activeMatch,
+        answer: activeMatch?.answer ?? null,
+        confidence: activeMatch?.confidence ?? 0,
+        matches,
+      };
+      res.json(response);
+    } catch (error: unknown) {
+      console.error('Error in /api/clinical-text/answer-followup:', error);
+      res.json(empty);
+    }
+  });
+
+  app.post('/api/clinical-text/natural-timeline', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { context, qa_history, patient_context } = req.body ?? {};
+      if (!context || typeof context !== 'object') {
+        return res.status(400).json({ error: 'Clinical context is required' });
+      }
+      const qaHistory = Array.isArray(qa_history) ? qa_history as Array<{ question: string; answer: string }> : [];
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const ctxJson = JSON.stringify(context, null, 2);
+      let qaBlock = '';
+      if (qaHistory.length > 0) {
+        qaBlock = '\n\n--- PATIENT FACTORS PROVIDED (incorporate into the timeline) ---\n' +
+          qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
+          '\n--- END PATIENT FACTORS ---\n\nUse these answers to refine the natural timeline. REMOVE any follow_up_questions that are now answered. Increase confidence_percent. Adjust per-finding healing classes, weeks-to-resolution, residual deficit, chronicity and recurrence risk based on what the answers reveal.';
+      }
+      qaBlock += formatPatientContextBlock(patient_context, {
+        instruction:
+          'Treat the PATIENT CONTEXT above as authoritative biopsychosocial modifiers. They MUST shift per-finding healing class, weeks-to-resolution, residual deficit, chronicity and recurrence risk versus a generic patient. Suppress any follow_up_question whose answer is already in the patient context.',
+      });
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert physiotherapy NATURAL-HISTORY PROGNOSIS engine. The clinician has already produced a structured clinical picture (compromised tissues with tissue type, pain markers with mechanism / nerve-root involvement, sling weak links, joint deviations, region highlights, and a clinical summary). Your single job is to predict what would happen to THIS specific clinical picture if NOTHING were done — no manual therapy, no exercise, no rest, no activity modification — just the patient's natural healing biology playing out under usual day-to-day load.
+            
+You must reason from tissue biology (tendons heal slowly with high recurrence; nerves are slow with chronicity risk; joints with OA persist; ligaments scar; muscles heal fast; discs partially resolve; bone heals well if loaded normally; fascia is variable), the pain mechanism (nociceptive vs neuropathic vs central — central pain rarely self-resolves), nerve-root involvement (radiculopathy raises chronicity), sling weak links (compensation patterns persist without intervention), and joint deviations (load asymmetry drives chronicity).
+
+Then identify which PATIENT FACTORS are still missing that would materially shift this natural timeline (age band, sex, diabetes, smoking, BMI, activity level, occupation/load demand, prior episodes of the same complaint, sleep quality, menopausal status, steroid / anticoagulant / NSAID use, fear-avoidance, mental health) — and emit follow_up_questions ONLY for the ones not already known from the provided context or QA history.
+
+Return ONLY valid JSON in EXACTLY this shape:
+{
+  "per_finding": [
+    {
+      "finding_id": "stable id like t_supraspinatus_r",
+      "label": "human label, e.g. Supraspinatus tendinopathy (R)",
+      "tissue_type": "tendon | nerve | joint | fascia | muscle | ligament | disc | bone | generic",
+      "tissue_id": "optional tissue id from context if available",
+      "healing_class": "resolves | partially_resolves | persists | worsens",
+      "expected_weeks_to_resolution": <number or null if persists/worsens>,
+      "residual_deficit_percent": <0-100 — how much functional/structural deficit remains at end of natural course>,
+      "phase_durations_weeks": { "inflammatory": n, "proliferative": n, "remodeling": n, "maturation": n },
+      "rationale": "1-2 sentence clinical reasoning grounded in tissue biology + this patient's modifiers"
+    }
+  ],
+  "overall_window_weeks": { "expected": n, "best": n, "worst": n },
+  "residual_deficit_summary": { "overall_percent": <0-100>, "description": "1 sentence summary of what does NOT recover on its own" },
+  "chronicity_risk_percent": <0-100 — probability this becomes chronic with no intervention>,
+  "recurrence_risk_percent": <0-100 — probability of recurrence within 12 months even if it does resolve>,
+  "flare_risk_percent": <0-100 — probability of symptomatic flares during the natural course>,
+  "rationale": "3-5 sentence written clinical rationale: which findings self-resolve, which persist or worsen, and why, given tissue biology + known patient factors",
+  "confidence_percent": <0-100 — your confidence in this timeline; rises as more patient factors are answered>,
+  "follow_up_questions": [
+    {
+      "id": "ntq1",
+      "question": "Concise clinical question",
+      "options": ["preset chips when meaningful"],
+      "clinical_relevance": "why this answer changes the natural timeline"
+    }
+  ],
+  "incorporated_factors": ["short labels of factors already accounted for, e.g. 'Age 70', 'Diabetic', 'Smoker', 'Manual labour'"]
+}
+
+Generate 3-6 follow-up questions when major modifiers are unknown; emit FEWER as questions get answered. The natural timeline must change visibly across patients — a 25 y/o non-diabetic non-smoker athlete with an acute hamstring strain should resolve in 4-8 weeks with low chronicity, while a 70 y/o diabetic smoker with chronic supraspinatus tendinopathy should persist or partially resolve over 6+ months with high chronicity and residual deficit.`,
+          },
+          {
+            role: 'user',
+            content: `CLINICAL CONTEXT (extracted by the clinical prediction engine):\n${ctxJson}${qaBlock}`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 3500,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+
+      const clamp01 = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) return dflt;
+        return Math.max(0, Math.min(100, n));
+      };
+      const num = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        return Number.isFinite(n) ? n : dflt;
+      };
+
+      const findings = Array.isArray(parsed.per_finding) ? parsed.per_finding : [];
+      const overall = parsed.overall_window_weeks ?? {};
+      const residual = parsed.residual_deficit_summary ?? {};
+
+      res.json({
+        per_finding: findings.map((f: Record<string, unknown>, i: number) => ({
+          finding_id: typeof f.finding_id === 'string' ? f.finding_id : `f_${i}`,
+          label: typeof f.label === 'string' ? f.label : `Finding ${i + 1}`,
+          tissue_type: f.tissue_type,
+          tissue_id: f.tissue_id,
+          healing_class: ['resolves', 'partially_resolves', 'persists', 'worsens'].includes(String(f.healing_class)) ? f.healing_class : 'partially_resolves',
+          expected_weeks_to_resolution: f.expected_weeks_to_resolution === null ? null : num(f.expected_weeks_to_resolution, 12),
+          residual_deficit_percent: clamp01(f.residual_deficit_percent, 20),
+          phase_durations_weeks: f.phase_durations_weeks ?? undefined,
+          rationale: typeof f.rationale === 'string' ? f.rationale : '',
+        })),
+        overall_window_weeks: {
+          expected: num(overall.expected, 12),
+          best: num(overall.best, 8),
+          worst: num(overall.worst, 24),
+        },
+        residual_deficit_summary: {
+          overall_percent: clamp01(residual.overall_percent, 20),
+          description: typeof residual.description === 'string' ? residual.description : '',
+        },
+        chronicity_risk_percent: clamp01(parsed.chronicity_risk_percent, 30),
+        recurrence_risk_percent: clamp01(parsed.recurrence_risk_percent, 25),
+        flare_risk_percent: clamp01(parsed.flare_risk_percent, 30),
+        rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
+        confidence_percent: clamp01(parsed.confidence_percent, 50),
+        follow_up_questions: (() => {
+          const raw = Array.isArray(parsed.follow_up_questions) ? parsed.follow_up_questions : [];
+          // Deterministic suppression: drop any follow-up whose
+          // question / factor_key is already present in the qa_history
+          // or in the request's patient_factors. Protects against the
+          // model repeating already-answered prompts.
+          const norm = (s: unknown) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+          const answeredKeys = new Set<string>();
+          for (const qa of qaHistory) {
+            answeredKeys.add(norm(qa.question));
+            const m = (qa.question || '').match(/\b([a-z][a-z0-9_]+)\s*[:?]/i);
+            if (m) answeredKeys.add(norm(m[1]));
+          }
+          const factors = (context && typeof context === 'object' && (context as any).patient_factors) || {};
+          for (const k of Object.keys(factors)) {
+            if (factors[k] !== undefined && factors[k] !== null && factors[k] !== '') answeredKeys.add(norm(k));
+          }
+          return raw.filter((q: any) => {
+            const fk = norm(q?.factor_key);
+            const qk = norm(q?.question);
+            if (fk && answeredKeys.has(fk)) return false;
+            if (qk && answeredKeys.has(qk)) return false;
+            return true;
+          });
+        })(),
+        incorporated_factors: Array.isArray(parsed.incorporated_factors) ? parsed.incorporated_factors : [],
+      });
+    } catch (error: unknown) {
+      console.error('Error generating natural timeline:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate natural timeline', details: message });
+    }
+  });
+
+  app.post('/api/clinical-text/case-specific-treatment-plan', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { context, natural_timeline, phases, archetype_id, condition_label, qa_history, patient_context } = req.body ?? {};
+      if (!context || typeof context !== 'object') {
+        return res.status(400).json({ error: 'Clinical context is required' });
+      }
+      if (!natural_timeline || typeof natural_timeline !== 'object') {
+        return res.status(400).json({ error: 'Natural-history timeline result is required' });
+      }
+      if (!Array.isArray(phases) || phases.length === 0) {
+        return res.status(400).json({ error: 'Archetype phases are required' });
+      }
+      const qaHistory = Array.isArray(qa_history) ? qa_history as Array<{ question: string; answer: string }> : [];
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const ctxJson = JSON.stringify(context, null, 2);
+      const ntJson = JSON.stringify(natural_timeline, null, 2);
+      const phasesJson = JSON.stringify(phases, null, 2);
+      let qaBlock = qaHistory.length > 0
+        ? '\n\n--- PATIENT FACTORS PROVIDED ---\n' +
+          qaHistory.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n') +
+          '\n--- END PATIENT FACTORS ---\n'
+        : '';
+      qaBlock += formatPatientContextBlock(patient_context, {
+        instruction:
+          'The PATIENT CONTEXT block above MUST personalise the prescription. Adjust dosage (e.g. lighter loads if deconditioned), pick contraindication-safe techniques (e.g. avoid aggressive thrust if anticoagulated), and prefer modalities the patient can actually adhere to (e.g. home-based if no clinic access). Mention the relevant context in each phase rationale when it changed your choice.',
+      });
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert physiotherapy CASE-SPECIFIC TREATMENT PLAN engine. The clinician has already produced (a) a structured clinical picture (compromised tissues with tissue type and ids, pain markers with mechanism / nerve-root involvement, sling weak links, joint deviations, region highlights, posture, patient factors) and (b) a natural-history verdict (per-finding healing class, weeks-to-resolution, residual deficit, chronicity / recurrence / flare risk).
+
+Your job is to take the rehab archetype's named phases (e.g. "Calm & Prepare", "Build Capacity", "Restore Power", "Return to Sport") and write a CASE-SPECIFIC prescription for EACH phase that:
+  1. References the patient's actual compromised tissues by name (use the labels from per_finding) — never generic "the tendon".
+  2. Targets the patient's actual sling weak links and joint deviations / postural drivers.
+  3. Reasons from the natural-history verdict — protect findings classed as "persists" or "worsens"; load findings classed as "resolves" earlier; account for high chronicity / flare risk by prescribing more pain-monitoring and graded loading.
+  4. Reads like a clinician's case note, NOT a textbook template. The same archetype phase for two different patients must look different.
+
+For EACH phase you must emit:
+  - goal: ONE concrete sentence referencing the actual tissues/drivers (e.g. "Settle supraspinatus inflammation, restore pain-free GH AROM 0-90°, off-load posterior cuff").
+  - rationale: 1-2 sentences linking this phase's plan to the natural-history verdict + clinical picture (cite tissue biology + the patient's specific risks).
+  - techniques: 2-5 hands-on / manual / modality items, each with name + target + dosage + rationale + the finding_ids/tissue_ids/sling_ids it addresses.
+  - exercises: 2-5 prescriptions, each with concrete name + target + sets×reps×load dosage + progression cue + rationale + finding_ids/tissue_ids/sling_ids.
+  - criteria: 2-4 objective entry/exit milestones in the patient's own clinical units (these gate movement INTO the next phase — they must be measurable on this patient: pain on a specific test, AROM in degrees, single-leg balance time, hop distance symmetry, etc.).
+  - finding_notes: per-finding healing notes — short clinician-facing reminders for THIS phase tied to a finding_id from the natural timeline.
+
+NAMING CONSTRAINT — keep names within the established physiotherapy concept vocabulary used by this app's exercise and manual-therapy libraries. Use canonical clinical terminology — e.g. "Isometric shoulder ER @ 0° abd", "Theraband ER 3×15", "HSR calf raise on step", "Posterior glenohumeral mobilisation grade III", "Sciatic nerve slider in slump", "Single-leg Romanian deadlift", "Side-plank with hip abd", "McKenzie repeated extension in lying". DO NOT invent novel branded protocols, marketing names, or non-clinical phrasing. If a finding has no specific evidence-based item, use the closest established graded-loading or motor-control concept rather than fabricating one. Dosage must be in standard clinical units (sets × reps × load/hold, frequency per day/week, hands-on grade × duration).
+
+Return ONLY valid JSON in EXACTLY this shape:
+{
+  "case_summary": "2-3 sentence narrative for the case as a whole",
+  "confidence_percent": <0-100>,
+  "phases": [
+    {
+      "phase_id": "MUST match the id passed in the input phases array",
+      "phase_name": "MUST match the name passed in the input phases array",
+      "goal": "...",
+      "rationale": "...",
+      "techniques": [
+        { "name": "...", "target": "...", "dosage": "...", "progression": "...", "rationale": "...", "finding_ids": ["..."], "tissue_ids": ["..."], "sling_ids": ["..."] }
+      ],
+      "exercises": [
+        { "name": "...", "target": "...", "dosage": "...", "progression": "...", "rationale": "...", "finding_ids": ["..."], "tissue_ids": ["..."], "sling_ids": ["..."] }
+      ],
+      "criteria": ["...", "..."],
+      "finding_notes": [{ "finding_id": "...", "note": "..." }]
+    }
+  ]
+}
+
+Emit exactly one phase entry per phase in the input phases array, in the same order, with phase_id and phase_name matching exactly. Do NOT invent extra phases. Do NOT skip any.`,
+          },
+          {
+            role: 'user',
+            content: `ARCHETYPE: ${archetype_id ?? 'unspecified'}
+CONDITION: ${condition_label ?? 'unspecified'}
+
+PHASES (emit one plan per id, in order):
+${phasesJson}
+
+CLINICAL CONTEXT:
+${ctxJson}
+
+NATURAL-HISTORY VERDICT (drives healing rationale, residual deficits, risk):
+${ntJson}${qaBlock}`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 4500,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      const clamp01 = (v: unknown, dflt: number) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) return dflt;
+        return Math.max(0, Math.min(100, n));
+      };
+      const str = (v: unknown, dflt = ''): string => typeof v === 'string' ? v : (v === null || v === undefined ? dflt : String(v));
+      const arrStr = (v: unknown): string[] => Array.isArray(v) ? v.map(x => str(x)).filter(Boolean) : [];
+      const normItem = (it: Record<string, unknown>) => ({
+        name: str(it.name),
+        target: str(it.target),
+        dosage: str(it.dosage),
+        progression: it.progression ? str(it.progression) : undefined,
+        rationale: str(it.rationale),
+        finding_ids: arrStr(it.finding_ids),
+        tissue_ids: arrStr(it.tissue_ids),
+        sling_ids: arrStr(it.sling_ids),
+      });
+
+      // Re-key the AI's phases against the input phase ids/names so the
+      // dashboard can match by stage id with zero ambiguity. Phases the
+      // AI failed to emit fall back to an empty plan rather than vanishing.
+      const aiPhases = Array.isArray(parsed.phases) ? parsed.phases as Array<Record<string, unknown>> : [];
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const ap of aiPhases) {
+        const pid = str(ap.phase_id);
+        if (pid) byId.set(pid, ap);
+      }
+      const orderedPhases = (phases as Array<{ id: string; name: string }>).map(p => {
+        const ap = byId.get(p.id) ?? aiPhases.find(x => str(x.phase_name).toLowerCase() === p.name.toLowerCase()) ?? {};
+        const techs = Array.isArray(ap.techniques) ? ap.techniques as Array<Record<string, unknown>> : [];
+        const exs = Array.isArray(ap.exercises) ? ap.exercises as Array<Record<string, unknown>> : [];
+        const notes = Array.isArray(ap.finding_notes) ? ap.finding_notes as Array<Record<string, unknown>> : [];
+        return {
+          phase_id: p.id,
+          phase_name: p.name,
+          goal: str(ap.goal),
+          rationale: str(ap.rationale),
+          techniques: techs.map(normItem).filter(t => t.name),
+          exercises: exs.map(normItem).filter(t => t.name),
+          criteria: arrStr(ap.criteria),
+          finding_notes: notes
+            .map(n => ({ finding_id: str(n.finding_id), note: str(n.note) }))
+            .filter(n => n.finding_id && n.note),
+        };
+      });
+
+      res.json({
+        case_summary: str(parsed.case_summary),
+        confidence_percent: clamp01(parsed.confidence_percent, 60),
+        phases: orderedPhases,
+      });
+    } catch (error: unknown) {
+      console.error('Error generating case-specific treatment plan:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate case-specific treatment plan', details: message });
+    }
+  });
+
+  /**
+   * POST /api/patient-context/prompts
+   *
+   * Given a clinician's prediction text + the AI-extracted clinical
+   * summary / findings, generate 3-6 condition-specific patient-context
+   * prompts the clinician should answer to make the prediction, natural
+   * timeline, treatment plan and recovery sim genuinely personalised
+   * (e.g. diabetes for frozen shoulder, anticoagulants for spinal
+   * mobilisation, smoker for tendinopathy).
+   */
+  app.post('/api/patient-context/prompts', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { description, clinical_summary, pain_markers, compromised_tissues, region_highlights } = req.body ?? {};
+      if ((!description || typeof description !== 'string' || description.trim().length < 3) &&
+          (!clinical_summary || typeof clinical_summary !== 'string')) {
+        return res.status(400).json({ error: 'Clinical description or summary is required' });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const findingsBlock = JSON.stringify({
+        pain_markers: Array.isArray(pain_markers) ? pain_markers.slice(0, 12) : [],
+        compromised_tissues: Array.isArray(compromised_tissues) ? compromised_tissues.slice(0, 12) : [],
+        region_highlights: Array.isArray(region_highlights) ? region_highlights.slice(0, 12) : [],
+      }, null, 2);
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a senior physiotherapist generating CONDITION-SPECIFIC patient-context questions.
+
+The clinician has just submitted a clinical picture. Your job is to ask 3-6 short, high-yield questions whose answers WOULD MEANINGFULLY CHANGE the prediction, natural-history timeline, treatment plan, or recovery simulation FOR THIS condition.
+
+Rules:
+1. Each question MUST be condition-specific. For frozen shoulder, ask about diabetes / thyroid / recent immobilisation. For Achilles tendinopathy, ask about fluoroquinolones / running mileage / footwear. For low back pain with leg symptoms, ask about night pain / saddle anaesthesia / steroid use. For post-op cases, ask about exact date and surgical protocol.
+2. Each question MUST have a "rationale" the clinician can read (one sentence — why this changes the case).
+3. Use one of these categories per prompt: "healing_time", "red_flag", "exercise_dosing", "contraindication", "compensation", "lifestyle". Choose the best fit.
+4. If the answer space is small / categorical (yes/no, frequency bands, severity bands), include "options" as a short array of 2-5 strings — the UI will render them as quick-select chips. Otherwise OMIT options so the clinician types freely.
+5. Ask about ACTIONABLE patient factors (comorbidities, medications, prior episodes, occupational load, sport demands, sleep, smoking, mental-health load, prior imaging/surgery). Do NOT re-ask anything obviously already in the description.
+6. Return AT MOST 6 prompts. Quality over quantity.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "prompts": [
+    {
+      "id": "stable-slug-string",
+      "prompt": "Question text the clinician sees",
+      "rationale": "One sentence on why this question changes the case",
+      "category": "healing_time" | "red_flag" | "exercise_dosing" | "contraindication" | "compensation" | "lifestyle",
+      "options": ["..."]   // OMIT entirely for free-text answers
+    }
+  ]
+}`,
+          },
+          {
+            role: 'user',
+            content: `Clinician's prediction text:
+"""
+${(description || '').toString().slice(0, 4000)}
+"""
+
+AI-extracted clinical summary:
+"""
+${(clinical_summary || '').toString().slice(0, 2000)}
+"""
+
+Structured findings:
+${findingsBlock}
+
+Generate the 3-6 highest-yield condition-specific patient-context prompts now.`,
+          },
+        ],
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+      });
+
+      const raw = response.choices?.[0]?.message?.content || '{}';
+      let parsed: any = {};
+      try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+      const allowedCategories = new Set(['healing_time', 'red_flag', 'exercise_dosing', 'contraindication', 'compensation', 'lifestyle', 'other']);
+      // Slug is deterministic — derived from the prompt text (or model-supplied id) — so
+      // re-generations produce the same id for the same question, maximising answer
+      // carryover. We never fall back to a random suffix.
+      const slug = (s: string, idx: number) =>
+        s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48)
+        || `prompt_${idx + 1}`;
+      const seen = new Set<string>();
+      const prompts = Array.isArray(parsed.prompts) ? parsed.prompts.slice(0, 6).map((p: any, idx: number) => {
+        const promptText = typeof p?.prompt === 'string' ? p.prompt.trim() : '';
+        if (!promptText) return null;
+        let id = typeof p?.id === 'string' && p.id.trim() ? slug(p.id, idx) : slug(promptText, idx);
+        if (seen.has(id)) id = `${id}_${idx}`;
+        seen.add(id);
+        const category = typeof p?.category === 'string' && allowedCategories.has(p.category) ? p.category : 'other';
+        const rationale = typeof p?.rationale === 'string' ? p.rationale.trim() : '';
+        const options = Array.isArray(p?.options)
+          ? p.options.map((o: any) => typeof o === 'string' ? o.trim() : '').filter(Boolean).slice(0, 5)
+          : undefined;
+        return {
+          id,
+          prompt: promptText,
+          rationale,
+          category,
+          ...(options && options.length > 0 ? { options } : {}),
+        };
+      }).filter(Boolean) : [];
+
+      res.json({
+        prompts,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (error: unknown) {
+      console.error('Error generating patient-context prompts:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate patient-context prompts', details: message });
     }
   });
 
@@ -12829,6 +16342,202 @@ Be specific to THIS skeleton's findings. Every root cause must reference a speci
     }
   });
   
+  // ===== Hypothesis Test Bench: fingerprint + distinguish =====
+  const hypothesisFingerprintCache = new Map<string, any>();
+
+  app.post('/api/clinical-reasoning/hypothesis-fingerprint', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { hypothesis, context } = req.body || {};
+      if (!hypothesis || typeof hypothesis.condition !== 'string') {
+        return res.status(400).json({ error: 'hypothesis.condition is required' });
+      }
+
+      const subjective: string = (context?.subjectiveHistory || '').slice(0, 1200);
+      const painMarkers = Array.isArray(context?.painMarkers) ? context.painMarkers.slice(0, 20) : [];
+      const hashContent = (s: string): string => {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        return (h >>> 0).toString(36);
+      };
+      const markerSig = painMarkers.map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone || ''}|${p.type || ''}|${p.severity ?? ''}`).join(';');
+      const postureSig = context?.posture ? Object.entries(context.posture).slice(0, 20).map(([g, params]: [string, any]) => `${g}:${Object.entries(params || {}).map(([k, v]) => `${k}=${typeof v === 'number' ? v.toFixed(1) : v}`).join(',')}`).join('|') : '';
+      const supportingSig = Array.isArray(hypothesis.supportingEvidence) ? hypothesis.supportingEvidence.join('|') : '';
+      const rulingOutSig = Array.isArray(hypothesis.rulingOutFactors) ? hypothesis.rulingOutFactors.join('|') : '';
+      const ctxHash = hashContent(`${subjective}::${markerSig}::${postureSig}::${supportingSig}::${rulingOutSig}`);
+      const cacheKey = `${hypothesis.condition.toLowerCase().trim()}::${ctxHash}`;
+      if (hypothesisFingerprintCache.size > 200) {
+        const firstKey = hypothesisFingerprintCache.keys().next().value;
+        if (firstKey) hypothesisFingerprintCache.delete(firstKey);
+      }
+      const cached = hypothesisFingerprintCache.get(cacheKey);
+      if (cached) {
+        return res.json({ ...cached, hypothesisId: hypothesis.id || cached.hypothesisId });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const painSummary = painMarkers.length > 0
+        ? painMarkers.map((p: any) => `${p.anatomicalLabel || p.label || p.nearestBone || 'unknown'} (${p.type || 'pain'}, ${p.severity ?? '?'} /10)`).join('; ')
+        : 'none reported';
+
+      const sysPrompt = `You are a senior physiotherapy diagnostician. For the given clinical hypothesis, produce a "skeleton fingerprint" describing the EXPECTED clinical presentation if the hypothesis were true, plus 4–6 confirmatory/refutatory clinical tests with evidence-based likelihood ratios.
+
+Return ONLY a JSON object with this exact shape:
+{
+  "expectedHighlights": {
+    "regions": [<AnatomicalRegion strings>],
+    "bones": [<bone-name strings, optional>],
+    "muscleGroups": [<muscle group strings>]
+  },
+  "expectedPainMarkers": [
+    { "anatomicalLabel": "<exact label>", "type": "point|area|referred", "severity": <1-10>, "label": "<short>" }
+  ],
+  "expectedPosture": {
+    "<group>": { "<param>": <degrees> }
+  },
+  "confirmatoryTests": [
+    {
+      "id": "t1",
+      "name": "<test name>",
+      "instruction": "<how to perform, 1-2 sentences>",
+      "sensitivity": <0-1>,
+      "specificity": <0-1>,
+      "lrPositive": <number, typical published LR+>,
+      "lrNegative": <number, 0-1, typical published LR->,
+      "evidenceCitation": "<short citation if known, e.g. 'Hegedus et al. 2012'>",
+      "targetRegion": "<optional region the test focuses on>"
+    }
+  ],
+  "whatWouldConfirm": ["<short bullet>", ...],
+  "whatWouldRuleOut": ["<short bullet>", ...],
+  "fingerprintSummary": "<1-2 sentence clinical fingerprint of this hypothesis>"
+}
+
+CRITICAL CONSTRAINTS:
+- AnatomicalRegion strings must be from: full_body, lumbar_spine, thoracic_spine, cervical_spine, left_shoulder, right_shoulder, left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle, pelvis, left_elbow, right_elbow, left_scapula, right_scapula, left_wrist, right_wrist, left_hand, right_hand, left_foot, right_foot, head.
+- expectedPosture groups must be from: spine, neck, pelvis, leftHip, rightHip, leftKnee, rightKnee, leftAnkle, rightAnkle, leftShoulder, rightShoulder, leftScapula, rightScapula, leftElbow, rightElbow, leftWrist, rightWrist. Params follow standard kinesiology (flexion, extension, lateralFlexion, rotation, tilt, kyphosis, lordosis, scoliosis, forwardHead, protraction, elevation, internalRotation, externalRotation, dorsiflexion, plantarflexion, inversion, eversion, varus, valgus).
+- expectedPainMarkers anatomicalLabel must use clinical labels like: C5-C6, L4-L5, Left Greater Trochanter, Right Subacromial Space, Left Patella, etc.
+- muscleGroups should be from: glut_max, glut_med, piriformis, hamstrings, quadriceps, gastroc, soleus, tib_post, peroneals, hip_flexors, adductors, tfl, erector_spinae, multifidus, rectus_abdominis, obliques, supraspinatus, infraspinatus, subscapularis, upper_trap, lower_trap, rhomboids, pec_major, pec_minor, deltoid, biceps, triceps, scm, scalenes, suboccipitals.
+- Provide REALISTIC published LR+ and LR- values when known (e.g., Spurling LR+ ~3.5, LR- ~0.6 for radiculopathy). Conservative defaults: LR+ 2.0, LR- 0.5 if unknown.
+- Generate 4–6 tests prioritising those with the highest discriminating value.
+- Use degrees in expectedPosture (positive/negative as per standard convention; e.g. anterior pelvic tilt positive).`;
+
+      const userPrompt = `HYPOTHESIS: ${hypothesis.condition} (current confidence ${hypothesis.confidence ?? '?'}%)
+
+Supporting evidence already gathered: ${(hypothesis.supportingEvidence || []).join('; ') || 'none'}
+Ruling-out factors: ${(hypothesis.rulingOutFactors || []).join('; ') || 'none'}
+
+Patient context:
+- Subjective: ${subjective || 'not provided'}
+- Existing pain markers on skeleton: ${painSummary}
+
+Produce the JSON fingerprint now.`;
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 2000,
+        temperature: 0.3,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      const tests = Array.isArray(parsed.confirmatoryTests) ? parsed.confirmatoryTests : [];
+      const safeTests = tests.map((t: any, i: number) => ({
+        id: typeof t.id === 'string' && t.id ? t.id : `t${i + 1}`,
+        name: String(t.name || `Test ${i + 1}`),
+        instruction: String(t.instruction || ''),
+        sensitivity: Math.max(0, Math.min(1, Number(t.sensitivity) || 0.5)),
+        specificity: Math.max(0, Math.min(1, Number(t.specificity) || 0.5)),
+        lrPositive: Math.max(0.1, Math.min(50, Number(t.lrPositive) || 2.0)),
+        lrNegative: Math.max(0.01, Math.min(1, Number(t.lrNegative) || 0.5)),
+        evidenceCitation: t.evidenceCitation ? String(t.evidenceCitation) : undefined,
+        targetRegion: t.targetRegion ? String(t.targetRegion) : undefined,
+      }));
+
+      const result = {
+        hypothesisId: hypothesis.id || `hyp-${Date.now()}`,
+        condition: hypothesis.condition,
+        expectedHighlights: {
+          regions: Array.isArray(parsed.expectedHighlights?.regions) ? parsed.expectedHighlights.regions : [],
+          bones: Array.isArray(parsed.expectedHighlights?.bones) ? parsed.expectedHighlights.bones : [],
+          muscleGroups: Array.isArray(parsed.expectedHighlights?.muscleGroups) ? parsed.expectedHighlights.muscleGroups : [],
+        },
+        expectedPainMarkers: Array.isArray(parsed.expectedPainMarkers) ? parsed.expectedPainMarkers : [],
+        expectedPosture: parsed.expectedPosture && typeof parsed.expectedPosture === 'object' ? parsed.expectedPosture : {},
+        confirmatoryTests: safeTests,
+        whatWouldConfirm: Array.isArray(parsed.whatWouldConfirm) ? parsed.whatWouldConfirm : [],
+        whatWouldRuleOut: Array.isArray(parsed.whatWouldRuleOut) ? parsed.whatWouldRuleOut : [],
+        fingerprintSummary: String(parsed.fingerprintSummary || ''),
+      };
+
+      hypothesisFingerprintCache.set(cacheKey, result);
+      if (hypothesisFingerprintCache.size > 200) {
+        const firstKey = hypothesisFingerprintCache.keys().next().value;
+        if (firstKey) hypothesisFingerprintCache.delete(firstKey);
+      }
+
+      res.json(result);
+    } catch (error: unknown) {
+      console.error('Error generating hypothesis fingerprint:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate hypothesis fingerprint', details: message });
+    }
+  });
+
+  app.post('/api/clinical-reasoning/hypothesis-distinguish', ensureAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const { a, b } = req.body || {};
+      if (!a?.condition || !b?.condition) {
+        return res.status(400).json({ error: 'Both a and b hypotheses with conditions are required' });
+      }
+
+      const replitApiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const replitOpenai = new OpenAI({
+        apiKey: replitApiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const sys = `You are a physiotherapy diagnostician. In ONE concise sentence (max 35 words), state the SINGLE most useful clinical feature or test that distinguishes hypothesis A from hypothesis B. Return JSON: { "summary": "<one sentence>" }.`;
+      const user = `A: ${a.condition}
+A fingerprint: ${a.fingerprintSummary || ''}
+A regions: ${(a.expectedHighlights?.regions || []).join(', ')}
+A muscles: ${(a.expectedHighlights?.muscleGroups || []).join(', ')}
+A tests: ${(a.confirmatoryTests || []).join(', ')}
+
+B: ${b.condition}
+B fingerprint: ${b.fingerprintSummary || ''}
+B regions: ${(b.expectedHighlights?.regions || []).join(', ')}
+B muscles: ${(b.expectedHighlights?.muscleGroups || []).join(', ')}
+B tests: ${(b.confirmatoryTests || []).join(', ')}`;
+
+      const response = await replitOpenai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: user },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 200,
+        temperature: 0.2,
+      });
+
+      const parsed = JSON.parse(response.choices[0].message.content || '{}');
+      res.json({ summary: String(parsed.summary || '') });
+    } catch (error: unknown) {
+      console.error('Error generating distinguishing summary:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ error: 'Failed to generate distinguishing summary', details: message });
+    }
+  });
+
   // Document status endpoint for polling
   app.get('/api/documents/status/:documentId', ensureAuthenticated, async (req, res) => {
     try {
@@ -21382,6 +25091,725 @@ If there are existing notes, seamlessly integrate the new content while maintain
       phoneCameraWss.handleUpgrade(request, socket, head, (ws) => {
         phoneCameraWss.emit('connection', ws, request);
       });
+    }
+  });
+
+  // ===== Treatment Plan Orchestrator (Task #185) =====
+  const planCartItemSchema = z.object({
+    id: z.string().min(1),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
+    name: z.string().min(1),
+    targetStructure: z.string().optional(),
+    targetFinding: z.string().optional(),
+    dosage: z.string().optional(),
+    rationale: z.string().optional(),
+    evidenceGrade: z.string().optional(),
+    contraindications: z.string().optional(),
+    parameters: z.string().optional(),
+    patientPosition: z.string().optional(),
+    category: z.string().optional(),
+  });
+
+  const orchestrateBodySchema = z.object({
+    items: z.array(planCartItemSchema).min(1).max(40),
+    clinicalContext: z.object({
+      topHypothesis: z.string().optional(),
+      irritability: z.string().optional(),
+      stage: z.string().optional(),
+      recoveryPhase: z.string().optional(),
+      patientFactors: z.union([
+        z.array(z.string()),
+        z.record(z.string(), z.unknown()),
+      ]).optional(),
+      constraints: z.array(z.string()).optional(),
+      primaryRegion: z.string().optional(),
+    }).default({}),
+  });
+
+  const sessionStepSchema = z.object({
+    order: z.number().int().min(1),
+    itemId: z.string(),
+    itemName: z.string(),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
+    durationMinutes: z.number().min(1).max(90),
+    rationale: z.string().min(1),
+  });
+  const frequencySchema = z.object({
+    itemId: z.string(),
+    itemName: z.string(),
+    modality: z.enum(['exercise', 'exercise_custom', 'manual_therapy', 'manual_therapy_custom', 'electrophysical', 'adjunct', 'lifestyle']),
+    sessionsPerWeek: z.number().min(1).max(14),
+    setting: z.string().transform(s => {
+      const v = String(s).toLowerCase().trim();
+      if (v.includes('home')) return 'home' as const;
+      if (v.includes('superv') || v.includes('clinic')) return 'supervised' as const;
+      if (v === 'either' || v.includes('both') || v.includes('mixed') || v.includes('combined')) return 'either' as const;
+      if (v === 'supervised' || v === 'home') return v as 'supervised' | 'home';
+      return 'either' as const;
+    }).pipe(z.enum(['supervised', 'home', 'either'])),
+    notes: z.string().optional(),
+  });
+  const scheduleCellSchema = z.object({
+    weekIndex: z.number().int().min(0).max(11),
+    dayOfWeek: z.number().int().min(0).max(6),
+    itemIds: z.array(z.string()),
+    label: z.string().optional(),
+  });
+  const phaseSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    order: z.number().int().min(1),
+    durationWeeks: z.union([z.string(), z.number()]).transform(v => typeof v === 'number' ? `${v} week${v === 1 ? '' : 's'}` : v),
+    goals: z.array(z.string()),
+    itemIds: z.array(z.string()),
+    frequency: z.string(),
+    reviewPoint: z.string(),
+  });
+  const milestoneSchema = z.object({
+    weekIndex: z.number().int().min(0).max(52),
+    title: z.string(),
+    description: z.string(),
+    phaseId: z.string().optional(),
+  });
+  const conflictSchema = z.object({
+    severity: z.enum(['info', 'warning', 'critical']),
+    description: z.string(),
+    involvedItemIds: z.array(z.string()),
+  });
+  const orchestratedPlanSchema = z.object({
+    planSummary: z.string(),
+    totalDurationWeeks: z.number().int().min(1).max(52),
+    sessionOrder: z.array(sessionStepSchema),
+    frequencies: z.array(frequencySchema),
+    weeklySchedule: z.array(scheduleCellSchema),
+    phases: z.array(phaseSchema),
+    timeline: z.array(milestoneSchema),
+    conflicts: z.array(conflictSchema),
+  });
+
+  app.post('/api/treatment-plan/orchestrate', async (req: Request, res: Response) => {
+    try {
+      const parse = orchestrateBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, clinicalContext } = parse.data;
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        modality: it.modality,
+        name: it.name,
+        targetStructure: it.targetStructure || '',
+        targetFinding: it.targetFinding || '',
+        dosage: it.dosage || it.parameters || '',
+        rationale: it.rationale || '',
+        evidenceGrade: it.evidenceGrade || '',
+        contraindications: it.contraindications || '',
+      }));
+
+      const ctxLines: string[] = [];
+      if (clinicalContext.topHypothesis) ctxLines.push(`Top hypothesis: ${clinicalContext.topHypothesis}`);
+      if (clinicalContext.primaryRegion) ctxLines.push(`Primary region: ${clinicalContext.primaryRegion}`);
+      if (clinicalContext.stage) ctxLines.push(`Stage: ${clinicalContext.stage}`);
+      if (clinicalContext.irritability) ctxLines.push(`Irritability: ${clinicalContext.irritability}`);
+      if (clinicalContext.recoveryPhase) ctxLines.push(`Recovery phase: ${clinicalContext.recoveryPhase}`);
+      if (clinicalContext.patientFactors) {
+        const pf = clinicalContext.patientFactors;
+        if (Array.isArray(pf)) {
+          if (pf.length) ctxLines.push(`Patient factors: ${pf.join(', ')}`);
+        } else if (typeof pf === 'object') {
+          const parts = Object.entries(pf)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${typeof v === 'number' ? Number(v.toFixed(2)) : String(v)}`);
+          if (parts.length) ctxLines.push(`Patient factors: ${parts.join(', ')}`);
+        }
+      }
+      if (clinicalContext.constraints?.length) ctxLines.push(`Constraints: ${clinicalContext.constraints.join(', ')}`);
+
+      const systemPrompt = `You are a senior physiotherapist organising a multi-modality treatment plan into a coherent program. You will receive a list of clinician-selected items (exercises, manual therapy, electrophysical modalities, adjunct therapies) and must return:
+1. The intra-session order (what to do first, second, etc., in a single visit) with rationale and duration in minutes.
+2. Per-item weekly frequency (sessions/week) and setting (supervised in clinic, home, or either).
+3. A multi-week schedule grid (weeklySchedule) mapping items to specific weeks (0-indexed) and days of week (0=Monday..6=Sunday). CRITICAL: emit cells for EVERY week index from 0 to totalDurationWeeks-1 — do NOT collapse the program into a single representative week. Repeat the weekly cadence implied by the frequencies array (e.g. Mon/Wed/Fri) explicitly in every week. When a phases boundary changes the active item set, switch the cells in the corresponding weeks accordingly. Only place items on the days they actually occur within that week.
+4. A phased program (phases) covering the full duration. Use 2–4 phases (e.g. acute/protect → restore → load → return). Each phase lists which item IDs are active and a review point.
+5. A recovery timeline (timeline) of 3–8 dated milestones (weekIndex from 0).
+6. Any conflicts or cautions (e.g., contradicting modalities, contraindications, dosage clashes).
+
+Clinical principles to apply:
+- Pain/inflammation modulation (electrophysical analgesia, gentle manual) goes BEFORE active loading.
+- Manual therapy that opens range goes BEFORE exercises that use that range.
+- High-intensity strength work goes after activation/warm-up; cool-down/recovery modalities last.
+- Respect irritability: high irritability = lower frequency, gentler dosage, more passive modalities early.
+- Respect contraindications and never stack two contradicting items in the same session — flag them as conflicts.
+- Frequencies should be realistic (e.g., supervised manual rx 1–3×/wk; home exercises 3–7×/wk).
+- Phases must progress (early phase emphasises symptom modulation; late phase emphasises loading/return-to-activity).
+
+Return STRICT JSON only, matching this shape exactly. itemId values MUST come from the provided item IDs.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}\n\nSelected items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys: planSummary (string, 2–3 sentences), totalDurationWeeks (integer 1–52), sessionOrder (array of {order,itemId,itemName,modality,durationMinutes,rationale}), frequencies (array of {itemId,itemName,modality,sessionsPerWeek,setting,notes?}), weeklySchedule (array of {weekIndex,dayOfWeek,itemIds[],label?}), phases (array of {id,name,order,durationWeeks,goals[],itemIds[],frequency,reviewPoint}), timeline (array of {weekIndex,title,description,phaseId?}), conflicts (array of {severity,description,involvedItemIds[]}).`;
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+        max_tokens: 3500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch (e) {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const planParse = orchestratedPlanSchema.safeParse(parsedJson);
+      if (!planParse.success) {
+        return res.status(502).json({ error: 'AI plan failed validation', details: planParse.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const filteredPhases = planParse.data.phases.map(p => ({ ...p, itemIds: p.itemIds.filter(id => validIds.has(id)) }));
+      const filteredSchedule = planParse.data.weeklySchedule
+        .map(c => ({ ...c, itemIds: c.itemIds.filter(id => validIds.has(id)) }))
+        .filter(c => c.itemIds.length > 0);
+
+      // ---- Server-side weeklySchedule safety net (forward replication) ----
+      // When the AI under-emits and only populates a few weeks (often only
+      // week 0), replicate the most recent populated week's day pattern
+      // forward into each missing week so every week index in
+      // [0, totalDurationWeeks) has cells. When the missing week falls
+      // inside a different phase from the source week, swap the itemIds
+      // for items belonging to the active phase.
+      // Cell shape stays {weekIndex, dayOfWeek, itemIds, label}; the
+      // derivation source is reported in a sibling weeklyScheduleMeta
+      // field on the response (not on the cell).
+      const totalWeeks = Math.max(1, planParse.data.totalDurationWeeks);
+      const parsePhaseWeeks = (s: string): number => {
+        const m = String(s || '').match(/(\d+)/);
+        return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+      };
+      const phaseRanges: Array<{ id: string; start: number; end: number; itemIds: string[] }> = [];
+      {
+        let cursor = 0;
+        for (const p of filteredPhases) {
+          const len = parsePhaseWeeks(p.durationWeeks);
+          phaseRanges.push({ id: p.id, start: cursor, end: Math.min(totalWeeks - 1, cursor + len - 1), itemIds: p.itemIds });
+          cursor += len;
+        }
+      }
+      const phaseAtWeek = (w: number) => phaseRanges.find(r => w >= r.start && w <= r.end);
+      const cellsByWeek = new Map<number, typeof filteredSchedule>();
+      for (const c of filteredSchedule) {
+        if (!cellsByWeek.has(c.weekIndex)) cellsByWeek.set(c.weekIndex, []);
+        cellsByWeek.get(c.weekIndex)!.push(c);
+      }
+      const expandedSchedule: typeof filteredSchedule = [];
+      const weeklyScheduleMeta: Record<string, { derivedFromWeek: number }> = {};
+      let lastSourceWeek = -1;
+      for (let w = 0; w < totalWeeks; w++) {
+        const native = cellsByWeek.get(w);
+        if (native && native.length > 0) {
+          expandedSchedule.push(...native);
+          lastSourceWeek = w;
+          continue;
+        }
+        // Intentional split: server only forward-replicates from a known
+        // populated source week. Leading gaps (where the AI emits nothing
+        // for weeks 0..k but cells exist for k+) and entirely-empty
+        // schedules are handled by the client's WeeklyScheduleGrid via
+        // backward seeding and frequency-based synthesis. Doing it
+        // client-side keeps the orchestrator response close to the AI's
+        // intent and lets the UI choose the right fallback chip.
+        if (lastSourceWeek < 0) continue;
+        const sourceCells = cellsByWeek.get(lastSourceWeek)!;
+        const tphase = phaseAtWeek(w);
+        const sphase = phaseAtWeek(lastSourceWeek);
+        const swap = tphase && sphase && tphase.id !== sphase.id && tphase.itemIds.length > 0;
+        let added = false;
+        for (const sc of sourceCells) {
+          const ids = swap
+            ? (() => {
+                const kept = sc.itemIds.filter(id => tphase!.itemIds.includes(id));
+                const need = Math.max(0, sc.itemIds.length - kept.length);
+                const filler = tphase!.itemIds.filter(id => !sc.itemIds.includes(id)).slice(0, need);
+                return [...kept, ...filler];
+              })()
+            : sc.itemIds;
+          if (ids.length === 0) continue;
+          expandedSchedule.push({ weekIndex: w, dayOfWeek: sc.dayOfWeek, itemIds: ids, label: sc.label });
+          added = true;
+        }
+        if (added) weeklyScheduleMeta[String(w)] = { derivedFromWeek: lastSourceWeek };
+      }
+
+      const filtered = {
+        ...planParse.data,
+        sessionOrder: planParse.data.sessionOrder.filter(s => validIds.has(s.itemId)),
+        frequencies: planParse.data.frequencies.filter(f => validIds.has(f.itemId)),
+        weeklySchedule: expandedSchedule,
+        phases: filteredPhases,
+        conflicts: planParse.data.conflicts.map(c => ({ ...c, involvedItemIds: c.involvedItemIds.filter(id => validIds.has(id)) })),
+      };
+
+      res.json({ ...filtered, weeklyScheduleMeta, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[treatment-plan/orchestrate] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to orchestrate plan' });
+    }
+  });
+
+  // ===== Treatment Rationale (Task #274) =====
+  // Generates a "Why this plan?" narrative for the Master Plan card. Takes
+  // the same plan-cart items + a richer clinicalContext bundle (pain
+  // markers, sling drivers, fascial chain tensions, kinetic-chain
+  // integrity, compromised tissues, scars/adhesions, force hotspots,
+  // postural deviations, natural progression) and optionally the AI-
+  // orchestrated session order, then asks GPT-4o to:
+  //   1. Tie the findings together into a 2-4 sentence clinical picture.
+  //   2. Justify each treatment item against the findings it addresses.
+  //   3. Explain why the items are sequenced in the order they are.
+  // Returned itemIds are filtered against the submitted set so the model
+  // can never invent items.
+  const rationaleClinicalContextSchema = z.object({
+    topHypothesis: z.string().optional(),
+    irritability: z.string().optional(),
+    stage: z.string().optional(),
+    recoveryPhase: z.string().optional(),
+    primaryRegion: z.string().optional(),
+    patientFactors: z.union([
+      z.array(z.string()),
+      z.record(z.string(), z.unknown()),
+    ]).optional(),
+    constraints: z.array(z.string()).max(20).optional(),
+    painMarkers: z.object({
+      count: z.number().int().min(0).max(60).optional(),
+      structures: z.array(z.string().max(120)).max(20).optional(),
+      mechanisms: z.array(z.string().max(80)).max(10).optional(),
+      severitySummary: z.string().max(200).optional(),
+    }).optional(),
+    slingDrivers: z.array(z.object({
+      sling: z.string().max(80),
+      role: z.string().max(40).optional(),
+      drivingFinding: z.string().max(200).optional(),
+    })).max(8).optional(),
+    fascialTensions: z.object({
+      activeChains: z.array(z.string().max(80)).max(10).optional(),
+      drivingChains: z.array(z.string().max(80)).max(10).optional(),
+      propagationCount: z.number().int().min(0).max(60).optional(),
+    }).optional(),
+    chainIntegrity: z.array(z.object({
+      chain: z.string().max(80),
+      score: z.number().min(0).max(100),
+      issues: z.array(z.string().max(120)).max(8).optional(),
+    })).max(8).optional(),
+    compromisedTissues: z.array(z.object({
+      name: z.string().max(120),
+      // Accept either a string label OR a numeric severity for resilience —
+      // some upstream callers pass the tissue's numeric severity score
+      // straight through. We coerce to a short string so the rationale
+      // prompt always sees a readable label, and we cap at 60 chars.
+      status: z.union([z.string(), z.number()])
+        .optional()
+        .transform(v => {
+          if (v === undefined || v === null) return undefined;
+          const s = typeof v === "number" ? String(v) : v;
+          const trimmed = s.trim();
+          if (trimmed.length === 0) return undefined;
+          return trimmed.length > 60 ? trimmed.slice(0, 60) : trimmed;
+        }),
+      region: z.string().max(80).optional(),
+    })).max(20).optional(),
+    scarLoad: z.object({
+      scarCount: z.number().int().min(0).max(40).optional(),
+      adhesionCount: z.number().int().min(0).max(40).optional(),
+      regions: z.array(z.string().max(80)).max(10).optional(),
+    }).optional(),
+    forceHotspots: z.array(z.object({
+      joint: z.string().max(80),
+      peakForceN: z.number().optional(),
+      asymmetryIndex: z.number().optional(),
+      note: z.string().max(160).optional(),
+    })).max(10).optional(),
+    posturalDeviations: z.object({
+      summary: z.string().max(300).optional(),
+      severity: z.string().max(40).optional(),
+    }).optional(),
+    thoracicStiffness: z.string().max(200).optional(),
+    tendonInflammation: z.array(z.string().max(120)).max(10).optional(),
+    naturalProgression: z.object({
+      window: z.string().max(120).optional(),
+      chronicityRiskPercent: z.number().min(0).max(100).optional(),
+      recurrenceRiskPercent: z.number().min(0).max(100).optional(),
+    }).optional(),
+  }).strip();
+
+  const rationaleSessionStepSchema = z.object({
+    order: z.number().int().min(1).max(40),
+    itemId: z.string().min(1).max(200),
+    itemName: z.string().min(1).max(240),
+    modality: z.string().min(1).max(40),
+    durationMinutes: z.number().min(0).max(180).optional(),
+    rationale: z.string().max(600).optional(),
+  });
+
+  const rationaleBodySchema = z.object({
+    items: z.array(planCartItemSchema).min(1).max(40),
+    clinicalContext: rationaleClinicalContextSchema.default({}),
+    sessionOrder: z.array(rationaleSessionStepSchema).max(40).optional(),
+  });
+
+  const rationaleResultSchema = z.object({
+    clinicalPicture: z.string().min(1),
+    drivers: z.array(z.object({
+      label: z.string().min(1),
+      detail: z.string().min(1),
+      kind: z.string().optional(),
+      // Item IDs from the cart that address this driver. Empty array means
+      // "no item targets this yet" — surfaced as a gap by the UI.
+      addressedItemIds: z.array(z.string()).default([]),
+    })).max(12).default([]),
+    treatmentRationale: z.array(z.object({
+      itemId: z.string().min(1),
+      itemName: z.string().min(1),
+      modality: z.string().min(1),
+      why: z.string().min(1),
+      addresses: z.array(z.string()).default([]),
+    })),
+    orderingRationale: z.string().min(1),
+  });
+
+  app.post('/api/treatment-plan/rationale', async (req: Request, res: Response) => {
+    try {
+      const parse = rationaleBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, clinicalContext, sessionOrder } = parse.data;
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        modality: it.modality,
+        name: it.name,
+        targetStructure: it.targetStructure || '',
+        targetFinding: it.targetFinding || '',
+        dosage: it.dosage || it.parameters || '',
+        rationale: it.rationale || '',
+        evidenceGrade: it.evidenceGrade || '',
+        contraindications: it.contraindications || '',
+        slingTag: it.slingTag || '',
+        slingRole: it.slingRole || '',
+        mechanism: it.mechanism || '',
+        targetTissue: it.targetTissue || '',
+        desiredEffect: it.desiredEffect || '',
+      }));
+
+      const ctxLines: string[] = [];
+      if (clinicalContext.topHypothesis) ctxLines.push(`Top hypothesis: ${clinicalContext.topHypothesis}`);
+      if (clinicalContext.primaryRegion) ctxLines.push(`Primary region: ${clinicalContext.primaryRegion}`);
+      if (clinicalContext.stage) ctxLines.push(`Stage/duration: ${clinicalContext.stage}`);
+      if (clinicalContext.irritability) ctxLines.push(`Irritability: ${clinicalContext.irritability}`);
+      if (clinicalContext.recoveryPhase) ctxLines.push(`Recovery phase: ${clinicalContext.recoveryPhase}`);
+      if (clinicalContext.patientFactors) {
+        const pf = clinicalContext.patientFactors;
+        if (Array.isArray(pf)) {
+          if (pf.length) ctxLines.push(`Patient factors: ${pf.join(', ')}`);
+        } else if (typeof pf === 'object') {
+          const parts = Object.entries(pf)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${typeof v === 'number' ? Number((v as number).toFixed(2)) : String(v)}`);
+          if (parts.length) ctxLines.push(`Patient factors: ${parts.join(', ')}`);
+        }
+      }
+      if (clinicalContext.constraints?.length) ctxLines.push(`Constraints/flags: ${clinicalContext.constraints.join('; ')}`);
+      const pm = clinicalContext.painMarkers;
+      if (pm && (pm.count || pm.structures?.length)) {
+        const bits: string[] = [];
+        if (pm.count) bits.push(`${pm.count} pain marker${pm.count === 1 ? '' : 's'}`);
+        if (pm.structures?.length) bits.push(`on ${pm.structures.join(', ')}`);
+        if (pm.mechanisms?.length) bits.push(`mechanisms: ${pm.mechanisms.join(', ')}`);
+        if (pm.severitySummary) bits.push(pm.severitySummary);
+        ctxLines.push(`Pain markers: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.slingDrivers?.length) {
+        ctxLines.push(`Sling drivers: ${clinicalContext.slingDrivers.map(s => `${s.sling}${s.role ? ` (${s.role})` : ''}${s.drivingFinding ? ` — ${s.drivingFinding}` : ''}`).join('; ')}`);
+      }
+      const ft = clinicalContext.fascialTensions;
+      if (ft && (ft.activeChains?.length || ft.drivingChains?.length)) {
+        const bits: string[] = [];
+        if (ft.drivingChains?.length) bits.push(`driving: ${ft.drivingChains.join(', ')}`);
+        if (ft.activeChains?.length) bits.push(`active: ${ft.activeChains.join(', ')}`);
+        if (ft.propagationCount) bits.push(`${ft.propagationCount} propagation step${ft.propagationCount === 1 ? '' : 's'}`);
+        ctxLines.push(`Fascial chain tension: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.chainIntegrity?.length) {
+        const lo = clinicalContext.chainIntegrity.filter(c => c.score < 80);
+        if (lo.length) {
+          ctxLines.push(`Kinetic-chain integrity (low): ${lo.map(c => `${c.chain} ${Math.round(c.score)}/100${c.issues?.length ? ` [${c.issues.slice(0, 3).join(', ')}]` : ''}`).join('; ')}`);
+        }
+      }
+      if (clinicalContext.compromisedTissues?.length) {
+        ctxLines.push(`Compromised tissues: ${clinicalContext.compromisedTissues.map(t => `${t.name}${t.status ? ` (${t.status})` : ''}${t.region ? ` @ ${t.region}` : ''}`).join('; ')}`);
+      }
+      const sl = clinicalContext.scarLoad;
+      if (sl && ((sl.scarCount ?? 0) + (sl.adhesionCount ?? 0) > 0)) {
+        const bits: string[] = [];
+        if (sl.scarCount) bits.push(`${sl.scarCount} scar${sl.scarCount === 1 ? '' : 's'}`);
+        if (sl.adhesionCount) bits.push(`${sl.adhesionCount} adhesion band${sl.adhesionCount === 1 ? '' : 's'}`);
+        if (sl.regions?.length) bits.push(`regions: ${sl.regions.join(', ')}`);
+        ctxLines.push(`Scar/adhesion load: ${bits.join(' · ')}`);
+      }
+      if (clinicalContext.forceHotspots?.length) {
+        ctxLines.push(`Force hotspots: ${clinicalContext.forceHotspots.map(f => `${f.joint}${typeof f.peakForceN === 'number' ? ` peak ${Math.round(f.peakForceN)}N` : ''}${typeof f.asymmetryIndex === 'number' ? ` asym ${Math.round(f.asymmetryIndex * 100)}%` : ''}${f.note ? ` (${f.note})` : ''}`).join('; ')}`);
+      }
+      if (clinicalContext.posturalDeviations?.summary) {
+        ctxLines.push(`Postural deviation: ${clinicalContext.posturalDeviations.summary}${clinicalContext.posturalDeviations.severity ? ` (${clinicalContext.posturalDeviations.severity})` : ''}`);
+      }
+      if (clinicalContext.thoracicStiffness) ctxLines.push(`Thoracic stiffness: ${clinicalContext.thoracicStiffness}`);
+      if (clinicalContext.tendonInflammation?.length) ctxLines.push(`Tendon inflammation: ${clinicalContext.tendonInflammation.join(', ')}`);
+      const np = clinicalContext.naturalProgression;
+      if (np && (np.window || typeof np.chronicityRiskPercent === 'number' || typeof np.recurrenceRiskPercent === 'number')) {
+        const bits: string[] = [];
+        if (np.window) bits.push(`window ${np.window}`);
+        if (typeof np.chronicityRiskPercent === 'number') bits.push(`chronicity ${Math.round(np.chronicityRiskPercent)}%`);
+        if (typeof np.recurrenceRiskPercent === 'number') bits.push(`recurrence ${Math.round(np.recurrenceRiskPercent)}%`);
+        ctxLines.push(`Natural progression: ${bits.join(' · ')}`);
+      }
+
+      const orderBlock = sessionOrder && sessionOrder.length > 0
+        ? `\n\nAI-orchestrated session order (already chosen — explain WHY this order makes clinical sense):\n${sessionOrder.map(s => `${s.order}. ${s.itemName} [${s.modality}]${s.durationMinutes ? ` · ${s.durationMinutes} min` : ''}${s.rationale ? ` — ${s.rationale}` : ''}`).join('\n')}`
+        : '';
+
+      const systemPrompt = `You are a senior physiotherapist authoring the rationale section of a treatment plan. Your job is to make the clinician (or student) immediately see WHY each treatment was picked and WHY they are sequenced in this order, by tying everything back to the actual clinical picture.
+
+Rules:
+- Tie findings together. The clinical picture must read as one coherent story (e.g. "L5 radicular pain → posterior chain tension → glute inhibition driving lateral sling failure → compensatory thoracic stiffness").
+- Be specific to the patient. Quote real findings (sling names, chain names, structures, joints, scores) — never generic boilerplate.
+- For each item, name the clinical finding(s) it addresses (drives, calms, restores, protects, offloads, mobilises, etc.).
+- For ordering, use real principles: pain/inflammation modulation → tissue prep / manual rx that opens range → activation/motor control → loading/strength → cool-down. If the AI already produced an order, justify it; don't reinvent it.
+- Plain clinical language. No marketing fluff. No restating instructions.
+- Return STRICT JSON only.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none provided)'}${orderBlock}\n\nSelected treatment items (${items.length}):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON with keys:\n- clinicalPicture (string, 2–4 sentences tying findings together)\n- drivers (array of {label, detail, kind?, addressedItemIds[]}; up to 8; "kind" is one of pain|sling|fascial|chain|tissue|scar|force|postural|tendon|thoracic|risk|other; addressedItemIds MUST list every cart item id that targets this driver, OR be an empty array if no item in the cart yet addresses it — empty array signals a clinical gap)\n- treatmentRationale (array of {itemId, itemName, modality, why, addresses[]}; one per item, IDs MUST be from the provided list)\n- orderingRationale (string, 2–4 sentences explaining the sequencing rationale)`;
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.4,
+        max_tokens: 2500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch (e) {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const result = rationaleResultSchema.safeParse(parsedJson);
+      if (!result.success) {
+        return res.status(502).json({ error: 'AI rationale failed validation', details: result.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const itemMap = new Map(items.map(i => [i.id, i]));
+      const filteredRationale = result.data.treatmentRationale.filter(r => validIds.has(r.itemId));
+
+      // Backfill missing items with a minimal default so the UI shows every
+      // cart item (the model may occasionally skip one).
+      const seen = new Set(filteredRationale.map(r => r.itemId));
+      for (const it of items) {
+        if (seen.has(it.id)) continue;
+        filteredRationale.push({
+          itemId: it.id,
+          itemName: it.name,
+          modality: it.modality,
+          why: it.rationale || `Selected for ${it.targetStructure || it.targetFinding || 'this presentation'}.`,
+          addresses: [it.targetStructure || it.targetFinding || ''].filter(Boolean) as string[],
+        });
+      }
+
+      // Reorder rationale to match cart order for stable rendering.
+      const cartOrder = new Map(items.map((i, idx) => [i.id, idx]));
+      filteredRationale.sort((a, b) => (cartOrder.get(a.itemId) ?? 0) - (cartOrder.get(b.itemId) ?? 0));
+
+      // Re-attach canonical names from the cart so the UI is never out of sync.
+      const finalRationale = filteredRationale.map(r => {
+        const it = itemMap.get(r.itemId);
+        return {
+          ...r,
+          itemName: it?.name ?? r.itemName,
+          modality: it?.modality ?? r.modality,
+        };
+      });
+
+      // Filter each driver's addressedItemIds against the cart so the model
+      // can never invent an item id, and dedupe in case the model
+      // duplicated entries.
+      const finalDrivers = result.data.drivers.map(d => ({
+        label: d.label,
+        detail: d.detail,
+        kind: d.kind,
+        addressedItemIds: Array.from(new Set((d.addressedItemIds || []).filter(id => validIds.has(id)))),
+      }));
+
+      res.json({
+        clinicalPicture: result.data.clinicalPicture,
+        drivers: finalDrivers,
+        treatmentRationale: finalRationale,
+        orderingRationale: result.data.orderingRationale,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[treatment-plan/rationale] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate rationale' });
+    }
+  });
+
+  // ===== Treatment Timeline Review (Task #193) =====
+  // Scores each scheduled intervention as help / neutral / hinder for the
+  // patient and flags conflicts. Filters returned IDs against submitted
+  // set so the model can never invent items.
+  const timelineReviewItemSchema = z.object({
+    id: z.string().min(1),
+    treatmentId: z.string().min(1),
+    name: z.string().min(1),
+    startWeek: z.number().int().min(0).max(104),
+    endWeek: z.number().int().min(0).max(104).optional(),
+    sessionsPerWeek: z.number().min(0).max(14).optional(),
+    doseMultiplier: z.number().min(0).max(5).optional(),
+    rationale: z.string().optional(),
+  });
+
+  const timelineReviewBodySchema = z.object({
+    items: z.array(timelineReviewItemSchema).min(1).max(40),
+    context: z.object({
+      conditionLabel: z.string().optional(),
+      totalWeeks: z.number().int().min(1).max(104).optional(),
+      irritability: z.string().optional(),
+      stage: z.string().optional(),
+    }).default({}),
+  });
+
+  const timelineVerdictSchema = z.object({
+    itemId: z.string(),
+    verdict: z.enum(['help', 'neutral', 'hinder']),
+    score: z.number().min(-100).max(100),
+    rationale: z.string().min(1),
+  });
+  const timelineConflictSchema = z.object({
+    severity: z.enum(['info', 'warning', 'critical']),
+    summary: z.string().min(1),
+    interventionIds: z.array(z.string()),
+    suggestedReschedule: z.array(z.object({
+      itemId: z.string(),
+      newStartWeek: z.number().int().min(0).max(104),
+    })).optional().default([]),
+  });
+  const timelineReviewResponseSchema = z.object({
+    summary: z.string().min(1),
+    verdicts: z.array(timelineVerdictSchema),
+    conflicts: z.array(timelineConflictSchema),
+  });
+
+  app.post('/api/treatment-timeline/review', async (req: Request, res: Response) => {
+    try {
+      const parse = timelineReviewBodySchema.safeParse(req.body);
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid request', details: parse.error.format() });
+      }
+      const { items, context } = parse.data;
+
+      const ctxLines: string[] = [];
+      if (context.conditionLabel) ctxLines.push(`Condition: ${context.conditionLabel}`);
+      if (context.totalWeeks) ctxLines.push(`Plan horizon: ${context.totalWeeks} weeks`);
+      if (context.irritability) ctxLines.push(`Irritability: ${context.irritability}`);
+      if (context.stage) ctxLines.push(`Recovery stage: ${context.stage}`);
+
+      const itemsForPrompt = items.map(it => ({
+        id: it.id,
+        treatmentId: it.treatmentId,
+        name: it.name,
+        startWeek: it.startWeek,
+        endWeek: it.endWeek ?? null,
+        sessionsPerWeek: it.sessionsPerWeek ?? null,
+        doseMultiplier: it.doseMultiplier ?? 1,
+        rationale: it.rationale ?? '',
+      }));
+
+      const systemPrompt = `You are a senior physiotherapist reviewing a clinician's draft treatment timeline.
+
+For EACH submitted intervention return a verdict: "help" (likely accelerates recovery for THIS case), "neutral" (acceptable but not strongly indicated), or "hinder" (likely to slow recovery, provoke symptoms, or duplicate another item). Provide a 1-sentence rationale and a numeric score (-100..100).
+
+Then identify conflicts across items: contradictory modalities at the same week, dose stacking, contraindications for the condition stage, ordering errors (e.g., heavy loading scheduled before pain modulation in highly irritable cases), or missing essentials.
+
+Only reference itemId values that were submitted. Do NOT invent IDs.
+
+Return STRICT JSON only.`;
+
+      const userPrompt = `Clinical context:\n${ctxLines.join('\n') || '(none)'}\n\nProposed timeline (${items.length} items):\n${JSON.stringify(itemsForPrompt, null, 2)}\n\nReturn JSON: { summary (string, 2-3 sentences overall plan summary), verdicts (array of {itemId, verdict, score, rationale}), conflicts (array of {severity: "info"|"warning"|"critical", summary (1-sentence conflict description), interventionIds[], suggestedReschedule (optional array of {itemId, newStartWeek}) — only include when a clear week-shift would resolve the conflict (e.g., move heavy loading from week 1 to week 4)}) }.`;
+
+      const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+      const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined;
+      const aiClient = new OpenAI({ apiKey, baseURL });
+
+      const completion = await aiClient.chat.completions.create({
+        model: 'gpt-4o',
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+        max_tokens: 2200,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content || '{}';
+      let parsedJson: unknown;
+      try {
+        parsedJson = JSON.parse(raw);
+      } catch {
+        return res.status(502).json({ error: 'AI returned invalid JSON' });
+      }
+
+      const reviewParse = timelineReviewResponseSchema.safeParse(parsedJson);
+      if (!reviewParse.success) {
+        return res.status(502).json({ error: 'AI review failed validation', details: reviewParse.error.format() });
+      }
+
+      const validIds = new Set(items.map(i => i.id));
+      const filtered = {
+        summary: reviewParse.data.summary,
+        verdicts: reviewParse.data.verdicts.filter(v => validIds.has(v.itemId)),
+        conflicts: reviewParse.data.conflicts
+          .map(c => ({
+            ...c,
+            interventionIds: c.interventionIds.filter(id => validIds.has(id)),
+            suggestedReschedule: (c.suggestedReschedule ?? []).filter(s => validIds.has(s.itemId)),
+          }))
+          .filter(c => c.interventionIds.length > 0 || c.severity !== 'info'),
+      };
+
+      res.json({ ...filtered, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[treatment-timeline/review] error:', err);
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to review timeline' });
     }
   });
 

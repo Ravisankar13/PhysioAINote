@@ -6,10 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check } from 'lucide-react';
+import { Camera, CameraOff, RefreshCw, AlertCircle, User, Crosshair, Eye, Scan, Loader2, ChevronDown, ChevronUp, Zap, Activity, Smartphone, Wifi, WifiOff, QrCode, X, Copy, Check, Footprints } from 'lucide-react';
 import { loadMediaPipeLibraries } from '@/utils/mediapipeLoader';
 import { MEDIAPIPE_CONFIG, checkMediaPipeSupport } from '@/config/mediapipe';
-import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, buildHandBoneRotations, HandBoneRotations } from '@/utils/mediapipeTo3D';
+import { convertMediaPipeTo3D, convertPartialMediaPipeTo3D, computePosturalMetrics, Posesmoother, PartialPoseSmoother, Skeleton3DPose, SmoothedPoseOutput, PartialSkeleton3DPose, PosturalMetrics, buildHandBoneRotations, HandBoneRotations, FootLockTracker, FootSupportState, FootVisibilityState, BodyVisibility } from '@/utils/mediapipeTo3D';
+import { defaultTorsoBasisSmoother } from '@/utils/footLock';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { type FocusedRegion, FOCUSED_REGIONS } from '@/lib/focusedRegions';
@@ -70,6 +71,8 @@ export default function FocusedCameraCapture({
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const smootherRef = useRef<Posesmoother>(new Posesmoother(0.4));
+  const footLockTrackerRef = useRef<FootLockTracker>(new FootLockTracker());
+  const phoneFootLockTrackerRef = useRef<FootLockTracker>(new FootLockTracker());
   const animationFrameRef = useRef<number | null>(null);
   const analysisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAnalysisRef = useRef<number>(0);
@@ -91,6 +94,65 @@ export default function FocusedCameraCapture({
   const [showDetails, setShowDetails] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [computedAngles, setComputedAngles] = useState<Record<string, number>>({});
+  const [footLockEnabled, setFootLockEnabled] = useState(true);
+  const footLockEnabledRef = useRef(true);
+  const [footSupport, setFootSupport] = useState<FootSupportState | null>(null);
+  // Per-foot visibility (ankle on-frame + visible) drives the foot-support badges.
+  const [feetVisible, setFeetVisible] = useState<FootVisibilityState | null>(null);
+  const [bodyVisibility, setBodyVisibility] = useState<BodyVisibility | null>(null);
+  // UI-only banner state with 1s hide hysteresis to prevent flicker on borderline frames.
+  const [displayedFramingHint, setDisplayedFramingHint] = useState<BodyVisibility | null>(null);
+  const hintHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { footLockEnabledRef.current = footLockEnabled; }, [footLockEnabled]);
+
+  useEffect(() => {
+    if (!bodyVisibility) {
+      // No tracking yet — clear any pending hide and show nothing.
+      if (hintHideTimerRef.current) {
+        clearTimeout(hintHideTimerRef.current);
+        hintHideTimerRef.current = null;
+      }
+      setDisplayedFramingHint(null);
+      return;
+    }
+    const fullyVisible = bodyVisibility.upperBody && bodyVisibility.lowerBody;
+    if (!fullyVisible) {
+      // Show banner immediately on bad framing; cancel any pending hide.
+      if (hintHideTimerRef.current) {
+        clearTimeout(hintHideTimerRef.current);
+        hintHideTimerRef.current = null;
+      }
+      setDisplayedFramingHint(bodyVisibility);
+    } else {
+      // Schedule the hide if not already pending. If a fresh "good" frame
+      // arrives while the timer is still running, the timer keeps going
+      // (we don't reset it) — this enforces "≥1s of fully visible
+      // landmarks before the banner clears."
+      if (!hintHideTimerRef.current) {
+        hintHideTimerRef.current = setTimeout(() => {
+          setDisplayedFramingHint({ upperBody: true, lowerBody: true });
+          hintHideTimerRef.current = null;
+        }, 1000);
+      }
+    }
+  }, [bodyVisibility]);
+
+  // Clean up the hide timer on unmount so it can't fire after the
+  // component is gone (would call setState on an unmounted component).
+  useEffect(() => () => {
+    if (hintHideTimerRef.current) {
+      clearTimeout(hintHideTimerRef.current);
+      hintHideTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => {
+    if (!footLockEnabled) {
+      footLockTrackerRef.current.reset();
+      phoneFootLockTrackerRef.current.reset();
+      setFootSupport(null);
+    }
+  }, [footLockEnabled]);
 
   const [phoneMode, setPhoneMode] = useState(false);
   const [phoneRoomId, setPhoneRoomId] = useState('');
@@ -204,6 +266,9 @@ export default function FocusedCameraCapture({
     }
     phonePoseSmootherRef.current.reset();
     phoneFullPoseSmootherRef.current.reset();
+    // Clear any stale planted-foot anchors so a reconnect starts clean
+    phoneFootLockTrackerRef.current.reset();
+    setFootSupport(null);
     setPhonePoseReady(false);
     setPhoneMode(false);
     setPhoneRoomId('');
@@ -331,6 +396,12 @@ export default function FocusedCameraCapture({
     setIsActive(false);
     setPoseDetected(false);
     setFps(0);
+    // Reset foot-lock anchors so a new session doesn't inherit stale plant positions
+    footLockTrackerRef.current.reset();
+    phoneFootLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
   }, []);
 
   useEffect(() => {
@@ -368,12 +439,26 @@ export default function FocusedCameraCapture({
       angles['Left Ankle Dorsiflexion'] = Math.round(angle3D(landmarks[25], landmarks[27], landmarks[31]) - 90);
     }
     if (region.includes('hip') || region.includes('leg') || region === 'full_body') {
+      // Hip flexion uses `180 - angle3D(shoulder, hip, knee)` because at
+      // upright standing the shoulder is *above* the hip while the knee
+      // is *below* — those two vectors point in opposite directions
+      // (angle ≈ 180°), so `180 − 180 ≈ 0°` correctly reads "neutral
+      // hip". Bringing the thigh forward to horizontal collapses the
+      // shoulder/knee vectors to ~90° apart → reads ~90° flexion.
+      // Contrast with shoulder flexion above, where hip and elbow are
+      // BOTH below the shoulder when arms hang at the side (vectors
+      // parallel, angle ≈ 0°), so the `180 −` term must NOT be applied.
       angles['Right Hip Flexion'] = Math.round(180 - angle3D(landmarks[12], landmarks[24], landmarks[26]));
       angles['Left Hip Flexion'] = Math.round(180 - angle3D(landmarks[11], landmarks[23], landmarks[25]));
     }
     if (region.includes('shoulder') || region === 'full_body') {
-      angles['Right Shoulder Flexion'] = Math.round(180 - angle3D(landmarks[24], landmarks[12], landmarks[14]));
-      angles['Left Shoulder Flexion'] = Math.round(180 - angle3D(landmarks[23], landmarks[11], landmarks[13]));
+      // Shoulder flexion = angle between torso-down (hip→shoulder) and arm
+      // (shoulder→elbow). Arm hanging at side ⇒ vectors point the same way
+      // ⇒ small angle ⇒ 0° flexion. Arm overhead ⇒ vectors opposite ⇒ ~180°.
+      // (Earlier `180 - angle3D(...)` inverted this and reported 173° when
+      // the arm was actually at the side.)
+      angles['Right Shoulder Flexion'] = Math.round(angle3D(landmarks[24], landmarks[12], landmarks[14]));
+      angles['Left Shoulder Flexion'] = Math.round(angle3D(landmarks[23], landmarks[11], landmarks[13]));
       angles['Right Elbow Flexion'] = Math.round(180 - angle3D(landmarks[12], landmarks[14], landmarks[16]));
       angles['Left Elbow Flexion'] = Math.round(180 - angle3D(landmarks[11], landmarks[13], landmarks[15]));
     }
@@ -396,7 +481,9 @@ export default function FocusedCameraCapture({
         y: (landmarks[11].y + landmarks[12].y) / 2,
         z: ((landmarks[11].z || 0) + (landmarks[12].z || 0)) / 2
       };
-      angles['Trunk Inclination'] = Math.round(angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }) - 180);
+      // Forward trunk lean: hip→shoulder vs hip→up. Both align at neutral (0°);
+      // pitching the shoulders forward 30° opens the angle to 30°.
+      angles['Trunk Inclination'] = Math.round(angle3D(midShoulder, midHip, { x: midHip.x, y: midHip.y - 1, z: midHip.z }));
     }
 
     return angles;
@@ -445,25 +532,41 @@ export default function FocusedCameraCapture({
           }
 
           if (regionId === 'full_body') {
-            const allVisible = results.poseLandmarks.filter((lm: any) =>
-              lm.visibility === undefined || lm.visibility >= 0.3
-            ).length;
-            if (allVisible >= 15) {
-              setPoseDetected(true);
-              if (onPoseUpdate) {
-                const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
-                const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
-                onPoseUpdate(fullSmoothed);
+            // Always emit; per-joint/region gating happens in handleCameraPoseUpdate.
+            setPoseDetected(true);
+            if (onPoseUpdate) {
+              const tracker = footLockEnabledRef.current ? phoneFootLockTrackerRef.current : null;
+              const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
+              const fullSmoothed = phoneFullPoseSmootherRef.current.smooth(pose3D);
+              if (fullSmoothed.footSupport) {
+                const next = fullSmoothed.footSupport;
+                setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
               }
-              if (onPosturalMetrics) {
-                onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
+              if (fullSmoothed.feetVisible) {
+                const nextFv = fullSmoothed.feetVisible;
+                setFeetVisible(prev => (prev && prev.left === nextFv.left && prev.right === nextFv.right) ? prev : nextFv);
               }
+              if (fullSmoothed.bodyVisibility) {
+                const nextVis = fullSmoothed.bodyVisibility;
+                setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
+              }
+              onPoseUpdate(fullSmoothed);
+            }
+            if (onPosturalMetrics) {
+              onPosturalMetrics(computePosturalMetrics(results.poseLandmarks));
             }
           } else {
             const partialPose = convertPartialMediaPipeTo3D(results.poseLandmarks, regionId, false);
-            const visibleJoints = Object.entries(partialPose)
-              .filter(([_, val]) => val !== null)
-              .map(([key]) => key);
+            // Filter to anatomical joint keys only — partial output also carries metadata.
+            const PARTIAL_JOINT_KEYS = [
+              'spine', 'neck', 'leftShoulder', 'rightShoulder',
+              'leftElbow', 'rightElbow', 'leftHip', 'rightHip',
+              'leftKnee', 'rightKnee', 'leftWrist', 'rightWrist',
+              'leftAnkle', 'rightAnkle',
+            ] as const;
+            const visibleJoints = PARTIAL_JOINT_KEYS.filter(
+              (key) => partialPose[key] != null,
+            );
             setDetectedJoints(visibleJoints);
             if (visibleJoints.length > 0) {
               setPoseDetected(true);
@@ -609,6 +712,21 @@ export default function FocusedCameraCapture({
   }, [isAnalyzing, selectedRegion, computedAngles, cameraType, mirrorVideo, onFocusedAnalysisComplete]);
 
   const startCamera = useCallback(async () => {
+    footLockTrackerRef.current.reset();
+    phoneFootLockTrackerRef.current.reset();
+    defaultTorsoBasisSmoother.reset();
+    smootherRef.current.reset();
+    setFootSupport(null);
+    setFeetVisible(null);
+    setBodyVisibility(null);
+    // Also reset the framing-hint hysteresis state so a new camera
+    // session doesn't carry over a stale "off-frame" banner from the
+    // previous one (and cancel any pending 1s hide timer).
+    if (hintHideTimerRef.current) {
+      clearTimeout(hintHideTimerRef.current);
+      hintHideTimerRef.current = null;
+    }
+    setDisplayedFramingHint(null);
     setIsLoading(true);
     setError('');
 
@@ -669,8 +787,21 @@ export default function FocusedCameraCapture({
           }
 
           if (onPoseUpdate) {
-            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false);
+            const tracker = footLockEnabledRef.current ? footLockTrackerRef.current : null;
+            const pose3D = convertMediaPipeTo3D(results.poseLandmarks, false, tracker);
             const smoothedPose = smootherRef.current.smooth(pose3D);
+            if (smoothedPose.footSupport) {
+              const next = smoothedPose.footSupport;
+              setFootSupport(prev => (prev && prev.left === next.left && prev.right === next.right) ? prev : next);
+            }
+            if (smoothedPose.feetVisible) {
+              const nextFv = smoothedPose.feetVisible;
+              setFeetVisible(prev => (prev && prev.left === nextFv.left && prev.right === nextFv.right) ? prev : nextFv);
+            }
+            if (smoothedPose.bodyVisibility) {
+              const nextVis = smoothedPose.bodyVisibility;
+              setBodyVisibility(prev => (prev && prev.upperBody === nextVis.upperBody && prev.lowerBody === nextVis.lowerBody) ? prev : nextVis);
+            }
             onPoseUpdate(smoothedPose);
           }
           if (onPosturalMetrics) {
@@ -1035,6 +1166,22 @@ export default function FocusedCameraCapture({
           <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-0" playsInline muted />
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
 
+          {isActive && poseDetected && displayedFramingHint && (!displayedFramingHint.upperBody || !displayedFramingHint.lowerBody) && (
+            <div
+              className="absolute top-2 left-1/2 -translate-x-1/2 bg-amber-900/85 border border-amber-600 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-lg backdrop-blur-sm"
+              data-testid="framing-hint-focused"
+            >
+              <AlertCircle className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+              <span className="text-[11px] text-amber-100 font-medium">
+                {!displayedFramingHint.upperBody && !displayedFramingHint.lowerBody
+                  ? 'Step back so the full body is in frame'
+                  : !displayedFramingHint.lowerBody
+                  ? 'Lower body off-frame — step back to track legs'
+                  : 'Upper body off-frame — adjust camera to track torso/arms'}
+              </span>
+            </div>
+          )}
+
           {!isActive && !isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
               {cameraType === 'focused' ? (
@@ -1138,6 +1285,44 @@ export default function FocusedCameraCapture({
             )}
           </div>
         )}
+
+        {/* Foot lock control + status — visible in all modes (full_body, focused, phone) */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <Switch
+              id="foot-lock-focused"
+              checked={footLockEnabled}
+              onCheckedChange={setFootLockEnabled}
+              className="scale-75"
+              data-testid="switch-foot-lock-focused"
+            />
+            <Label htmlFor="foot-lock-focused" className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Footprints className="h-3 w-3" /> Foot lock
+            </Label>
+          </div>
+          {footLockEnabled && (isActive || (phoneMode && phoneConnected)) && footSupport && feetVisible && (feetVisible.left || feetVisible.right) && (
+            <div className="flex items-center gap-1" data-testid="foot-support-indicators-focused">
+              {feetVisible.left && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.left === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-left-focused"
+                >
+                  L:{footSupport.left === 'planted' ? '●' : '○'}
+                </Badge>
+              )}
+              {feetVisible.right && (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 h-4 ${footSupport.right === 'planted' ? 'border-green-500 text-green-400' : 'border-amber-500 text-amber-400'}`}
+                  data-testid="badge-foot-right-focused"
+                >
+                  R:{footSupport.right === 'planted' ? '●' : '○'}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
 
         {Object.keys(computedAngles).length > 0 && isActive && (
           <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700 flex-shrink-0">

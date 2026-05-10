@@ -817,6 +817,14 @@ Keep responses concise, practical, and directly applicable to clinical practice.
   async deleteConversation(conversationId: number, userId: number) {
     await physioGptStorage.deleteConversation(conversationId, userId);
   }
+
+  async updateCaseSnapshot(
+    conversationId: number,
+    userId: number,
+    caseSnapshot: import("@shared/schema").PhysioGptCaseSnapshot
+  ) {
+    return await physioGptStorage.updateCaseSnapshot(conversationId, userId, caseSnapshot);
+  }
 }
 
 export const physioGptService = new PhysioGptService();

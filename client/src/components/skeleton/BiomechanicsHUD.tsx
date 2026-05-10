@@ -295,7 +295,7 @@ export default function BiomechanicsHUD({
       color: 'text-orange-400',
       bgColor: 'bg-orange-500/15',
       ringColor: 'ring-orange-500/30',
-      label: 'Controls',
+      label: 'Pose',
       value: romRestrictionCount > 0 ? `${romRestrictionCount}` : 'OK',
       valueColor: romRestrictionCount >= 4 ? '#ef4444' : romRestrictionCount >= 2 ? '#f97316' : romRestrictionCount >= 1 ? '#eab308' : '#22c55e',
       onClick: onOpenForceOverlay,
@@ -323,17 +323,6 @@ export default function BiomechanicsHUD({
       secondary: onToggleSlingsOverlay
         ? { tooltip: 'Open Slings panel', onClick: onOpenSlings, icon: ChevronRight, testId: 'hud-slings-open-panel' }
         : undefined,
-    },
-    {
-      id: 'biomechanics',
-      icon: Brain,
-      color: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/15',
-      ringColor: 'ring-cyan-500/30',
-      label: 'Biomech',
-      value: bioQualityScore !== null ? `${Math.round(bioQualityScore)}%` : '--',
-      valueColor: bioQualityScore !== null ? getScoreColor(bioQualityScore) : '#6b7280',
-      onClick: onOpenBiomechanics,
     },
     {
       id: 'tissue',
@@ -412,97 +401,10 @@ export default function BiomechanicsHUD({
       color: 'text-rose-400',
       bgColor: 'bg-rose-500/15',
       ringColor: 'ring-rose-500/30',
-      label: 'Balance',
+      label: 'Muscles',
       value: syndromeCount > 0 ? `${syndromeCount} syn` : imbalanceCount > 0 ? `${imbalanceCount} imb` : 'OK',
       valueColor: syndromeCount > 0 ? '#ef4444' : imbalanceCount > 0 ? '#f97316' : '#22c55e',
       onClick: onOpenMuscleOverlay,
-    },
-    ...(onOpenForceTime ? [{
-      id: 'time',
-      icon: Clock,
-      color: 'text-amber-300',
-      bgColor: 'bg-amber-300/15',
-      ringColor: 'ring-amber-300/30',
-      label: 'Time',
-      value: (() => {
-        if (!timeMetrics || timeMetrics.frameCount < 2) return '—';
-        const worstAsym = timeMetrics.asymmetry.reduce((mx, a) => Math.max(mx, a.indexPct), 0);
-        const peakImpact = timeMetrics.impact.peakInertialN;
-        if (peakImpact > 0) {
-          if (peakImpact >= 1000) return `${(peakImpact / 1000).toFixed(1)}kN`;
-          return `${Math.round(peakImpact)}N`;
-        }
-        if (worstAsym > 5) return `${worstAsym.toFixed(0)}%Δ`;
-        return 'live';
-      })(),
-      valueColor: (() => {
-        if (!timeMetrics || timeMetrics.frameCount < 2) return '#6b7280';
-        const worstAsym = timeMetrics.asymmetry.reduce((mx, a) => Math.max(mx, a.indexPct), 0);
-        const share = timeMetrics.impact.impactShare;
-        if (worstAsym > 20 || share > 0.4) return '#ef4444';
-        if (worstAsym > 10 || share > 0.2) return '#f97316';
-        if (worstAsym > 5 || share > 0.1) return '#eab308';
-        return '#22c55e';
-      })(),
-      onClick: onOpenForceTime,
-    }] : []),
-    ...(onChangeExternalLoad ? [{
-      id: 'load',
-      icon: Weight,
-      color: 'text-yellow-300',
-      bgColor: 'bg-yellow-500/15',
-      ringColor: 'ring-yellow-500/30',
-      label: 'Load',
-      value: externalLoadKg > 0 ? `${externalLoadKg}kg` : '0',
-      valueColor: externalLoadKg >= 20 ? '#ef4444'
-                : externalLoadKg >= 10 ? '#f97316'
-                : externalLoadKg >= 5  ? '#eab308'
-                : externalLoadKg > 0   ? '#a3e635'
-                : '#6b7280',
-      onClick: () => setLoadPopoverOpen(v => !v),
-      tooltip: externalLoadKg > 0
-        ? `Carrying ${externalLoadKg} kg in ${externalLoadHand} hand(s) — click to change`
-        : 'Add a hand-held load (click to choose kg + hand)',
-      pressed: loadPopoverOpen || externalLoadKg > 0,
-    }] : []),
-    {
-      // Task #381 — Clean/Detailed toggle for the on-skeleton stress viz.
-      // Pressed = Detailed (legacy cloud); released = Clean (rings + focal halo).
-      id: 'stressViz',
-      icon: Cloud,
-      color: 'text-sky-400',
-      bgColor: 'bg-sky-500/15',
-      ringColor: 'ring-sky-500/30',
-      label: 'Cloud',
-      value: stressVizMode === 'clean' ? 'Clean' : 'Detail',
-      valueColor: stressVizMode === 'clean' ? '#38bdf8' : '#fb923c',
-      onClick: toggleStressVizMode,
-      pressed: stressVizMode === 'detailed',
-      // Task #382 — same toggle now also governs the pain-marker layer
-      // (head/neck/shoulder symptom blobs), not just the joint-stress cloud.
-      tooltip: stressVizMode === 'clean'
-        ? 'Stress + pain viz: Clean rings (click for legacy cloud)'
-        : 'Stress + pain viz: Detailed cloud (click for clean rings)',
-    },
-    {
-      id: 'weight',
-      icon: Scale,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/15',
-      ringColor: 'ring-blue-500/30',
-      label: 'Weight',
-      value: weightDistribution
-        ? weightDistribution.asymmetryPercent > 3
-          ? `${weightDistribution.asymmetryPercent.toFixed(0)}%`
-          : 'Even'
-        : '--',
-      valueColor: weightDistribution
-        ? weightDistribution.asymmetryPercent > 15 ? '#ef4444'
-          : weightDistribution.asymmetryPercent > 10 ? '#f97316'
-          : weightDistribution.asymmetryPercent > 5 ? '#eab308'
-          : '#22c55e'
-        : '#6b7280',
-      onClick: onOpenForceOverlay,
     },
   ];
 

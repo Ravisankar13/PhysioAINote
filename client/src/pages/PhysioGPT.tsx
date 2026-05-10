@@ -121,7 +121,7 @@ import HypothesisTestBench, { type BenchHypothesisInput, type BenchSkeletonOverl
 import type { ClinicalExtractionResult } from "@shared/clinicalIntakeTypes";
 import { parseClinicalText, mergeHighlights, HIGHLIGHT_COLORS, type RegionHighlight, type HighlightType, type ParsedClinicalContext } from "@/lib/clinicalTextParser";
 import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWarnings, computeWeightDistribution, type ForceAnalysisResult, type JointSurfaceForce, type WeightDistribution, type ExternalLoadConfig } from "@/lib/posturalForceEngine";
-import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
+import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type ClinicalStatus, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
 import { DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
@@ -10692,6 +10692,107 @@ ${ddxList}`;
   // obscuring the avatar. The 3D sling pathways (tubes, dots, status labels,
   // reroute arrows) are rendered independently in PureThreeGLBViewer at
   // ~L4569+, so the sling stays fully visible without the body-paint.
+  // Task #404 — Build a `{groups, colors}` map from manual muscle-popup
+  // overrides so the affected GLB muscle groups can be tinted directly on
+  // the body mesh (mirroring the Task #399 fascial-chain fix). This
+  // replaces the previous `muscleOverrideHighlights` array that fed
+  // bone-anchored translucent sphere "clouds" into `highlightBoneNames`.
+  // Colours come from the canonical `getClinicalStatusColor` helper so the
+  // tint matches the same red/orange/blue/purple convention used by the
+  // muscle popup and the right-side Muscle Analysis panel.
+  // Declared above `mergedHighlightMuscleGroups` to keep useMemo
+  // initialization order safe (no const TDZ).
+  const muscleOverrideMeshHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
+    const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
+    if (entries.length === 0) return { groups: [], colors: {} };
+
+    const MUSCLE_TO_GROUPS: Record<string, string[]> = {
+      l_glut_max: ['glute_l'], l_glut_med: ['glute_l'], l_glut_min: ['glute_l'], l_piriformis: ['glute_l'],
+      r_glut_max: ['glute_r'], r_glut_med: ['glute_r'], r_glut_min: ['glute_r'], r_piriformis: ['glute_r'],
+      l_rect_fem: ['quad_l'], l_vast_lat: ['quad_l'], l_vast_med: ['quad_l'], l_hamstrings: ['quad_l', 'glute_l'],
+      r_rect_fem: ['quad_r'], r_vast_lat: ['quad_r'], r_vast_med: ['quad_r'], r_hamstrings: ['quad_r', 'glute_r'],
+      l_hip_flexors: ['quad_l'], l_adductors: ['quad_l'],
+      r_hip_flexors: ['quad_r'], r_adductors: ['quad_r'],
+      l_gastroc: ['calf_l'], l_soleus: ['calf_l'],
+      r_gastroc: ['calf_r'], r_soleus: ['calf_r'],
+      l_tib_ant: ['shin_l'], l_peroneals: ['shin_l'], l_tib_post: ['shin_l'], l_plantar_fascia: ['shin_l', 'foot_l'],
+      r_tib_ant: ['shin_r'], r_peroneals: ['shin_r'], r_tib_post: ['shin_r'], r_plantar_fascia: ['shin_r', 'foot_r'],
+      l_ant_deltoid: ['deltoid_l'], l_mid_deltoid: ['deltoid_l'], l_post_deltoid: ['deltoid_l'], l_supraspinatus: ['scapula_l'],
+      r_ant_deltoid: ['deltoid_r'], r_mid_deltoid: ['deltoid_r'], r_post_deltoid: ['deltoid_r'], r_supraspinatus: ['scapula_r'],
+      l_infraspinatus: ['scapula_l'], l_upper_trap: ['neck', 'scapula_l'], l_lower_trap: ['scapula_l'],
+      r_infraspinatus: ['scapula_r'], r_upper_trap: ['neck', 'scapula_r'], r_lower_trap: ['scapula_r'],
+      l_rhomboids: ['scapula_l'], l_serratus_ant: ['scapula_l', 'chest'],
+      r_rhomboids: ['scapula_r'], r_serratus_ant: ['scapula_r', 'chest'],
+      l_biceps: ['bicep_l'], l_triceps: ['bicep_l'], l_wrist_flex: ['bicep_l'], l_wrist_ext: ['bicep_l'],
+      r_biceps: ['bicep_r'], r_triceps: ['bicep_r'], r_wrist_flex: ['bicep_r'], r_wrist_ext: ['bicep_r'],
+      l_pec_major: ['chest'], l_pec_minor: ['chest'],
+      r_pec_major: ['chest'], r_pec_minor: ['chest'],
+      rectus_abdominis: ['core'], transverse_abdominis: ['core'], obliques: ['core'],
+      erector_spinae_lumbar: ['core', 'spine'], erector_spinae_thoracic: ['spine'],
+      multifidus: ['core', 'spine'],
+    };
+
+    // Severity rank used to resolve collisions when several manually-edited
+    // muscles project onto the same mesh group (e.g. l_glut_max + l_glut_med
+    // → glute_l). The most diagnostic clinical state wins so the clinician
+    // sees the worst affected status, not whichever was iterated last.
+    const STATUS_RANK: Record<ClinicalStatus, number> = {
+      spasm: 7,
+      overactive: 6,
+      shortened: 5,
+      inhibited: 4,
+      weak: 3,
+      lengthened: 2,
+      normal: 1,
+    };
+
+    // Prefer the analyzed clinicalStatus from `muscleAnalysis` so the body
+    // tint matches what the muscle popup itself shows. Fall back to a
+    // direct override→status derivation when analysis hasn't recomputed yet
+    // (first paint after a slider drag, before the engine repopulates).
+    const analyzedById = new Map<string, ClinicalStatus>();
+    if (muscleAnalysis) {
+      for (const m of muscleAnalysis.allMuscles) {
+        analyzedById.set(m.id, m.clinicalStatus);
+      }
+    }
+    const statusFromOverride = (ov: MuscleOverride): ClinicalStatus => {
+      if (ov.pathology && ov.pathology !== 'none') return 'spasm';
+      if (ov.inhibition > 30) return 'inhibited';
+      if (ov.tensionOffset > 15) return 'overactive';
+      if (ov.tensionOffset < -15) return 'lengthened';
+      if (ov.lengthOverride === 'shortened') return 'shortened';
+      if (ov.lengthOverride === 'lengthened') return 'lengthened';
+      if (ov.activationOffset > 15) return 'overactive';
+      if (ov.activationOffset < -15) return 'weak';
+      return 'normal';
+    };
+
+    const groupStatus: Record<string, ClinicalStatus> = {};
+
+    for (const [muscleId, ov] of entries) {
+      if (!ov) continue;
+      const groups = MUSCLE_TO_GROUPS[muscleId];
+      if (!groups) continue;
+
+      const status = analyzedById.get(muscleId) ?? statusFromOverride(ov);
+      if (status === 'normal') continue; // nothing diagnostic to tint
+
+      for (const g of groups) {
+        const existing = groupStatus[g];
+        if (!existing || STATUS_RANK[status] > STATUS_RANK[existing]) {
+          groupStatus[g] = status;
+        }
+      }
+    }
+
+    const colors: Record<string, string> = {};
+    for (const [g, status] of Object.entries(groupStatus)) {
+      colors[g] = getClinicalStatusColor(status);
+    }
+    return { groups: Object.keys(colors), colors };
+  }, [muscleOverrides, muscleAnalysis]);
+
   const mergedHighlightMuscleGroups = useMemo<string[] | undefined>(() => {
     const merged: string[] = [];
     const seen = new Set<string>();
@@ -10770,97 +10871,10 @@ ${ddxList}`;
   // each bone (which clinicians described as "clouds overlaying the muscles").
   const chainHighlightBones = useMemo(() => undefined, []);
 
-  // Task #404 — Previously this returned an array of `{boneName, color,
-  // intensity, glowSize}` entries that fed into PureThreeGLBViewer's
-  // `highlightBoneNames` prop, which renders translucent bone-anchored
-  // glow spheres. Editing muscle properties (length, tone, activation,
-  // pathology) in the muscle popup therefore drew large amorphous "clouds"
-  // over hips/knees/lumbar/etc. that obscured the avatar without telling
-  // the clinician *which* muscle was affected. Mirroring the Task #399
-  // fascial-chain fix, we now produce a `{groups, colors}` map keyed by
-  // GLB muscle-group IDs (matching `MUSCLE_GROUPS` in muscleGroupSplitter)
-  // which is merged into `mergedMuscleHighlightColors` below and painted
-  // directly onto the body mesh.
-  const muscleOverrideMeshHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
-    const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
-    if (entries.length === 0) return { groups: [], colors: {} };
-
-    const MUSCLE_TO_GROUPS: Record<string, string[]> = {
-      l_glut_max: ['glute_l'], l_glut_med: ['glute_l'], l_glut_min: ['glute_l'], l_piriformis: ['glute_l'],
-      r_glut_max: ['glute_r'], r_glut_med: ['glute_r'], r_glut_min: ['glute_r'], r_piriformis: ['glute_r'],
-      l_rect_fem: ['quad_l'], l_vast_lat: ['quad_l'], l_vast_med: ['quad_l'], l_hamstrings: ['quad_l', 'glute_l'],
-      r_rect_fem: ['quad_r'], r_vast_lat: ['quad_r'], r_vast_med: ['quad_r'], r_hamstrings: ['quad_r', 'glute_r'],
-      l_hip_flexors: ['quad_l'], l_adductors: ['quad_l'],
-      r_hip_flexors: ['quad_r'], r_adductors: ['quad_r'],
-      l_gastroc: ['calf_l'], l_soleus: ['calf_l'],
-      r_gastroc: ['calf_r'], r_soleus: ['calf_r'],
-      l_tib_ant: ['shin_l'], l_peroneals: ['shin_l'], l_tib_post: ['shin_l'], l_plantar_fascia: ['shin_l', 'foot_l'],
-      r_tib_ant: ['shin_r'], r_peroneals: ['shin_r'], r_tib_post: ['shin_r'], r_plantar_fascia: ['shin_r', 'foot_r'],
-      l_ant_deltoid: ['deltoid_l'], l_mid_deltoid: ['deltoid_l'], l_post_deltoid: ['deltoid_l'], l_supraspinatus: ['scapula_l'],
-      r_ant_deltoid: ['deltoid_r'], r_mid_deltoid: ['deltoid_r'], r_post_deltoid: ['deltoid_r'], r_supraspinatus: ['scapula_r'],
-      l_infraspinatus: ['scapula_l'], l_upper_trap: ['neck', 'scapula_l'], l_lower_trap: ['scapula_l'],
-      r_infraspinatus: ['scapula_r'], r_upper_trap: ['neck', 'scapula_r'], r_lower_trap: ['scapula_r'],
-      l_rhomboids: ['scapula_l'], l_serratus_ant: ['scapula_l', 'chest'],
-      r_rhomboids: ['scapula_r'], r_serratus_ant: ['scapula_r', 'chest'],
-      l_biceps: ['bicep_l'], l_triceps: ['bicep_l'], l_wrist_flex: ['bicep_l'], l_wrist_ext: ['bicep_l'],
-      r_biceps: ['bicep_r'], r_triceps: ['bicep_r'], r_wrist_flex: ['bicep_r'], r_wrist_ext: ['bicep_r'],
-      l_pec_major: ['chest'], l_pec_minor: ['chest'],
-      r_pec_major: ['chest'], r_pec_minor: ['chest'],
-      rectus_abdominis: ['core'], transverse_abdominis: ['core'], obliques: ['core'],
-      erector_spinae_lumbar: ['core', 'spine'], erector_spinae_thoracic: ['spine'],
-      multifidus: ['core', 'spine'],
-    };
-
-    // Higher rank == more clinically severe; wins on collision so the most
-    // diagnostic colour is what the clinician sees on a shared mesh group
-    // (e.g. l_glut_max + l_glut_med both touching `glute_l`).
-    const colorRank = (hex: string): number => {
-      switch (hex) {
-        case '#ef4444': return 5;  // pathology / shortened
-        case '#a855f7': return 4;  // inhibited
-        case '#f97316': return 3;  // overactive / hypertonic
-        case '#3b82f6': return 2;  // lengthened / underactive tone
-        case '#22c55e': return 1;  // overactive activation
-        default: return 0;
-      }
-    };
-
-    const groupColor: Record<string, string> = {};
-
-    for (const [muscleId, ov] of entries) {
-      if (!ov) continue;
-      const groups = MUSCLE_TO_GROUPS[muscleId];
-      if (!groups) continue;
-
-      let color = '#22c55e';
-      if (ov.pathology !== 'none') {
-        color = '#ef4444';
-      } else if (ov.inhibition > 30) {
-        color = '#a855f7';
-      } else if (ov.tensionOffset > 15) {
-        color = '#f97316';
-      } else if (ov.tensionOffset < -15) {
-        color = '#3b82f6';
-      } else if (ov.lengthOverride === 'shortened') {
-        color = '#ef4444';
-      } else if (ov.lengthOverride === 'lengthened') {
-        color = '#3b82f6';
-      } else if (ov.activationOffset > 15) {
-        color = '#22c55e';
-      } else if (ov.activationOffset < -15) {
-        color = '#a855f7';
-      }
-
-      for (const g of groups) {
-        const existing = groupColor[g];
-        if (!existing || colorRank(color) > colorRank(existing)) {
-          groupColor[g] = color;
-        }
-      }
-    }
-
-    return { groups: Object.keys(groupColor), colors: groupColor };
-  }, [muscleOverrides]);
+  // Task #404 — `muscleOverrideMeshHighlights` is now declared earlier
+  // (just above `mergedHighlightMuscleGroups`) so the merger memos that
+  // depend on it are evaluated *after* its initialization. Avoids the
+  // const TDZ violation flagged in code review.
 
   const influenceHighlights = useMemo(() => {
     const entries = Object.entries(influenceMap);
@@ -12442,7 +12456,23 @@ ${ddxList}`;
                           Reset
                         </button>
                       )}
-                      <button onClick={() => setClickedMusclePopup(null)} className="text-gray-400 hover:text-white p-0.5">
+                      <button
+                        onClick={() => {
+                          // Task #404 — Closing the popup also clears the
+                          // group's manual overrides so the body-mesh tint
+                          // disappears with the popup (per task AC: close
+                          // OR reset removes the highlight cleanly). The
+                          // explicit Reset button uses the same clearing
+                          // path; X just composes Reset + dismiss.
+                          setMuscleOverrides(prev => {
+                            const next = { ...prev };
+                            group.muscles.forEach(m => delete next[m.id]);
+                            return next;
+                          });
+                          setClickedMusclePopup(null);
+                        }}
+                        className="text-gray-400 hover:text-white p-0.5"
+                      >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>

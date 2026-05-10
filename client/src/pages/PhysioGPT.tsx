@@ -9662,6 +9662,7 @@ ${ddxList}`;
     if (showIntelligence && hasClinicalInput) {
       for (const intel of inflammationIntelligenceMap.values()) {
         if ((intel.severity ?? 0) < 0.25) continue;
+        if (intel.state.healingStage === 'baseline') continue; // Task #396: suppress yellow "at-risk" halos
         out.push(tissueIntelligenceToOverlayHighlight(intel));
       }
     }

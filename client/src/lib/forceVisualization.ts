@@ -519,59 +519,18 @@ export class ForceVisualizationManager {
     }
   }
 
-  private updateMuscleGlows(muscles: MuscleActivationData): void {
-    const musclePositions: { name: string; boneNames: string[]; offset: THREE.Vector3 }[] = [
-      { name: 'erectorSpinae', boneNames: ['Spine1_M', 'RootPart2_M'], offset: new THREE.Vector3(0, 0, -0.2) },
-      { name: 'gluteMaxL', boneNames: ['Hip_L'], offset: new THREE.Vector3(-0.1, 0.1, -0.2) },
-      { name: 'gluteMaxR', boneNames: ['Hip_R'], offset: new THREE.Vector3(0.1, 0.1, -0.2) },
-      { name: 'gluteMedL', boneNames: ['Hip_L'], offset: new THREE.Vector3(-0.15, 0.2, 0) },
-      { name: 'gluteMedR', boneNames: ['Hip_R'], offset: new THREE.Vector3(0.15, 0.2, 0) },
-      { name: 'quadsL', boneNames: ['HipPart1_L'], offset: new THREE.Vector3(0, 0, 0.15) },
-      { name: 'quadsR', boneNames: ['HipPart1_R'], offset: new THREE.Vector3(0, 0, 0.15) },
-      { name: 'hamstringsL', boneNames: ['HipPart1_L'], offset: new THREE.Vector3(0, 0, -0.15) },
-      { name: 'hamstringsR', boneNames: ['HipPart1_R'], offset: new THREE.Vector3(0, 0, -0.15) },
-    ];
-
-    const getActivation = (name: string): number => {
-      switch (name) {
-        case 'erectorSpinae': return muscles.erectorSpinae / 100;
-        case 'gluteMaxL': return muscles.gluteusMaximus.left / 100;
-        case 'gluteMaxR': return muscles.gluteusMaximus.right / 100;
-        case 'gluteMedL': return muscles.gluteusMedius.left / 100;
-        case 'gluteMedR': return muscles.gluteusMedius.right / 100;
-        case 'quadsL': return muscles.quadriceps.left / 100;
-        case 'quadsR': return muscles.quadriceps.right / 100;
-        case 'hamstringsL': return muscles.hamstrings.left / 100;
-        case 'hamstringsR': return muscles.hamstrings.right / 100;
-        default: return 0;
-      }
-    };
-
-    for (const muscle of musclePositions) {
-      const activation = getActivation(muscle.name);
-      if (activation < 0.1) continue;
-
-      for (const boneName of muscle.boneNames) {
-        const bone = this.bones[boneName];
-        if (bone) {
-          const worldPos = new THREE.Vector3();
-          bone.getWorldPosition(worldPos);
-          worldPos.add(muscle.offset);
-
-          const intensity = Math.min(1, activation);
-          const color = new THREE.Color().lerpColors(
-            new THREE.Color(0x4444ff),
-            new THREE.Color(0xff4444),
-            intensity
-          );
-          
-          const glow = this.createMuscleGlow(worldPos, color, intensity);
-          this.scene.add(glow);
-          this.muscleGlows.set(muscle.name, glow);
-          break;
-        }
-      }
-    }
+  private updateMuscleGlows(_muscles: MuscleActivationData): void {
+    // Task #404 — Disabled. Previously rendered translucent sphere "clouds"
+    // anchored to bone positions whenever muscle activation/length/tone was
+    // edited in the muscle popup. Clinicians found these draped large
+    // amorphous volumes across the avatar (hips, lumbar, thighs) that
+    // obscured anatomy without indicating which specific muscle was
+    // affected. The replacement pipeline paints the actual GLB body-mesh
+    // muscle groups directly via `mergedMuscleHighlightColors` →
+    // PureThreeGLBViewer's `muscleHighlightColors` prop (same path Task
+    // #399 used to fix the fascial-chain selection sphere bug). Leaving
+    // this method present (as a no-op) keeps the `showMuscleGlow` gate
+    // and the broader `updateVisualization` API stable for callers.
   }
 
   clearVisualization(): void {

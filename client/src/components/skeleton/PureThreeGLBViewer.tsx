@@ -1608,6 +1608,11 @@ interface PureThreeGLBViewerProps {
   animationConstraints?: AnimationConstraint[];
   livePose?: Skeleton3DPose | null;
   handBoneRotations?: HandBoneRotations | null;
+  // Raw MediaPipe pose landmarks (33 keypoints) for direct quaternion retargeting.
+  // When provided, this bypasses BONE_MAPPING and applies world-space joint orientations
+  // directly to bones. Works with any rigged humanoid (Mixamo, custom, etc) since it
+  // doesn't depend on per-bone-axis conventions hand-tuned for a specific model.
+  liveLandmarks?: Array<{ x: number; y: number; z: number; visibility?: number }> | null;
   fixedCameraPosition?: { x: number; y: number; z: number };
   fixedCameraLookAt?: { x: number; y: number; z: number };
   showLoadingSpinner?: boolean;
@@ -1737,6 +1742,89 @@ const FORCE_JOINT_TO_BONE: Record<string, string> = {
   leftElbow: 'Elbow_L',
   rightElbow: 'Elbow_R',
 };
+
+// Maps the canonical PhysioGPT bone names (_L/_R/_M convention) onto Mixamo bone names.
+// Used when a GLB exposes Mixamo-style bones (e.g. Soldier.glb) so BONE_MAPPING still resolves.
+// Three.js GLTFLoader sanitizes node names via PropertyBinding.sanitizeNodeName, which REMOVES
+// the colon entirely (not replace with underscore), so "mixamorig:Hips" becomes "mixamorigHips".
+// When multiple physio bones map to the same Mixamo bone (e.g. Shoulder_L + ShoulderPart1_L → mixamorigLeftArm),
+// rotation deltas are summed under the resolved name to avoid overwriting (see resolveBoneName usage below).
+const BONE_ALIASES: Record<string, string> = {
+  Root_M: 'mixamorigHips',
+  RootPart1_M: 'mixamorigHips',
+  RootPart2_M: 'mixamorigHips',
+  Spine1_M: 'mixamorigSpine',
+  Spine1Part1_M: 'mixamorigSpine1',
+  Spine1Part2_M: 'mixamorigSpine1',
+  Chest_M: 'mixamorigSpine2',
+  Neck_M: 'mixamorigNeck',
+  NeckPart1_M: 'mixamorigNeck',
+  NeckPart2_M: 'mixamorigNeck',
+  Head_M: 'mixamorigHead',
+  Scapula_L: 'mixamorigLeftShoulder',
+  Scapula_R: 'mixamorigRightShoulder',
+  Shoulder_L: 'mixamorigLeftArm',
+  Shoulder_R: 'mixamorigRightArm',
+  ShoulderPart1_L: 'mixamorigLeftArm',
+  ShoulderPart1_R: 'mixamorigRightArm',
+  Elbow_L: 'mixamorigLeftForeArm',
+  Elbow_R: 'mixamorigRightForeArm',
+  Wrist_L: 'mixamorigLeftHand',
+  Wrist_R: 'mixamorigRightHand',
+  Hip_L: 'mixamorigLeftUpLeg',
+  Hip_R: 'mixamorigRightUpLeg',
+  HipPart1_L: 'mixamorigLeftUpLeg',
+  HipPart1_R: 'mixamorigRightUpLeg',
+  HipPart2_L: 'mixamorigLeftUpLeg',
+  HipPart2_R: 'mixamorigRightUpLeg',
+  Knee_L: 'mixamorigLeftLeg',
+  Knee_R: 'mixamorigRightLeg',
+  Ankle_L: 'mixamorigLeftFoot',
+  Ankle_R: 'mixamorigRightFoot',
+  Toes_L: 'mixamorigLeftToeBase',
+  Toes_R: 'mixamorigRightToeBase',
+
+  // === FINGERS (from buildHandBoneRotations in mediapipeTo3D.ts) ===
+  IndexFinger1_L: 'mixamorigLeftHandIndex1',
+  IndexFinger2_L: 'mixamorigLeftHandIndex2',
+  IndexFinger3_L: 'mixamorigLeftHandIndex3',
+  IndexFinger1_R: 'mixamorigRightHandIndex1',
+  IndexFinger2_R: 'mixamorigRightHandIndex2',
+  IndexFinger3_R: 'mixamorigRightHandIndex3',
+  MiddleFinger1_L: 'mixamorigLeftHandMiddle1',
+  MiddleFinger2_L: 'mixamorigLeftHandMiddle2',
+  MiddleFinger3_L: 'mixamorigLeftHandMiddle3',
+  MiddleFinger1_R: 'mixamorigRightHandMiddle1',
+  MiddleFinger2_R: 'mixamorigRightHandMiddle2',
+  MiddleFinger3_R: 'mixamorigRightHandMiddle3',
+  RingFinger1_L: 'mixamorigLeftHandRing1',
+  RingFinger2_L: 'mixamorigLeftHandRing2',
+  RingFinger3_L: 'mixamorigLeftHandRing3',
+  RingFinger1_R: 'mixamorigRightHandRing1',
+  RingFinger2_R: 'mixamorigRightHandRing2',
+  RingFinger3_R: 'mixamorigRightHandRing3',
+  PinkyFinger1_L: 'mixamorigLeftHandPinky1',
+  PinkyFinger2_L: 'mixamorigLeftHandPinky2',
+  PinkyFinger3_L: 'mixamorigLeftHandPinky3',
+  PinkyFinger1_R: 'mixamorigRightHandPinky1',
+  PinkyFinger2_R: 'mixamorigRightHandPinky2',
+  PinkyFinger3_R: 'mixamorigRightHandPinky3',
+  ThumbFinger1_L: 'mixamorigLeftHandThumb1',
+  ThumbFinger2_L: 'mixamorigLeftHandThumb2',
+  ThumbFinger3_L: 'mixamorigLeftHandThumb3',
+  ThumbFinger1_R: 'mixamorigRightHandThumb1',
+  ThumbFinger2_R: 'mixamorigRightHandThumb2',
+  ThumbFinger3_R: 'mixamorigRightHandThumb3',
+};
+
+// Returns the actual bone name in `bones` that should be used for `requestedName`.
+// Prefers a direct match (custom anatomical model) and falls back to the Mixamo alias.
+function resolveBoneName(requestedName: string, bones: Record<string, THREE.Object3D>): string {
+  if (bones[requestedName]) return requestedName;
+  const alias = BONE_ALIASES[requestedName];
+  if (alias && bones[alias]) return alias;
+  return requestedName;
+}
 
 const BONE_MAPPING: { [configKey: string]: { boneName: string; axis: 'x' | 'y' | 'z'; scale: number; isPosition?: boolean; customAxis?: { x: number; y: number; z: number } }[] } = {
   // === HIP / FEMUR ===
@@ -2142,6 +2230,7 @@ export default function PureThreeGLBViewer({
   animationConstraints = [],
   livePose = null,
   handBoneRotations = null,
+  liveLandmarks = null,
   fixedCameraPosition,
   fixedCameraLookAt,
   showLoadingSpinner = true,
@@ -2205,6 +2294,15 @@ export default function PureThreeGLBViewer({
   const bonesRef = useRef<{ [name: string]: THREE.Object3D }>({});
   const initialRotationsRef = useRef<{ [name: string]: THREE.Euler }>({});
   const bindPoseQuaternionsRef = useRef<{ [name: string]: THREE.Quaternion }>({});
+  // Bind-pose data per bone, captured at model load. Used by direct quaternion retargeting.
+  // `restWorld`: world-space direction from bone to primary child at bind pose.
+  // `bindWorldQuat`: bone's world rotation at bind pose.
+  const bindPoseDataRef = useRef<{ [name: string]: { restWorld: THREE.Vector3; bindWorldQuat: THREE.Quaternion } }>({});
+  // True when the loaded GLB doesn't have native `_L/_R/_M` bones (e.g., Mixamo rigs that use
+  // mixamorigHips, mixamorigLeftArm, etc.). The new quaternion-retargeting paths are only
+  // used for these foreign rigs — when the original anatomical model is loaded with native
+  // bone names, BONE_MAPPING (hand-tuned for that model) drives the bones as before.
+  const isMixamoStyleRigRef = useRef<boolean>(false);
   const sliderRotationsRef = useRef<{ [boneName: string]: { x: number; y: number; z: number } }>({});
   const clavicleOffsetsRef = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const legIKStateRef = useRef<LegIKState | null>(null);
@@ -5489,12 +5587,83 @@ export default function PureThreeGLBViewer({
               initialRotationsRef.current[name] = bone.rotation.clone();
               bindPoseQuaternionsRef.current[name] = bone.quaternion.clone();
             });
+
+            // Cache bind-pose data per bone in WORLD space (more robust than local-space approach
+            // for retargeting: avoids guesswork about each bone's local axis convention).
+            // restWorld: world-space direction from bone to primary child at bind pose.
+            // bindWorldQuat: bone's world quaternion at bind pose.
+            // The model is in bind pose now (we haven't applied any animation yet).
+            bindPoseDataRef.current = {};
+            // Make sure all world matrices are up to date for accurate world position/quaternion reads.
+            model.updateMatrixWorld(true);
+            const _tmpBoneWorld = new THREE.Vector3();
+            const _tmpChildWorld = new THREE.Vector3();
+            boneNames.forEach((name) => {
+              const bone = bones[name] as THREE.Bone;
+              const childBones = (bone.children || []).filter(
+                (c: THREE.Object3D) => (c as THREE.Bone).isBone || (c as any).isBone
+              );
+              if (childBones.length === 0) return;
+              // Use the child whose offset is largest (avoids tiny accessory bones throwing off the direction).
+              let primaryChild = childBones[0];
+              let maxLen = primaryChild.position.length();
+              for (const c of childBones) {
+                const len = c.position.length();
+                if (len > maxLen) {
+                  maxLen = len;
+                  primaryChild = c;
+                }
+              }
+              if (maxLen < 0.0001) return;
+              bone.getWorldPosition(_tmpBoneWorld);
+              primaryChild.getWorldPosition(_tmpChildWorld);
+              const restWorld = _tmpChildWorld.clone().sub(_tmpBoneWorld);
+              if (restWorld.lengthSq() < 0.0001) return;
+              restWorld.normalize();
+              const bindWorldQuat = new THREE.Quaternion();
+              bone.getWorldQuaternion(bindWorldQuat);
+              bindPoseDataRef.current[name] = { restWorld, bindWorldQuat };
+            });
             console.log(`Model loaded: ${boneNames.length} bones, ${muscleMeshes.length} muscles`);
+            // Detect rig type: if the canonical anatomical bones (Hip_L/Hip_R) exist natively,
+            // this is the original anatomical model and BONE_MAPPING applies as designed.
+            // Otherwise it's a foreign rig (Mixamo etc.) and the new quaternion-retargeting paths drive it.
+            isMixamoStyleRigRef.current = !bones['Hip_L'] || !bones['Shoulder_L'];
+            console.log(`[Rig detection] isMixamoStyleRig=${isMixamoStyleRigRef.current}`);
+            const aliasResolved = Object.entries(BONE_ALIASES)
+              .filter(([physio, mixamo]) => !bones[physio] && bones[mixamo])
+              .map(([physio, mixamo]) => `${physio}→${mixamo}`);
+            if (aliasResolved.length > 0) {
+              console.log(`[BONE_ALIASES] Resolved ${aliasResolved.length} aliases:`, aliasResolved);
+            }
+            const unresolvedPhysioBones = Object.keys(BONE_ALIASES)
+              .filter(physio => !bones[physio] && !bones[BONE_ALIASES[physio]]);
+            if (unresolvedPhysioBones.length > 0) {
+              console.warn(`[BONE_ALIASES] Could not resolve:`, unresolvedPhysioBones);
+            }
             
             bonesRef.current = bones;
             muscleMeshesRef.current = muscleMeshes;
-            
-            model.position.set(-0.15, -1.2, 0);
+
+            // Auto-fit model to the camera frame: target ~1.6 units tall, centered horizontally,
+            // bottom-aligned around y=-1.0 so it sits within the front-view CAMERA_PRESETS frame.
+            // This makes the viewer work for arbitrary GLBs (e.g. Mixamo Soldier ~1.7m, custom anatomical ~1m).
+            const TARGET_HEIGHT = 1.6;
+            const TARGET_BOTTOM_Y = -1.0;
+            const fitBox = new THREE.Box3().setFromObject(model);
+            const fitSize = fitBox.getSize(new THREE.Vector3());
+            const fitCenter = fitBox.getCenter(new THREE.Vector3());
+            if (fitSize.y > 0.0001) {
+              const scaleFactor = TARGET_HEIGHT / fitSize.y;
+              model.scale.setScalar(scaleFactor);
+              model.position.set(
+                -fitCenter.x * scaleFactor,
+                TARGET_BOTTOM_Y - fitBox.min.y * scaleFactor,
+                -fitCenter.z * scaleFactor
+              );
+            } else {
+              model.position.set(-0.15, -1.2, 0);
+            }
             scene.add(model);
             model.updateMatrixWorld(true);
 
@@ -6097,7 +6266,11 @@ export default function PureThreeGLBViewer({
 
   useEffect(() => {
     if (status !== 'ready' || !livePose) return;
-    
+    // When raw landmarks are provided AND the rig is foreign (Mixamo etc.), the direct
+    // quaternion retargeting effect drives the bones. For the original anatomical model,
+    // BONE_MAPPING was hand-tuned for that rig so we keep using it.
+    if (isMixamoStyleRigRef.current && liveLandmarks && liveLandmarks.length >= 33) return;
+
     const bones = bonesRef.current;
     const initialRotations = initialRotationsRef.current;
     
@@ -6166,24 +6339,28 @@ export default function PureThreeGLBViewer({
     Object.entries(livePoseConfig).forEach(([configKey, value]) => {
       const mappings = BONE_MAPPING[configKey];
       if (!mappings) return;
-      
+
       mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
         if (isPosition) return;
-        
+
+        // Resolve through aliases so deltas keyed on different physio names (e.g. Shoulder_L,
+        // ShoulderPart1_L) accumulate under a single Mixamo bone instead of overwriting each other.
+        const resolvedName = resolveBoneName(boneName, bones);
+
         const adjustedAngle = value * scale;
-        
+
         if (customAxis) {
-          if (!customAxisAccum[boneName]) {
-            customAxisAccum[boneName] = { axis: new THREE.Vector3(customAxis.x, customAxis.y, customAxis.z).normalize(), angle: 0 };
+          if (!customAxisAccum[resolvedName]) {
+            customAxisAccum[resolvedName] = { axis: new THREE.Vector3(customAxis.x, customAxis.y, customAxis.z).normalize(), angle: 0 };
           }
-          customAxisAccum[boneName].angle += adjustedAngle;
+          customAxisAccum[resolvedName].angle += adjustedAngle;
         } else {
-          if (!boneRotationDeltas[boneName]) {
-            boneRotationDeltas[boneName] = { x: 0, y: 0, z: 0 };
+          if (!boneRotationDeltas[resolvedName]) {
+            boneRotationDeltas[resolvedName] = { x: 0, y: 0, z: 0 };
           }
-          if (axis === 'x') boneRotationDeltas[boneName].x += adjustedAngle;
-          else if (axis === 'y') boneRotationDeltas[boneName].y += adjustedAngle;
-          else if (axis === 'z') boneRotationDeltas[boneName].z += adjustedAngle;
+          if (axis === 'x') boneRotationDeltas[resolvedName].x += adjustedAngle;
+          else if (axis === 'y') boneRotationDeltas[resolvedName].y += adjustedAngle;
+          else if (axis === 'z') boneRotationDeltas[resolvedName].z += adjustedAngle;
         }
       });
     });
@@ -6205,8 +6382,15 @@ export default function PureThreeGLBViewer({
       boneRotationDeltas[boneName].z += resultEuler.z - initial.z;
     });
     
-    const animationLoopBones = new Set(['Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R']);
-    const quaternionComposeBones = new Set(['Hip_L', 'Hip_R', 'Shoulder_L', 'Shoulder_R']);
+    const animationLoopBones = new Set([
+      'Shoulder_L', 'Shoulder_R', 'ShoulderPart1_L', 'ShoulderPart1_R',
+      'mixamorigLeftArm', 'mixamorigRightArm',
+    ]);
+    const quaternionComposeBones = new Set([
+      'Hip_L', 'Hip_R', 'Shoulder_L', 'Shoulder_R',
+      'mixamorigLeftArm', 'mixamorigRightArm',
+      'mixamorigLeftUpLeg', 'mixamorigRightUpLeg',
+    ]);
 
     Object.entries(boneRotationDeltas).forEach(([boneName, delta]) => {
       const bone = bones[boneName] as THREE.Bone;
@@ -6246,8 +6430,119 @@ export default function PureThreeGLBViewer({
       }
     });
 
-  }, [livePose, status]);
-  
+  }, [livePose, status, liveLandmarks]);
+
+  // === DIRECT QUATERNION RETARGETING from raw MediaPipe landmarks ===
+  // Bypasses BONE_MAPPING — works with any rigged humanoid by computing world-space joint
+  // orientations directly from the 33 MediaPipe pose landmarks.
+  // Hierarchy order matters: parents are processed before children so child rotations
+  // can use their parent's already-updated world rotation as a reference frame.
+  const prevDirectQuatsRef = useRef<Record<string, THREE.Quaternion>>({});
+  useEffect(() => {
+    // Only used for foreign rigs (Mixamo etc.). The original anatomical model uses BONE_MAPPING.
+    if (!isMixamoStyleRigRef.current) return;
+    if (status !== 'ready' || !liveLandmarks || liveLandmarks.length < 33) {
+      // When landmarks stop, clear cached quaternions and reset bones to bind pose.
+      if (!liveLandmarks) {
+        const bones = bonesRef.current;
+        const bindPoseQuats = bindPoseQuaternionsRef.current;
+        for (const name of Object.keys(prevDirectQuatsRef.current)) {
+          const bone = bones[name] as THREE.Bone | undefined;
+          if (bone && bindPoseQuats[name]) bone.quaternion.copy(bindPoseQuats[name]);
+        }
+        prevDirectQuatsRef.current = {};
+      }
+      return;
+    }
+    const bones = bonesRef.current;
+    const bindPoseData = bindPoseDataRef.current;
+    if (Object.keys(bones).length === 0) return;
+
+    // MediaPipe landmark indices
+    const LM_LEFT_SHOULDER = 11, LM_RIGHT_SHOULDER = 12;
+    const LM_LEFT_ELBOW = 13, LM_RIGHT_ELBOW = 14;
+    const LM_LEFT_WRIST = 15, LM_RIGHT_WRIST = 16;
+    const LM_LEFT_HIP = 23, LM_RIGHT_HIP = 24;
+    const LM_LEFT_KNEE = 25, LM_RIGHT_KNEE = 26;
+    const LM_LEFT_ANKLE = 27, LM_RIGHT_ANKLE = 28;
+
+    // Convert a MediaPipe landmark to a THREE.Vector3 in our coordinate system:
+    // - MediaPipe X is screen-right-positive (we keep it as +X in our world).
+    // - MediaPipe Y is screen-down-positive (we flip → +Y is up in Three.js).
+    // - MediaPipe Z is "closer to camera = smaller value"; we want closer = +Z in Three.js (toward viewer), so flip.
+    // - MediaPipe Z is also noisier than X/Y so we dampen.
+    const Z_SCALE = 0.6;
+    const lmVec = (i: number): THREE.Vector3 | null => {
+      const p = liveLandmarks[i];
+      if (!p) return null;
+      if (p.visibility !== undefined && p.visibility < 0.3) return null;
+      return new THREE.Vector3(p.x, -p.y, -p.z * Z_SCALE);
+    };
+
+    // The webcam is typically displayed mirrored (selfie view). MediaPipe's "Left" labels are with
+    // respect to the user, so user's actual LEFT shoulder = MP LEFT_SHOULDER. The avatar faces the
+    // viewer, so the avatar's LEFT arm appears on screen-RIGHT — same side as the user's actual
+    // LEFT arm in a mirror. So we map: avatar Left bones ← MP Left landmarks. No swap needed.
+    type Chain = { boneName: string; from: number; to: number };
+    const chains: Chain[] = [
+      { boneName: resolveBoneName('Shoulder_L', bones), from: LM_LEFT_SHOULDER, to: LM_LEFT_ELBOW },
+      { boneName: resolveBoneName('Elbow_L', bones), from: LM_LEFT_ELBOW, to: LM_LEFT_WRIST },
+      { boneName: resolveBoneName('Shoulder_R', bones), from: LM_RIGHT_SHOULDER, to: LM_RIGHT_ELBOW },
+      { boneName: resolveBoneName('Elbow_R', bones), from: LM_RIGHT_ELBOW, to: LM_RIGHT_WRIST },
+      { boneName: resolveBoneName('Hip_L', bones), from: LM_LEFT_HIP, to: LM_LEFT_KNEE },
+      { boneName: resolveBoneName('Knee_L', bones), from: LM_LEFT_KNEE, to: LM_LEFT_ANKLE },
+      { boneName: resolveBoneName('Hip_R', bones), from: LM_RIGHT_HIP, to: LM_RIGHT_KNEE },
+      { boneName: resolveBoneName('Knee_R', bones), from: LM_RIGHT_KNEE, to: LM_RIGHT_ANKLE },
+    ];
+
+    // Algorithm (world-space — robust to per-bone local axis conventions):
+    //   restWorld    = pre-computed bind-pose direction from bone to child (world space)
+    //   bindWorldQ   = pre-computed bone world rotation at bind pose
+    //   targetWorld  = (toLandmark - fromLandmark) normalized
+    //   worldDelta   = quaternion rotating restWorld → targetWorld
+    //   newWorldQ    = worldDelta * bindWorldQ
+    //   bone.quat    = parentCurrentWorldQ⁻¹ * newWorldQ  (convert to local space)
+    //
+    // This avoids reasoning about whether the bone's local +Y or +X is "down the bone" — Mixamo,
+    // VRM, and custom rigs all use different conventions but this formulation is convention-agnostic.
+    const SMOOTH = 0.5;
+    const prev = prevDirectQuatsRef.current;
+    const _parentWorldQ = new THREE.Quaternion();
+
+    for (const { boneName, from, to } of chains) {
+      const bone = bones[boneName] as THREE.Bone | undefined;
+      if (!bone) continue;
+      const data = bindPoseData[boneName];
+      if (!data) continue;
+
+      const fromV = lmVec(from);
+      const toV = lmVec(to);
+      if (!fromV || !toV) continue;
+
+      const targetWorld = new THREE.Vector3().subVectors(toV, fromV);
+      if (targetWorld.lengthSq() < 0.0001) continue;
+      targetWorld.normalize();
+
+      // World-space rotation: restWorld → targetWorld
+      const worldDelta = new THREE.Quaternion().setFromUnitVectors(data.restWorld, targetWorld);
+      // New bone world quaternion: apply the delta on top of the bind pose orientation
+      const newWorldQ = worldDelta.clone().multiply(data.bindWorldQuat);
+      // Convert to local space (current parent world inverse * new world)
+      if (bone.parent) {
+        bone.parent.getWorldQuaternion(_parentWorldQ);
+      } else {
+        _parentWorldQ.identity();
+      }
+      const localQ = _parentWorldQ.clone().invert().multiply(newWorldQ);
+
+      // Slerp with previous frame for smoothing
+      const smoothed = prev[boneName] ? prev[boneName].clone().slerp(localQ, SMOOTH) : localQ;
+      bone.quaternion.copy(smoothed);
+      bone.updateMatrixWorld(true);
+      prev[boneName] = smoothed;
+    }
+  }, [liveLandmarks, status]);
+
   // === HAND BONE ROTATIONS from MediaPipe Hands (with smoothing) ===
   // Track previous hand bone rotations for exponential smoothing
   const prevHandBoneRotRef = useRef<Record<string, { x: number; y: number; z: number }>>({});
@@ -6262,12 +6557,13 @@ export default function PureThreeGLBViewer({
     const prev = prevHandBoneRotRef.current;
 
     for (const [boneName, rot] of Object.entries(handBoneRotations)) {
-      const bone = bones[boneName] as THREE.Bone | undefined;
-      const initial = initialRotations[boneName];
+      const resolvedName = resolveBoneName(boneName, bones);
+      const bone = bones[resolvedName] as THREE.Bone | undefined;
+      const initial = initialRotations[resolvedName];
       if (!bone || !initial) continue;
 
       // Smooth each axis using exponential moving average
-      const p = prev[boneName] || { x: rot.x, y: rot.y, z: rot.z };
+      const p = prev[resolvedName] || { x: rot.x, y: rot.y, z: rot.z };
       const smoothedX = p.x + (rot.x - p.x) * HAND_SMOOTH_FACTOR;
       const smoothedY = p.y + (rot.y - p.y) * HAND_SMOOTH_FACTOR;
       const smoothedZ = p.z + (rot.z - p.z) * HAND_SMOOTH_FACTOR;
@@ -6281,7 +6577,7 @@ export default function PureThreeGLBViewer({
       const finalY = applyDZ(smoothedY);
       const finalZ = applyDZ(smoothedZ);
 
-      prev[boneName] = { x: smoothedX, y: smoothedY, z: smoothedZ };
+      prev[resolvedName] = { x: smoothedX, y: smoothedY, z: smoothedZ };
 
       bone.rotation.set(
         initial.x + finalX,
@@ -6819,26 +7115,27 @@ export default function PureThreeGLBViewer({
           const angleInRadians = (value * Math.PI) / 180;
           
           mappings.forEach(({ boneName, axis, scale, isPosition, customAxis }) => {
+            const resolvedName = resolveBoneName(boneName, bones);
             if (isPosition) {
               const positionOffset = value * scale;
-              if (!animBonePositions[boneName]) {
-                animBonePositions[boneName] = { x: 0, y: 0, z: 0 };
+              if (!animBonePositions[resolvedName]) {
+                animBonePositions[resolvedName] = { x: 0, y: 0, z: 0 };
               }
-              if (axis === 'x') animBonePositions[boneName].x += positionOffset;
-              else if (axis === 'y') animBonePositions[boneName].y += positionOffset;
-              else if (axis === 'z') animBonePositions[boneName].z += positionOffset;
+              if (axis === 'x') animBonePositions[resolvedName].x += positionOffset;
+              else if (axis === 'y') animBonePositions[resolvedName].y += positionOffset;
+              else if (axis === 'z') animBonePositions[resolvedName].z += positionOffset;
             } else {
               const adjustedAngle = angleInRadians * scale;
-              if (!animBoneRotations[boneName]) {
-                const initial = initialRotations[boneName];
-                animBoneRotations[boneName] = initial ? { ...initial } : { x: 0, y: 0, z: 0 };
+              if (!animBoneRotations[resolvedName]) {
+                const initial = initialRotations[resolvedName];
+                animBoneRotations[resolvedName] = initial ? { ...initial } : { x: 0, y: 0, z: 0 };
               }
               if (customAxis) {
-                applyCustomAxisRotation(animBoneRotations, boneName, customAxis, adjustedAngle, initialRotations);
+                applyCustomAxisRotation(animBoneRotations, resolvedName, customAxis, adjustedAngle, initialRotations);
               } else {
-                if (axis === 'x') animBoneRotations[boneName].x += adjustedAngle;
-                else if (axis === 'y') animBoneRotations[boneName].y += adjustedAngle;
-                else if (axis === 'z') animBoneRotations[boneName].z += adjustedAngle;
+                if (axis === 'x') animBoneRotations[resolvedName].x += adjustedAngle;
+                else if (axis === 'y') animBoneRotations[resolvedName].y += adjustedAngle;
+                else if (axis === 'z') animBoneRotations[resolvedName].z += adjustedAngle;
               }
             }
           });
@@ -6846,7 +7143,8 @@ export default function PureThreeGLBViewer({
       });
       
       // Quaternion composition for shoulder and hip bones (matches slider and camera paths)
-      ['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R'].forEach(boneName => {
+      ['Shoulder_L', 'Shoulder_R', 'Hip_L', 'Hip_R'].forEach(physioName => {
+        const boneName = resolveBoneName(physioName, bones);
         const initial = initialRotations[boneName];
         const anim = animBoneRotations[boneName];
         if (!initial || !anim) return;
@@ -7152,7 +7450,122 @@ export default function PureThreeGLBViewer({
           });
         });
       }
-      
+
+      // === WORLD-SPACE CHAIN OVERRIDE (for animation player on Mixamo-rigged models) ===
+      // The BONE_MAPPING above was tuned for the original anatomical model's bone-axis convention.
+      // For foreign rigs (Mixamo Xbot/Soldier/etc.) the same Euler rotations produce wrong motion,
+      // so we re-apply rotations on chain bones using world-space anatomical conventions.
+      // Skipped entirely when the original anatomical model is loaded.
+      const _bindData = bindPoseDataRef.current;
+      if (isMixamoStyleRigRef.current && Object.keys(_bindData).length > 0) {
+        const dToR = Math.PI / 180;
+        const _parentWQ = new THREE.Quaternion();
+        const _tmpWQ = new THREE.Quaternion();
+
+        const applyTargetWorld = (boneName: string, targetWorldQ: THREE.Quaternion) => {
+          const b = bones[boneName] as THREE.Bone | undefined;
+          if (!b || !b.parent) return;
+          b.parent.getWorldQuaternion(_parentWQ);
+          b.quaternion.copy(_parentWQ.clone().invert().multiply(targetWorldQ));
+          b.updateMatrixWorld(true);
+        };
+
+        // SHOULDERS — flexion (raise forward) + abduction (raise sideways)
+        for (const side of ['L', 'R'] as const) {
+          const j = jointValues[side === 'L' ? 'leftShoulder' : 'rightShoulder'];
+          if (!j) continue;
+          const flex = (j.flexion || 0) * dToR;
+          const abd = (j.abduction || 0) * dToR;
+          if (Math.abs(flex) < 0.001 && Math.abs(abd) < 0.001) continue;
+          const boneName = resolveBoneName(`Shoulder_${side}`, bones);
+          const data = _bindData[boneName];
+          if (!data) continue;
+          // Flexion axis: +Y for left arm, -Y for right (so flexion always brings arm forward).
+          // Abduction axis: +Z for left, -Z for right (so abduction always lifts arm outward).
+          const flexAxis = side === 'L' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, -1, 0);
+          const abdAxis = side === 'L' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 0, -1);
+          const flexQ = new THREE.Quaternion().setFromAxisAngle(flexAxis, flex);
+          const abdQ = new THREE.Quaternion().setFromAxisAngle(abdAxis, abd);
+          const targetWQ = abdQ.clone().multiply(flexQ).multiply(data.bindWorldQuat);
+          applyTargetWorld(boneName, targetWQ);
+        }
+
+        // ELBOWS — flexion (bend forearm). Bending axis depends on current upper-arm direction
+        // so the elbow always bends "through" the elbow joint correctly.
+        for (const side of ['L', 'R'] as const) {
+          const j = jointValues[side === 'L' ? 'leftElbow' : 'rightElbow'];
+          if (!j) continue;
+          const flex = (j.flexion || 0) * dToR;
+          if (Math.abs(flex) < 0.001) continue;
+          const boneName = resolveBoneName(`Elbow_${side}`, bones);
+          const upperBoneName = resolveBoneName(`Shoulder_${side}`, bones);
+          const data = _bindData[boneName];
+          const upperData = _bindData[upperBoneName];
+          const upperBone = bones[upperBoneName];
+          if (!data || !upperData || !upperBone) continue;
+          // Get upper arm's CURRENT world direction
+          upperBone.getWorldQuaternion(_tmpWQ);
+          const deltaQ = _tmpWQ.clone().multiply(upperData.bindWorldQuat.clone().invert());
+          const upperDir = upperData.restWorld.clone().applyQuaternion(deltaQ);
+          // Bending axis: perpendicular to upper arm and to world-up. Falls back to world X if degenerate.
+          const elbowAxis = upperDir.clone().cross(new THREE.Vector3(0, 1, 0));
+          if (elbowAxis.lengthSq() < 0.0001) elbowAxis.set(side === 'L' ? -1 : 1, 0, 0);
+          elbowAxis.normalize();
+          const flexQ = new THREE.Quaternion().setFromAxisAngle(elbowAxis, flex);
+          // Elbow's bind world quat under current upper arm = upperWorldQ * upperBindWorldQ⁻¹ * elbowBindWorldQ
+          const elbowCurrentBindWorldQ = _tmpWQ.clone()
+            .multiply(upperData.bindWorldQuat.clone().invert())
+            .multiply(data.bindWorldQuat);
+          const targetWQ = flexQ.clone().multiply(elbowCurrentBindWorldQ);
+          applyTargetWorld(boneName, targetWQ);
+        }
+
+        // HIPS — flexion (lift leg forward, both sides rotate around +X) + abduction (leg out sideways)
+        for (const side of ['L', 'R'] as const) {
+          const j = jointValues[side === 'L' ? 'leftHip' : 'rightHip'];
+          if (!j) continue;
+          const flex = (j.flexion || 0) * dToR;
+          const abd = (j.abduction || 0) * dToR;
+          if (Math.abs(flex) < 0.001 && Math.abs(abd) < 0.001) continue;
+          const boneName = resolveBoneName(`Hip_${side}`, bones);
+          const data = _bindData[boneName];
+          if (!data) continue;
+          const flexAxis = new THREE.Vector3(1, 0, 0);
+          const abdAxis = side === 'L' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 0, -1);
+          const flexQ = new THREE.Quaternion().setFromAxisAngle(flexAxis, flex);
+          const abdQ = new THREE.Quaternion().setFromAxisAngle(abdAxis, abd);
+          const targetWQ = abdQ.clone().multiply(flexQ).multiply(data.bindWorldQuat);
+          applyTargetWorld(boneName, targetWQ);
+        }
+
+        // KNEES — flexion (bend shin backward)
+        for (const side of ['L', 'R'] as const) {
+          const j = jointValues[side === 'L' ? 'leftKnee' : 'rightKnee'];
+          if (!j) continue;
+          const flex = (j.flexion || 0) * dToR;
+          if (Math.abs(flex) < 0.001) continue;
+          const boneName = resolveBoneName(`Knee_${side}`, bones);
+          const upperBoneName = resolveBoneName(`Hip_${side}`, bones);
+          const data = _bindData[boneName];
+          const upperData = _bindData[upperBoneName];
+          const upperBone = bones[upperBoneName];
+          if (!data || !upperData || !upperBone) continue;
+          upperBone.getWorldQuaternion(_tmpWQ);
+          const deltaQ = _tmpWQ.clone().multiply(upperData.bindWorldQuat.clone().invert());
+          const thighDir = upperData.restWorld.clone().applyQuaternion(deltaQ);
+          const kneeAxis = thighDir.clone().cross(new THREE.Vector3(0, 0, 1));
+          if (kneeAxis.lengthSq() < 0.0001) kneeAxis.set(side === 'L' ? 1 : -1, 0, 0);
+          kneeAxis.normalize();
+          // Bend backward (knees flex backward, so flip sign so positive `flex` produces backward bend)
+          const flexQ = new THREE.Quaternion().setFromAxisAngle(kneeAxis, -flex);
+          const kneeCurrentBindWorldQ = _tmpWQ.clone()
+            .multiply(upperData.bindWorldQuat.clone().invert())
+            .multiply(data.bindWorldQuat);
+          const targetWQ = flexQ.clone().multiply(kneeCurrentBindWorldQ);
+          applyTargetWorld(boneName, targetWQ);
+        }
+      }
+
       if (onAnimationFrame) {
         onAnimationFrame(jointValues);
       }

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/ravi/Desktop/Ravi/clients/physioconversation/PhysioAINote/.env*)",
+      "Bash(grep -h \"process\\\\.env\\\\.\" /Users/ravi/Desktop/Ravi/clients/physioconversation/PhysioAINote/server/*.ts)",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -r \"STRIPE_PRICE\" /Users/ravi/Desktop/Ravi/clients/physioconversation/PhysioAINote/server/*.ts)",
+      "Bash(lsof -ti:5000)",
+      "Bash(xargs kill *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5000)",
+      "Bash(PGPASSWORD=npg_sI5olNaZm7hH psql *)",
+      "Bash(PGPASSWORD=npg_Aaw1RkfSi0LU psql *)",
+      "Bash(PGPASSWORD=password psql *)",
+      "Bash(node *)",
+      "Bash(grep -r \"onPoseUpdate\\\\|onPartialPoseUpdate\" /Users/ravi/Desktop/Ravi/clients/physioconversation/PhysioAINote/client/src/pages/*.tsx)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(ls -la /Users/ravi/Desktop/Ravi/clients/physioconversation/PhysioAINote/*.sh)",
+      "Bash(npx tsx *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(curl -s -o /dev/null -w \"Server: %{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"GLB: %{http_code}, Size: %{size_download} bytes\\\\n\" http://localhost:3000/models/skeleton_character.glb)"
+    ]
+  }
+}

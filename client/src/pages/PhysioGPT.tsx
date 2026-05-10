@@ -589,6 +589,7 @@ export default function PhysioGPT() {
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
   const [livePoseData, setLivePoseData] = useState<Skeleton3DPose | null>(null);
   const [handBoneRotations, setHandBoneRotations] = useState<HandBoneRotations | null>(null);
+  const [liveLandmarks, setLiveLandmarks] = useState<Array<{ x: number; y: number; z: number; visibility?: number }> | null>(null);
   const [poseTrackingQuality, setPoseTrackingQuality] = useState<{ overall: number; estimatedJoints: string[] }>({ overall: 1, estimatedJoints: [] });
   const [posturalMetrics, setPosturalMetrics] = useState<PosturalMetrics | null>(null);
   const [focusedCameraResult, setFocusedCameraResult] = useState<FocusedCameraResult | null>(null);
@@ -5012,6 +5013,7 @@ ${ddxList}`;
                   onPartialPoseUpdate={handlePartialPoseUpdate}
                   onPosturalMetrics={handlePosturalMetricsUpdate}
                   onHandBoneRotations={setHandBoneRotations}
+                  onRawLandmarks={(lms: any[]) => setLiveLandmarks(lms || null)}
                   isActive={cameraMode}
                   onFocusedAnalysisComplete={handleFocusedAnalysisComplete}
                   onRegionChange={(region) => setFocusedRegion(region)}
@@ -5179,7 +5181,7 @@ ${ddxList}`;
             )}
             <div ref={skeletonContainerRef} className={`${cameraMode ? 'w-[60%]' : 'w-full'} h-full relative`}>
             <PureThreeGLBViewer
-              modelPath="/models/skeleton_character.glb"
+              modelPath={cameraPoseActive ? "/models/xbot.glb" : "/models/skeleton_character.glb"}
               modelConfig={finalModelConfig as any}
               livePose={cameraPoseActive ? livePoseData : undefined}
               zoomToRegion={zoomToRegion}
@@ -5242,6 +5244,7 @@ ${ddxList}`;
               selectedForceJoint={selectedForceJoint}
               onForceJointSelect={(joint) => setSelectedForceJoint(prev => prev === joint ? null : joint)}
               handBoneRotations={handBoneRotations}
+              liveLandmarks={cameraPoseActive ? liveLandmarks : null}
               muscleStates={muscleMode && muscleAnalysis ? muscleAnalysis.groupStates : undefined}
               enableMuscleInteraction={muscleMode}
               onMuscleGroupClick={(groupId, screenX, screenY) => {

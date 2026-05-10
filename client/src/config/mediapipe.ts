@@ -23,13 +23,13 @@ export const MEDIAPIPE_CONFIG = {
       return `${baseUrl}/${file}`;
     },
     
-    // Pose detection settings optimized for web deployment
+    // Pose detection settings — using "heavy" model for better limb accuracy
     options: {
-      modelComplexity: 1 as 0 | 1 | 2, // Reduced from 2 for better performance in production
+      modelComplexity: 2 as 0 | 1 | 2,
       smoothLandmarks: true,
       enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6,
       selfieMode: false // Don't mirror for back camera
     }
   },

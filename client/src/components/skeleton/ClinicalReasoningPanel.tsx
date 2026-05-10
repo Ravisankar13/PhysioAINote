@@ -278,6 +278,7 @@ interface ClinicalReasoningPanelProps {
   requestedTab?: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null;
   onRequestedTabHandled?: () => void;
   onActiveTabChange?: (tab: 'analysis' | 'structured' | 'decision' | 'plan' | 'evidence') => void;
+  showEvidenceTab?: boolean;
   externalClinicalNotes?: ClinicalNotes | null;
   onExternalClinicalNotesChange?: (notes: ClinicalNotes | null) => void;
   externalIsGeneratingNotes?: boolean;
@@ -522,6 +523,7 @@ export default function ClinicalReasoningPanel({
   requestedTab,
   onRequestedTabHandled,
   onActiveTabChange,
+  showEvidenceTab = true,
   externalClinicalNotes,
   onExternalClinicalNotesChange,
   externalIsGeneratingNotes,
@@ -532,10 +534,18 @@ export default function ClinicalReasoningPanel({
 
   useEffect(() => {
     if (requestedTab) {
+      // Defensive guard: when the Evidence tab is hidden by the parent
+      // (e.g. PhysioGPT's bottom toolbar no longer surfaces Evidence),
+      // ignore stale evidence requests so the tab cannot be activated
+      // by other affordances.
+      if (requestedTab === 'evidence' && !showEvidenceTab) {
+        onRequestedTabHandled?.();
+        return;
+      }
       setActiveTab(requestedTab);
       onRequestedTabHandled?.();
     }
-  }, [requestedTab, onRequestedTabHandled]);
+  }, [requestedTab, onRequestedTabHandled, showEvidenceTab]);
 
   useEffect(() => {
     onActiveTabChange?.(activeTab);
@@ -910,27 +920,29 @@ export default function ClinicalReasoningPanel({
             Plan
             {planData && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-cyan-400" />}
           </button>
-          <button
-            onClick={() => {
-              setActiveTab('evidence');
-              if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
-                onEvidenceQuery();
-              }
-            }}
-            className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
-          >
-            <BookOpen className="h-3 w-3" />
-            Evidence
-            {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
-            {!evidenceLoading && evidenceData && (() => {
-              const totalCount = (evidenceData.pubmedPapers?.length || 0) + (evidenceData.options?.length || 0);
-              return totalCount > 0 ? (
-                <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 min-w-[14px] text-center">{totalCount}</span>
-              ) : (
-                <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
-              );
-            })()}
-          </button>
+          {showEvidenceTab && (
+            <button
+              onClick={() => {
+                setActiveTab('evidence');
+                if (!evidenceData && !evidenceLoading && onEvidenceQuery) {
+                  onEvidenceQuery();
+                }
+              }}
+              className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${activeTab === 'evidence' ? 'text-amber-400 border-amber-400' : 'text-gray-500 border-transparent hover:text-gray-300'}`}
+            >
+              <BookOpen className="h-3 w-3" />
+              Evidence
+              {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
+              {!evidenceLoading && evidenceData && (() => {
+                const totalCount = (evidenceData.pubmedPapers?.length || 0) + (evidenceData.options?.length || 0);
+                return totalCount > 0 ? (
+                  <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/20 text-amber-400 min-w-[14px] text-center">{totalCount}</span>
+                ) : (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
+                );
+              })()}
+            </button>
+          )}
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1 custom-scrollbar">

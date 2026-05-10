@@ -50,7 +50,6 @@ import {
   SlidersHorizontal,
   MapPin,
   Crosshair,
-  Ruler,
   Activity,
   Weight,
   Scan,
@@ -59,7 +58,6 @@ import {
   Pause,
   Sparkles,
   Zap,
-  Search,
   Check,
   Scale,
   GitBranch,
@@ -68,8 +66,6 @@ import {
   Layers,
   Network,
   Radio,
-  Palette,
-  Scissors,
   Grid2X2,
   RefreshCw,
   ExternalLink,
@@ -130,14 +126,14 @@ import { calculatePosturalForces, forceToNewtons, getStatusColor, getThresholdWa
 import { computeFullMuscleAnalysis, computeAllMuscleStates, applyOverridesToAnalysis, getClinicalStatusColor, getClinicalStatusLabel, getToneLabel, getExerciseRecommendations, computeMuscleBalanceRatios, computeTreatmentPriorities, type MuscleAnalysisResult, type IndividualMuscle, type MuscleGroupAnalysis, type ExerciseRecommendation, type MuscleBalanceRatio, type TreatmentPriority, type MuscleOverride, type LengthOverride, type PathologyType, type CrossMuscleEffects, PATHOLOGY_LABELS, PATHOLOGY_EFFECTS } from "@/lib/muscleBiomechanicsEngine";
 import { computeBidirectionalEffects, computeMuscleRestrictionEffects, computeChainDrivenJointEffects, MUSCLE_JOINT_ACTIONS, type MuscleRestrictionEffect } from "@/lib/bidirectionalMuscleJoint";
 import { computePathologyCompensation, type PathologyCompensationResult } from "@/lib/pathologyCompensationEngine";
-import { ENVIRONMENT_PRESETS, DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
+import { DEFAULT_ENVIRONMENT } from "@/lib/environmentPresets";
 import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPosturePreset } from "@/lib/clinicalPosturePresets";
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
 import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
-import { type ScarMarker, type AdhesionBand, SCAR_TYPES, SCAR_SEVERITY_LABELS, TISSUE_LAYERS, getScarImpact, type ScarType, type TissueLayer, type ScarAge, type ScarMobility } from "@/lib/scarTissueMapping";
+import { type ScarMarker, type AdhesionBand, SCAR_TYPES, getScarImpact } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
 import { type FascialModifiers } from "@/lib/posturalForceEngine";
 import { classifyPainMechanism } from "@/lib/neurologyMap";
@@ -775,7 +771,6 @@ export default function PhysioGPT() {
   const [showClinicalPresets, setShowClinicalPresets] = useState(false);
   const [openControlSections, setOpenControlSections] = useState<Set<string>>(new Set());
   const [environmentPreset, setEnvironmentPreset] = useState(DEFAULT_ENVIRONMENT);
-  const [showEnvironmentPicker, setShowEnvironmentPicker] = useState(false);
 
   const [selectedRegion, setSelectedRegion] = useState<keyof typeof BODY_REGIONS | null>(null);
   const [showSpecialTests, setShowSpecialTests] = useState(false);
@@ -843,7 +838,6 @@ export default function PhysioGPT() {
   const [activeSymptomType, setActiveSymptomType] = useState<SymptomType>('pain');
   const [editingMarkerId, setEditingMarkerId] = useState<string | null>(null);
   const [markerDescription, setMarkerDescription] = useState('');
-  const [romMode, setRomMode] = useState(false);
   const [poseMode, setPoseMode] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
   const [cameraPoseActive, setCameraPoseActive] = useState(false);
@@ -1201,8 +1195,6 @@ export default function PhysioGPT() {
   }, [showInjuryMechanism, mechanismBoneIds]);
   const [connectionHighlights, setConnectionHighlights] = useState<AnatomicalRegion[]>([]);
   const [testChainActive, setTestChainActive] = useState<{ connection: KineticChainConnection; originalRegion: string } | null>(null);
-  const [zoomToolMode, setZoomToolMode] = useState(false);
-  const [expandedZoomRegion, setExpandedZoomRegion] = useState<string | null>(null);
   const [correlationMode, setCorrelationMode] = useState(false);
   const [expandedCorrelation, setExpandedCorrelation] = useState<string | null>(null);
   const [correlationTab, setCorrelationTab] = useState<'overview' | 'chains' | 'muscles' | 'root_cause'>('overview');
@@ -1212,13 +1204,8 @@ export default function PhysioGPT() {
   const [tensionTabActive, setTensionTabActive] = useState(false);
   const [selectedChainNode, setSelectedChainNode] = useState<{ chainId: string; muscleId: string; chainName: string } | null>(null);
   const [manualChainTensions, setManualChainTensions] = useState<Record<string, number>>({});
-  const [showScarPanel, setShowScarPanel] = useState(false);
   const [scarMarkers, setScarMarkers] = useState<ScarMarker[]>([]);
   const [adhesionBands, setAdhesionBands] = useState<AdhesionBand[]>([]);
-  const [editingScar, setEditingScar] = useState<string | null>(null);
-  const [scarPlacementMode, setScarPlacementMode] = useState<ScarType | null>(null);
-  const [adhesionPlacementStep, setAdhesionPlacementStep] = useState<'idle' | 'start' | 'end'>('idle');
-  const [pendingAdhesionStart, setPendingAdhesionStart] = useState<{ position: { x: number; y: number; z: number }; bone: string } | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'chat' | 'treatment' | 'biomechanics' | 'slings'>('chat');
   const [reasoningRequestedTab, setReasoningRequestedTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence' | null>(null);
   const [reasoningActiveTab, setReasoningActiveTab] = useState<'analysis' | 'structured' | 'decision' | 'plan' | 'evidence'>('analysis');
@@ -5028,7 +5015,6 @@ ${ddxList}`;
     setCameraMode(newMode);
     if (newMode) {
       setPainMarkerMode(false);
-      setRomMode(false);
       setPoseMode(false);
       setSelectedRomJoint(null);
       setCameraPoseActive(true);
@@ -11418,8 +11404,6 @@ ${ddxList}`;
               const movementImplicitPose =
                 skeletonMode === 'movement' &&
                 !painMarkerMode &&
-                !romMode &&
-                !zoomToolMode &&
                 !cameraMode &&
                 !cameraPoseActive;
               const effectiveEnablePoseMode = poseMode || movementImplicitPose;
@@ -11470,8 +11454,7 @@ ${ddxList}`;
                 const marker = painMarkers.find(m => m.id === id);
                 if (marker) setClinicalBubbleMarker(marker);
               }}
-              enableRomMode={romMode}
-              onRomJointSelect={handleRomJointSelect}
+              enableRomMode={false}
               selectedRomJointId={selectedRomJoint?.id || null}
               enableJointZoomMode={skeletonMode === 'movement'}
               onJointZoomSelect={(side) => {
@@ -11494,8 +11477,7 @@ ${ddxList}`;
               activeCapacities={viewerActiveCapacities}
               onActiveMovementAttempt={handleActiveMovementAttempt}
               onPainfulArcFlare={handlePainfulArcFlare}
-              enableZoomTool={zoomToolMode}
-              onLandmarkSelect={handleLandmarkSelect}
+              enableZoomTool={false}
               forceOverlay={(() => {
                 if (!overlayVisibility.forceArrows) return null;
                 if (showMechanicsAnalyser && !mechanicsOverlay.jointReactionArrows) return null;
@@ -11536,7 +11518,6 @@ ${ddxList}`;
               onChainNodeClick={handleChainNodeClick}
               scarMarkers={overlayVisibility.scarAdhesion ? scarMarkers : []}
               adhesionBands={overlayVisibility.scarAdhesion ? adhesionBands : []}
-              onScarMarkerClick={(id) => setEditingScar(id)}
               treatmentBoneNames={treatmentBoneNames}
               onBoneScreenPositions={handleBoneScreenPositions}
               dermatomeHighlightBones={overlayVisibility.dermatomeNerve ? dermatomeHighlightBones : []}
@@ -11601,48 +11582,8 @@ ${ddxList}`;
                   setTissueDisambiguationEntries(matches.map(m => ({ id: m.id, label: m.label })));
                 }
               } : undefined}
-              enableSkeletonClick={!!scarPlacementMode || adhesionPlacementStep !== 'idle' || (!!tissueViewMode && tissueViewMode !== 'muscle')}
+              enableSkeletonClick={!!tissueViewMode && tissueViewMode !== 'muscle'}
               goalStateOverlay={goalOverlayData}
-              onSkeletonClick={(position, nearestBone, anatomicalLabel) => {
-                if (scarPlacementMode) {
-                  const newScar: ScarMarker = {
-                    id: `scar_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    position,
-                    nearestBone,
-                    anatomicalLabel,
-                    type: scarPlacementMode,
-                    length: 0.08,
-                    width: 0.03,
-                    orientation: 0,
-                    affectedLayers: ['superficial'],
-                    severity: 3,
-                    age: 'chronic',
-                    mobility: 'tethered',
-                    painOnPalpation: 3,
-                    notes: '',
-                  };
-                  setScarMarkers(prev => [...prev, newScar]);
-                  setEditingScar(newScar.id);
-                  setScarPlacementMode(null);
-                } else if (adhesionPlacementStep === 'start') {
-                  setPendingAdhesionStart({ position, bone: nearestBone });
-                  setAdhesionPlacementStep('end');
-                } else if (adhesionPlacementStep === 'end' && pendingAdhesionStart) {
-                  const newBand: AdhesionBand = {
-                    id: `adhesion_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                    startPosition: pendingAdhesionStart.position,
-                    endPosition: position,
-                    startBone: pendingAdhesionStart.bone,
-                    endBone: nearestBone,
-                    restrictedMovements: [],
-                    tensionLevel: 50,
-                    depth: 'superficial',
-                  };
-                  setAdhesionBands(prev => [...prev, newBand]);
-                  setAdhesionPlacementStep('idle');
-                  setPendingAdhesionStart(null);
-                }
-              }}
             />
             ); if (showRecoverySim && recoverySimSlot) return createPortal(__viewer, recoverySimSlot); if (showMechanicsAnalyser && mechanicsAnalyserSlot) return createPortal(__viewer, mechanicsAnalyserSlot); if (skeletonMode === 'treatment') return (
               <div className="relative w-full h-full ring-2 ring-amber-500/70 ring-inset rounded-md" data-testid="treatment-mode-frame">
@@ -14091,81 +14032,6 @@ ${ddxList}`;
               </div>
             )}
 
-            {/* Zoom Tool Region Navigator with Landmark Browser */}
-            {zoomToolMode && (() => {
-              const stripSide = (label: string) => label.replace(/^(Left |Right )/, '').replace(/ \(.*\)$/, '');
-
-              return (
-              <div className="absolute top-2 left-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[230px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Search className="h-3.5 w-3.5 text-cyan-400" />
-                    <span className="text-[11px] font-semibold text-white">Anatomy Browser</span>
-                  </div>
-                  <button className="text-gray-400 hover:text-white" onClick={() => setZoomToolMode(false)}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <p className="text-[9px] text-gray-400 mb-2">Select a region to zoom in, or expand to pick a specific landmark.</p>
-                <div className="space-y-0.5">
-                  {zoomRegionLandmarks.map(({ region, label, landmarks }) => {
-                    const isExpanded = expandedZoomRegion === region;
-                    const isActive = zoomToRegion === region;
-                    return (
-                      <div key={region} className="rounded-md overflow-hidden">
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            className={`flex-1 flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-l-md transition-colors text-left ${
-                              isActive
-                                ? 'bg-cyan-500/25 text-cyan-300'
-                                : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
-                            }`}
-                            onClick={() => { setZoomToRegion(region); setExpandedZoomRegion(isExpanded ? null : region); }}
-                          >
-                            <Bone className="h-3 w-3 flex-shrink-0 opacity-60" />
-                            <span className="flex-1">{label}</span>
-                            <span className="text-[8px] text-gray-500">{landmarks.length}</span>
-                          </button>
-                          <button
-                            className={`px-1.5 py-1.5 rounded-r-md transition-colors ${
-                              isExpanded
-                                ? 'bg-cyan-500/25 text-cyan-300'
-                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                            }`}
-                            onClick={(e) => { e.stopPropagation(); setExpandedZoomRegion(isExpanded ? null : region); if (!isExpanded) setZoomToRegion(region); }}
-                          >
-                            <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                        </div>
-                        {isExpanded && landmarks.length > 0 && (
-                          <div className="ml-2 mt-0.5 mb-1 border-l border-cyan-500/20 pl-2 space-y-0.5">
-                            {landmarks.map((lm) => (
-                              <button
-                                key={lm.boneName}
-                                className="w-full flex items-center gap-1.5 text-[9px] px-1.5 py-1 rounded text-left text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
-                                onClick={() => {
-                                  handleLandmarkSelect({ label: lm.label, boneName: lm.boneName, position: { x: 0, y: 0, z: 0 } });
-                                }}
-                              >
-                                <MapPin className="h-2.5 w-2.5 flex-shrink-0 text-cyan-500/50" />
-                                <span className="truncate">{stripSide(lm.label)}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  className="w-full mt-2 text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-                  onClick={() => { setZoomToRegion('full_body'); setExpandedZoomRegion(null); }}
-                >
-                  Reset to Full Body
-                </button>
-              </div>
-              );
-            })()}
 
             {/* Clinical Highlights Legend */}
             {clinicalHighlights.length > 0 && !forceMode && (
@@ -14550,131 +14416,6 @@ ${ddxList}`;
               </div>
             )}
 
-            {/* ROM Joint Slider Panel */}
-            {selectedRomJoint && romMode && (
-              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2 z-20 w-72 max-h-[calc(100%-16px)] overflow-y-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-[11px] text-blue-300 uppercase tracking-wider font-medium">ROM Assessment</p>
-                    <p className="text-[13px] text-white font-semibold">{selectedRomJoint.label}</p>
-                  </div>
-                  <button
-                    className="text-gray-400 hover:text-white"
-                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {selectedRomJoint.movements.map(movement => {
-                    const isDeficitType = movement.id.includes('deficit') || movement.label.toLowerCase().includes('contracture') || movement.label.toLowerCase().includes('lag');
-                    const val = romValues[movement.id] ?? (isDeficitType ? 0 : movement.normalRange[1]);
-                    const maxRange = isDeficitType ? Math.max(movement.normalRange[1] * 6, 30) : Math.max(movement.normalRange[1], 10);
-                    const restricted = isDeficitType ? val > movement.normalRange[1] : val < movement.normalRange[1];
-                    const pct = isDeficitType
-                      ? (maxRange > 0 ? Math.round(((maxRange - val) / maxRange) * 100) : 100)
-                      : (maxRange > 0 ? Math.round((val / maxRange) * 100) : 100);
-                    return (
-                      <div key={movement.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] text-gray-300">{movement.label}</span>
-                          <span className={`text-[12px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
-                            {val}{movement.unit}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Slider
-                            value={[val]}
-                            min={0}
-                            max={maxRange}
-                            step={1}
-                            onValueChange={([v]) => setRomValues(prev => ({ ...prev, [movement.id]: v }))}
-                            className="flex-1"
-                          />
-                          <span className="text-[9px] text-gray-500 w-14 text-right">
-                            {isDeficitType ? 'Accept:' : 'Normal:'} {movement.normalRange[1]}{movement.unit}
-                          </span>
-                        </div>
-                        {restricted && (
-                          <div className="mt-0.5 h-1 rounded-full bg-gray-700 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-1 mt-3">
-                  <Button
-                    size="sm"
-                    className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={handleRomSave}
-                  >
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Save Measurements
-                  </Button>
-                  <button
-                    className="text-[10px] text-gray-400 hover:text-white px-2"
-                    onClick={() => { setSelectedRomJoint(null); setRomValues({}); }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ROM Measurements List */}
-            {romMeasurements.length > 0 && romMode && !selectedRomJoint && (
-              <div className="absolute bottom-12 right-2 bg-black/80 backdrop-blur rounded-lg px-3 py-2 z-10 w-72 max-h-64 overflow-y-auto">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] text-blue-300 uppercase tracking-wider font-medium">ROM Findings ({romMeasurements.length})</p>
-                  <button
-                    className="text-[10px] text-red-400 hover:text-red-300"
-                    onClick={() => setRomMeasurements([])}
-                  >
-                    Clear All
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  {romMeasurements.map((m, i) => {
-                    const restricted = isRomRestricted(m);
-                    return (
-                      <div key={i} className="flex items-center gap-2 bg-white/5 rounded px-2 py-1">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${restricted ? 'bg-amber-400' : 'bg-green-400'}`} />
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[10px] text-gray-400">{m.jointLabel}</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[11px] text-white truncate">{m.movementLabel}</span>
-                            <span className={`text-[11px] font-mono font-bold ${restricted ? 'text-amber-400' : 'text-green-400'}`}>
-                              {m.measuredValue}{m.unit}
-                            </span>
-                            <span className="text-[9px] text-gray-500">/ {m.normalRange[1]}{m.unit}</span>
-                          </div>
-                        </div>
-                        <button
-                          className="text-gray-500 hover:text-red-400"
-                          onClick={() => setRomMeasurements(prev => prev.filter((_, idx) => idx !== i))}
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full mt-2 h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={handleRomSendToChat}
-                  disabled={isStreaming}
-                >
-                  <Stethoscope className="h-3 w-3 mr-1" />
-                  Send ROM to Chat
-                </Button>
-              </div>
-            )}
 
             {/* Skeleton controls bar */}
             <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1 z-10 pointer-events-none [&>*]:pointer-events-auto">
@@ -14737,7 +14478,6 @@ ${ddxList}`;
                     const newMode = !painMarkerMode;
                     setPainMarkerMode(newMode);
                     if (newMode) {
-                      setRomMode(false);
                       setPoseMode(false);
                       setCameraMode(false);
                       setCameraPoseActive(false);
@@ -14758,30 +14498,6 @@ ${ddxList}`;
                   {painMarkerMode ? 'Marking...' : 'Mark Pain'}
                 </Button>
               </div>
-              {skeletonMode !== 'movement' && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${romMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !romMode;
-                  setRomMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setPoseMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    toast({ title: "ROM Measurement Mode", description: "Click on a highlighted joint to measure its range of motion." });
-                  } else {
-                    setSelectedRomJoint(null);
-                    setRomValues({});
-                  }
-                }}
-              >
-                <Ruler className="h-3 w-3 mr-1" />
-                {romMode ? 'Measuring...' : 'Measure ROM'}
-              </Button>
-              )}
               {skeletonMode === 'movement' ? (
                 <>
                   <div
@@ -14845,7 +14561,6 @@ ${ddxList}`;
                     setPoseMode(newMode);
                     if (newMode) {
                       setPainMarkerMode(false);
-                      setRomMode(false);
                       setCameraMode(false);
                       setCameraPoseActive(false);
                       setSelectedRomJoint(null);
@@ -14859,26 +14574,6 @@ ${ddxList}`;
               )}
               {skeletonMode !== 'movement' && (
               <>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${zoomToolMode ? 'bg-cyan-500 text-white hover:bg-cyan-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !zoomToolMode;
-                  setZoomToolMode(newMode);
-                  if (newMode) {
-                    setPainMarkerMode(false);
-                    setRomMode(false);
-                    setPoseMode(false);
-                    setCameraMode(false);
-                    setCameraPoseActive(false);
-                    toast({ title: "Zoom & Landmark Tool", description: "Scroll to zoom into specific anatomical structures. Click on a labeled landmark to place a pain marker and get AI clinical analysis." });
-                  }
-                }}
-              >
-                <Search className="h-3 w-3 mr-1" />
-                {zoomToolMode ? 'Zooming...' : 'Zoom'}
-              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -14938,24 +14633,6 @@ ${ddxList}`;
               >
                 <Network className="h-3 w-3 mr-1" />
                 {correlationMode ? 'Correlate On' : 'Correlate'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${showScarPanel ? 'bg-pink-500 text-white hover:bg-pink-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  const newMode = !showScarPanel;
-                  setShowScarPanel(newMode);
-                  if (newMode) {
-                    toast({ title: "Scar Tissue Mapping", description: "Document surgical scars and adhesion bands on the 3D model. Click placement buttons then click the skeleton." });
-                  }
-                }}
-              >
-                <Scissors className="h-3 w-3 mr-1" />
-                Scars
-                {scarMarkers.length > 0 && (
-                  <span className="ml-1 bg-pink-400 text-white text-[9px] rounded-full px-1 leading-tight">{scarMarkers.length}</span>
-                )}
               </Button>
               <Button
                 variant="secondary"
@@ -15062,7 +14739,6 @@ ${ddxList}`;
                       // interaction on after a conflicting tool activates).
                       setPoseMode(false);
                       setPainMarkerMode(false);
-                      setRomMode(false);
                       setCameraMode(false);
                       setCameraPoseActive(false);
                       setSelectedRomJoint(null);
@@ -15095,7 +14771,6 @@ ${ddxList}`;
                       if (showMechanicsAnalyser) setShowMechanicsAnalyser(false);
                       setPoseMode(false);
                       setPainMarkerMode(false);
-                      setRomMode(false);
                       setCameraMode(false);
                       setCameraPoseActive(false);
                       setSelectedRomJoint(null);
@@ -15111,32 +14786,6 @@ ${ddxList}`;
               </Button>
               {skeletonMode !== 'movement' && skeletonMode !== 'treatment' && (
               <>
-              <Button
-                variant="secondary"
-                size="sm"
-                className={`h-7 text-xs shadow-sm ${clinicalReasoningOpen && reasoningActiveTab === 'evidence' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                onClick={() => {
-                  if (clinicalReasoningOpen && reasoningActiveTab === 'evidence') {
-                    setClinicalReasoningOpen(false);
-                  } else {
-                    setClinicalReasoningOpen(true);
-                    setReasoningRequestedTab('evidence');
-                  }
-                }}
-              >
-                <BookOpen className="h-3 w-3 mr-1" />
-                Evidence
-                {evidenceLoading && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse inline-block" />}
-                {!evidenceLoading && evidenceEngineResult && (() => {
-                  const totalCount = (evidenceEngineResult.pubmedPapers?.length || 0) + (evidenceEngineResult.options?.length || 0);
-                  return totalCount > 0 ? (
-                    <span className="ml-1 text-[7px] px-1 py-0.5 rounded-full bg-amber-500/30 text-amber-200 min-w-[14px] text-center inline-block">{totalCount}</span>
-                  ) : (
-                    <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-300 inline-block" />
-                  );
-                })()}
-              </Button>
-              <div className="w-px h-5 bg-gray-600/50 mx-0.5" />
               <Button
                 variant="secondary"
                 size="sm"
@@ -15218,54 +14867,6 @@ ${ddxList}`;
                   </div>
                 </PopoverContent>
               </Popover>
-              <div className="relative">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className={`h-7 text-xs shadow-sm ${showEnvironmentPicker ? 'bg-indigo-500 text-white hover:bg-indigo-600' : 'bg-gray-800/80 text-gray-200 hover:bg-gray-700/90 hover:text-white border border-gray-600/50'}`}
-                  onClick={() => setShowEnvironmentPicker(!showEnvironmentPicker)}
-                >
-                  <Palette className="h-3 w-3 mr-1" />
-                  Scene
-                </Button>
-                {showEnvironmentPicker && (
-                  <div className="absolute bottom-full mb-2 left-0 bg-gray-900/95 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-2xl p-3 w-56 z-50 animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-[11px] font-semibold text-white">Virtual Environment</span>
-                      <button onClick={() => setShowEnvironmentPicker(false)} className="text-gray-400 hover:text-white">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ENVIRONMENT_PRESETS.map(env => (
-                        <button
-                          key={env.id}
-                          onClick={() => {
-                            setEnvironmentPreset(env.id);
-                            setShowEnvironmentPicker(false);
-                          }}
-                          className={`group rounded-lg overflow-hidden border transition-all ${
-                            environmentPreset === env.id
-                              ? 'border-indigo-500 ring-1 ring-indigo-500/40'
-                              : 'border-gray-700/50 hover:border-gray-600'
-                          }`}
-                        >
-                          <div
-                            className="h-10 w-full"
-                            style={{ background: env.thumbnail }}
-                          />
-                          <div className={`px-2 py-1.5 ${environmentPreset === env.id ? 'bg-indigo-500/15' : 'bg-gray-800/80'}`}>
-                            <div className={`text-[10px] font-medium truncate ${environmentPreset === env.id ? 'text-indigo-300' : 'text-gray-300 group-hover:text-white'}`}>
-                              {env.name}
-                            </div>
-                            <div className="text-[8px] text-gray-500 truncate">{env.description}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
               <Button
                 variant="secondary"
                 size="sm"
@@ -15363,12 +14964,7 @@ ${ddxList}`;
                   setPainMarkerMode(false);
                   setForceMode(false);
                   setMuscleMode(false);
-                  setRomMode(false);
                   setPoseMode(false);
-                  setZoomToolMode(false);
-                  setScarPlacementMode(null);
-                  setAdhesionPlacementStep('idle');
-                  setPendingAdhesionStart(null);
 
                   clinicalTextAppliedRef.current = null;
                   // Voice Activity dock: session reset clears the
@@ -15422,162 +15018,6 @@ ${ddxList}`;
               </div>
             </div>
 
-            {showScarPanel && (
-              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur rounded-lg px-3 py-2.5 z-10 w-[280px] max-h-[calc(100%-60px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Scissors className="h-3.5 w-3.5 text-pink-400" />
-                    <span className="text-[11px] font-semibold text-white">Scar Tissue Mapping</span>
-                  </div>
-                  <button onClick={() => setShowScarPanel(false)} className="text-gray-400 hover:text-white">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-
-                {scarPlacementMode && (
-                  <div className="mb-2 p-2 rounded-lg bg-pink-500/20 border border-pink-500/30 text-[9px] text-pink-300">
-                    Click on the skeleton to place a {SCAR_TYPES[scarPlacementMode].label.toLowerCase()}
-                    <button className="ml-2 text-pink-400 hover:text-white underline" onClick={() => setScarPlacementMode(null)}>Cancel</button>
-                  </div>
-                )}
-                {adhesionPlacementStep !== 'idle' && (
-                  <div className="mb-2 p-2 rounded-lg bg-red-500/20 border border-red-500/30 text-[9px] text-red-300">
-                    {adhesionPlacementStep === 'start' ? 'Click skeleton for adhesion START point' : 'Click skeleton for adhesion END point'}
-                    <button className="ml-2 text-red-400 hover:text-white underline" onClick={() => { setAdhesionPlacementStep('idle'); setPendingAdhesionStart(null); }}>Cancel</button>
-                  </div>
-                )}
-
-                <div className="mb-3">
-                  <span className="text-[9px] text-gray-400 font-medium">Place Markers</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(Object.entries(SCAR_TYPES) as [ScarType, typeof SCAR_TYPES[ScarType]][]).map(([type, info]) => (
-                      <Button
-                        key={type}
-                        variant="secondary"
-                        size="sm"
-                        className={`h-6 text-[9px] ${scarPlacementMode === type ? 'bg-pink-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
-                        onClick={() => setScarPlacementMode(scarPlacementMode === type ? null : type)}
-                      >
-                        {info.label}
-                      </Button>
-                    ))}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className={`h-6 text-[9px] ${adhesionPlacementStep !== 'idle' ? 'bg-red-500 text-white' : 'bg-gray-800/80 text-gray-300 border border-gray-600/50'}`}
-                      onClick={() => {
-                        if (adhesionPlacementStep !== 'idle') {
-                          setAdhesionPlacementStep('idle');
-                          setPendingAdhesionStart(null);
-                        } else {
-                          setAdhesionPlacementStep('start');
-                          setScarPlacementMode(null);
-                        }
-                      }}
-                    >
-                      Adhesion Band
-                    </Button>
-                  </div>
-                </div>
-
-                {scarMarkers.length > 0 && (
-                  <div className="mb-3">
-                    <span className="text-[9px] text-gray-400 font-medium">Scars ({scarMarkers.length})</span>
-                    <div className="space-y-1 mt-1">
-                      {scarMarkers.map(scar => (
-                        <div key={scar.id} className={`p-1.5 rounded border transition-colors cursor-pointer ${editingScar === scar.id ? 'border-pink-500/50 bg-pink-500/10' : 'border-gray-700/50 bg-white/5 hover:bg-white/10'}`}>
-                          <div className="flex items-center justify-between" onClick={() => setEditingScar(editingScar === scar.id ? null : scar.id)}>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: SCAR_TYPES[scar.type].color }} />
-                              <span className="text-[9px] text-gray-200">{SCAR_TYPES[scar.type].label}</span>
-                              <span className="text-[8px] text-gray-500">{scar.anatomicalLabel}</span>
-                            </div>
-                            <button className="text-gray-500 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setScarMarkers(prev => prev.filter(s => s.id !== scar.id)); if (editingScar === scar.id) setEditingScar(null); }}>
-                              <Trash2 className="h-2.5 w-2.5" />
-                            </button>
-                          </div>
-                          {editingScar === scar.id && (
-                            <div className="mt-2 space-y-2 border-t border-gray-700/50 pt-2">
-                              <div>
-                                <label className="text-[8px] text-gray-400">Severity</label>
-                                <Slider value={[scar.severity]} min={1} max={5} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, severity: v } : s))} className="mt-0.5" />
-                                <span className="text-[8px] text-gray-500">{SCAR_SEVERITY_LABELS[scar.severity as keyof typeof SCAR_SEVERITY_LABELS]?.label}</span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-1">
-                                <div>
-                                  <label className="text-[8px] text-gray-400">Age</label>
-                                  <select value={scar.age} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, age: e.target.value as ScarAge } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
-                                    <option value="acute">Acute</option>
-                                    <option value="subacute">Subacute</option>
-                                    <option value="chronic">Chronic</option>
-                                    <option value="mature">Mature</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="text-[8px] text-gray-400">Mobility</label>
-                                  <select value={scar.mobility} onChange={(e) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, mobility: e.target.value as ScarMobility } : s))} className="w-full bg-gray-800 border border-gray-700 rounded text-[9px] text-gray-200 px-1 py-0.5">
-                                    <option value="mobile">Mobile</option>
-                                    <option value="tethered">Tethered</option>
-                                    <option value="fixed">Fixed</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-[8px] text-gray-400">Affected Layers</label>
-                                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                                  {(Object.keys(TISSUE_LAYERS) as TissueLayer[]).map(layer => (
-                                    <button key={layer} className={`text-[7px] px-1 py-0.5 rounded ${scar.affectedLayers.includes(layer) ? 'bg-pink-500/30 text-pink-300' : 'bg-white/5 text-gray-500'}`} onClick={() => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, affectedLayers: s.affectedLayers.includes(layer) ? s.affectedLayers.filter(l => l !== layer) : [...s.affectedLayers, layer] } : s))}>
-                                      {TISSUE_LAYERS[layer].label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <label className="text-[8px] text-gray-400">Pain on Palpation (0-10)</label>
-                                <Slider value={[scar.painOnPalpation]} min={0} max={10} step={1} onValueChange={([v]) => setScarMarkers(prev => prev.map(s => s.id === scar.id ? { ...s, painOnPalpation: v } : s))} className="mt-0.5" />
-                                <span className="text-[8px] text-gray-500">{scar.painOnPalpation}/10</span>
-                              </div>
-                              {(() => {
-                                const impact = getScarImpact(scar);
-                                return impact.affectedChains.length > 0 || impact.restrictedMovements.length > 0 ? (
-                                  <div className="p-1.5 rounded bg-yellow-500/10 border border-yellow-500/30">
-                                    <span className="text-[8px] font-medium text-yellow-400">Clinical Impact</span>
-                                    {impact.affectedChains.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Chains: {impact.affectedChains.map(c => c.chain.name).join(', ')}</p>}
-                                    {impact.restrictedMovements.length > 0 && <p className="text-[7px] text-yellow-300 mt-0.5">Restrictions: {impact.restrictedMovements.join(', ')}</p>}
-                                  </div>
-                                ) : null;
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adhesionBands.length > 0 && (
-                  <div>
-                    <span className="text-[9px] text-gray-400 font-medium">Adhesion Bands ({adhesionBands.length})</span>
-                    <div className="space-y-1 mt-1">
-                      {adhesionBands.map(band => (
-                        <div key={band.id} className="p-1.5 rounded border border-gray-700/50 bg-white/5 flex items-center justify-between">
-                          <div>
-                            <span className="text-[9px] text-gray-200">{band.startBone} → {band.endBone}</span>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-[8px] text-gray-500">Tension: {band.tensionLevel}%</span>
-                              <span className="text-[8px] text-gray-500">Depth: {band.depth}</span>
-                            </div>
-                          </div>
-                          <button className="text-gray-500 hover:text-red-400" onClick={() => setAdhesionBands(prev => prev.filter(b => b.id !== band.id))}>
-                            <Trash2 className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {tissueViewMode && (
               <div className="absolute top-2 right-2 z-30 w-[280px] animate-in slide-in-from-right-2 duration-200">
@@ -18338,6 +17778,7 @@ ${ddxList}`;
         requestedTab={reasoningRequestedTab}
         onRequestedTabHandled={() => setReasoningRequestedTab(null)}
         onActiveTabChange={setReasoningActiveTab}
+        showEvidenceTab={false}
         externalClinicalNotes={clinicalNotes}
         onExternalClinicalNotesChange={(notes) => {
           setClinicalNotes(notes);

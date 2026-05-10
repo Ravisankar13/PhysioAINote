@@ -7737,7 +7737,10 @@ export default function PureThreeGLBViewer({
       const wp = new THREE.Vector3();
       bones[boneName]?.getWorldPosition(wp);
       buildArrowsForJoint(jointKey, wp);
-      if (skeletonModeRef.current === 'movement') {
+      // Task #400 — Posture mode also gets the slider HUD now, so we
+      // populate movementSelectedJoint in both Posture and Movement
+      // (Treatment still suppresses the chip).
+      if (skeletonModeRef.current !== 'treatment') {
         const screen = wp.clone().project(camera);
         const rect = domElement.getBoundingClientRect();
         const sx = (screen.x * 0.5 + 0.5) * rect.width;
@@ -8143,9 +8146,11 @@ export default function PureThreeGLBViewer({
       // free to begin a camera drag from the same gesture.
       if (
         (!boneName || !POSE_BONE_MAP[boneName]) &&
-        skeletonModeRef.current === 'movement' &&
+        skeletonModeRef.current !== 'treatment' &&
         (selectedJointKey || selectedAnchorBoneName || selectedBoneSegmentId)
       ) {
+        // Task #400 — In Posture mode too, a click on empty space dismisses
+        // the slider chip and clears the joint selection, matching Movement.
         deselectJoint();
         return;
       }
@@ -8339,7 +8344,7 @@ export default function PureThreeGLBViewer({
           // skeleton) on every frame. We write to a ref so this does not
           // force a viewer-wide re-render — the slider HUD reads it via
           // a getter and re-renders itself on its own raf tick.
-          if (skeletonModeRef.current === 'movement') {
+          if (skeletonModeRef.current !== 'treatment') {
             const screen = wp.clone().project(camera);
             const rect = domElement.getBoundingClientRect();
             const sx = (screen.x * 0.5 + 0.5) * rect.width;
@@ -12206,7 +12211,7 @@ export default function PureThreeGLBViewer({
           arrow drag. Pin toggle reuses lockedMovementConfigKeys so a
           pinned slider DOF skips spring-back. The 3D arrow gizmo stays
           rendered as the fallback. */}
-      {skeletonMode === 'movement' && movementSelectedJoint && (() => {
+      {skeletonMode !== 'treatment' && movementSelectedJoint && (() => {
         const seen = new Set<string>();
         const dofs: SliderDof[] = (JOINT_MOVEMENT_DEFS[movementSelectedJoint.key] ?? [])
           .filter(def => DOF_LIMIT_INDEX.has(def.configKey))
@@ -12262,6 +12267,7 @@ export default function PureThreeGLBViewer({
             }}
             onClose={() => sliderHudApiRef.current?.deselect()}
             getCanvasEl={() => canvasElRef.current}
+            hidePinControls={skeletonMode === 'posture'}
           />
         );
       })()}

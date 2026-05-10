@@ -40,6 +40,13 @@ export interface MovementJointSliderHUDProps {
    * under the drag/selection that's about to start.
    */
   getCanvasEl: () => HTMLElement | null;
+  /**
+   * Task #400: hide the per-DOF pin button and the spring-back footer
+   * line. Used by Posture mode where pinning is meaningless because
+   * there is no spring-back tween to opt out of — slider drags persist
+   * directly, like the 3D arrow drag already does.
+   */
+  hidePinControls?: boolean;
 }
 
 const TRACK_WIDTH_PX = 160;
@@ -60,6 +67,7 @@ export default function MovementJointSliderHUD({
   onTogglePin,
   onClose,
   getCanvasEl,
+  hidePinControls = false,
 }: MovementJointSliderHUDProps) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -448,21 +456,23 @@ export default function MovementJointSliderHUD({
               <div className="text-[10px] font-semibold tabular-nums text-white w-9 text-right">
                 {Math.round(current)}°
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onTogglePin(dof.configKey); }}
-                onMouseDown={e => e.stopPropagation()}
-                className={`shrink-0 rounded-md p-1 transition-colors ${dof.pinned ? 'bg-amber-500/30 text-amber-200 hover:bg-amber-500/40' : 'bg-slate-700/40 text-slate-400 hover:bg-slate-700/70 hover:text-slate-100'}`}
-                title={dof.pinned ? 'Unpin (allow spring-back)' : 'Pin (skip spring-back)'}
-                data-testid={`slider-pin-${dof.configKey}`}
-              >
-                {dof.pinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
-              </button>
+              {!hidePinControls && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onTogglePin(dof.configKey); }}
+                  onMouseDown={e => e.stopPropagation()}
+                  className={`shrink-0 rounded-md p-1 transition-colors ${dof.pinned ? 'bg-amber-500/30 text-amber-200 hover:bg-amber-500/40' : 'bg-slate-700/40 text-slate-400 hover:bg-slate-700/70 hover:text-slate-100'}`}
+                  title={dof.pinned ? 'Unpin (allow spring-back)' : 'Pin (skip spring-back)'}
+                  data-testid={`slider-pin-${dof.configKey}`}
+                >
+                  {dof.pinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
+                </button>
+              )}
             </div>
           );
         })}
         <div className="text-[9px] text-slate-400 px-1 pt-0.5 border-t border-slate-700/40">
-          Drag to test · release springs back · pin to keep
+          {hidePinControls ? 'Drag to set the joint angle' : 'Drag to test · release springs back · pin to keep'}
         </div>
       </div>
     </div>

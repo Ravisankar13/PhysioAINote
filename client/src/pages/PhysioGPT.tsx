@@ -10701,13 +10701,25 @@ ${ddxList}`;
     for (const g of chainMuscleHighlights.groups) {
       if (!seen.has(g)) { seen.add(g); merged.push(g); }
     }
+    // Task #404 — include groups from muscle-popup overrides so the GLB
+    // mesh paints them (replaces the removed bone-cloud highlights).
+    for (const g of muscleOverrideMeshHighlights.groups) {
+      if (!seen.has(g)) { seen.add(g); merged.push(g); }
+    }
     return merged.length > 0 ? merged : undefined;
-  }, [biomechanicalMuscleHighlights, chainMuscleHighlights]);
+  }, [biomechanicalMuscleHighlights, chainMuscleHighlights, muscleOverrideMeshHighlights]);
 
   const mergedMuscleHighlightColors = useMemo<Record<string, string> | undefined>(() => {
-    const merged: Record<string, string> = { ...chainMuscleHighlights.colors, ...muscleHighlightColors };
+    // Task #404 — Override-derived colours sit between chain colours and
+    // explicit `muscleHighlightColors` so a clinician's manual popup edit
+    // beats the chain default but still yields to other explicit highlights.
+    const merged: Record<string, string> = {
+      ...chainMuscleHighlights.colors,
+      ...muscleOverrideMeshHighlights.colors,
+      ...muscleHighlightColors,
+    };
     return Object.keys(merged).length > 0 ? merged : undefined;
-  }, [chainMuscleHighlights, muscleHighlightColors]);
+  }, [chainMuscleHighlights, muscleOverrideMeshHighlights, muscleHighlightColors]);
 
   const handleChainNodeClick = useCallback((data: { chainId: string; muscleId: string; chainName: string }) => {
     setSelectedChainNode(prev => prev?.muscleId === data.muscleId && prev?.chainId === data.chainId ? null : data);
@@ -10758,77 +10770,96 @@ ${ddxList}`;
   // each bone (which clinicians described as "clouds overlaying the muscles").
   const chainHighlightBones = useMemo(() => undefined, []);
 
-  const muscleOverrideHighlights = useMemo(() => {
+  // Task #404 — Previously this returned an array of `{boneName, color,
+  // intensity, glowSize}` entries that fed into PureThreeGLBViewer's
+  // `highlightBoneNames` prop, which renders translucent bone-anchored
+  // glow spheres. Editing muscle properties (length, tone, activation,
+  // pathology) in the muscle popup therefore drew large amorphous "clouds"
+  // over hips/knees/lumbar/etc. that obscured the avatar without telling
+  // the clinician *which* muscle was affected. Mirroring the Task #399
+  // fascial-chain fix, we now produce a `{groups, colors}` map keyed by
+  // GLB muscle-group IDs (matching `MUSCLE_GROUPS` in muscleGroupSplitter)
+  // which is merged into `mergedMuscleHighlightColors` below and painted
+  // directly onto the body mesh.
+  const muscleOverrideMeshHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
     const entries = Object.entries(muscleOverrides).filter(([_, ov]) => ov?.isManual);
-    if (entries.length === 0) return [];
+    if (entries.length === 0) return { groups: [], colors: {} };
 
-    const MUSCLE_TO_BONES: Record<string, string[]> = {
-      l_glut_max: ['Hip_L'], l_glut_med: ['Hip_L'], l_glut_min: ['Hip_L'], l_piriformis: ['Hip_L'],
-      r_glut_max: ['Hip_R'], r_glut_med: ['Hip_R'], r_glut_min: ['Hip_R'], r_piriformis: ['Hip_R'],
-      l_rect_fem: ['Hip_L', 'Knee_L'], l_vast_lat: ['Knee_L'], l_vast_med: ['Knee_L'], l_hamstrings: ['Hip_L', 'Knee_L'],
-      r_rect_fem: ['Hip_R', 'Knee_R'], r_vast_lat: ['Knee_R'], r_vast_med: ['Knee_R'], r_hamstrings: ['Hip_R', 'Knee_R'],
-      l_hip_flexors: ['Hip_L'], l_adductors: ['Hip_L'],
-      r_hip_flexors: ['Hip_R'], r_adductors: ['Hip_R'],
-      l_gastroc: ['Knee_L', 'Ankle_L'], l_soleus: ['Ankle_L'],
-      r_gastroc: ['Knee_R', 'Ankle_R'], r_soleus: ['Ankle_R'],
-      l_tib_ant: ['Ankle_L'], l_peroneals: ['Ankle_L'], l_tib_post: ['Ankle_L'], l_plantar_fascia: ['Ankle_L'],
-      r_tib_ant: ['Ankle_R'], r_peroneals: ['Ankle_R'], r_tib_post: ['Ankle_R'], r_plantar_fascia: ['Ankle_R'],
-      l_ant_deltoid: ['Shoulder_L'], l_mid_deltoid: ['Shoulder_L'], l_post_deltoid: ['Shoulder_L'], l_supraspinatus: ['Shoulder_L'],
-      r_ant_deltoid: ['Shoulder_R'], r_mid_deltoid: ['Shoulder_R'], r_post_deltoid: ['Shoulder_R'], r_supraspinatus: ['Shoulder_R'],
-      l_infraspinatus: ['Shoulder_L'], l_upper_trap: ['Shoulder_L', 'Neck_M'], l_lower_trap: ['Shoulder_L'],
-      r_infraspinatus: ['Shoulder_R'], r_upper_trap: ['Shoulder_R', 'Neck_M'], r_lower_trap: ['Shoulder_R'],
-      l_rhomboids: ['Shoulder_L'], l_serratus_ant: ['Shoulder_L'],
-      r_rhomboids: ['Shoulder_R'], r_serratus_ant: ['Shoulder_R'],
-      l_biceps: ['Elbow_L'], l_triceps: ['Elbow_L'], l_wrist_flex: ['Elbow_L'], l_wrist_ext: ['Elbow_L'],
-      r_biceps: ['Elbow_R'], r_triceps: ['Elbow_R'], r_wrist_flex: ['Elbow_R'], r_wrist_ext: ['Elbow_R'],
-      l_pec_major: ['Shoulder_L'], l_pec_minor: ['Shoulder_L'],
-      r_pec_major: ['Shoulder_R'], r_pec_minor: ['Shoulder_R'],
-      rectus_abdominis: ['RootPart1_M'], transverse_abdominis: ['RootPart1_M'], obliques: ['RootPart1_M'],
-      erector_spinae_lumbar: ['RootPart1_M'], erector_spinae_thoracic: ['Spine1Part2_M'],
-      multifidus: ['RootPart1_M'],
+    const MUSCLE_TO_GROUPS: Record<string, string[]> = {
+      l_glut_max: ['glute_l'], l_glut_med: ['glute_l'], l_glut_min: ['glute_l'], l_piriformis: ['glute_l'],
+      r_glut_max: ['glute_r'], r_glut_med: ['glute_r'], r_glut_min: ['glute_r'], r_piriformis: ['glute_r'],
+      l_rect_fem: ['quad_l'], l_vast_lat: ['quad_l'], l_vast_med: ['quad_l'], l_hamstrings: ['quad_l', 'glute_l'],
+      r_rect_fem: ['quad_r'], r_vast_lat: ['quad_r'], r_vast_med: ['quad_r'], r_hamstrings: ['quad_r', 'glute_r'],
+      l_hip_flexors: ['quad_l'], l_adductors: ['quad_l'],
+      r_hip_flexors: ['quad_r'], r_adductors: ['quad_r'],
+      l_gastroc: ['calf_l'], l_soleus: ['calf_l'],
+      r_gastroc: ['calf_r'], r_soleus: ['calf_r'],
+      l_tib_ant: ['shin_l'], l_peroneals: ['shin_l'], l_tib_post: ['shin_l'], l_plantar_fascia: ['shin_l', 'foot_l'],
+      r_tib_ant: ['shin_r'], r_peroneals: ['shin_r'], r_tib_post: ['shin_r'], r_plantar_fascia: ['shin_r', 'foot_r'],
+      l_ant_deltoid: ['deltoid_l'], l_mid_deltoid: ['deltoid_l'], l_post_deltoid: ['deltoid_l'], l_supraspinatus: ['scapula_l'],
+      r_ant_deltoid: ['deltoid_r'], r_mid_deltoid: ['deltoid_r'], r_post_deltoid: ['deltoid_r'], r_supraspinatus: ['scapula_r'],
+      l_infraspinatus: ['scapula_l'], l_upper_trap: ['neck', 'scapula_l'], l_lower_trap: ['scapula_l'],
+      r_infraspinatus: ['scapula_r'], r_upper_trap: ['neck', 'scapula_r'], r_lower_trap: ['scapula_r'],
+      l_rhomboids: ['scapula_l'], l_serratus_ant: ['scapula_l', 'chest'],
+      r_rhomboids: ['scapula_r'], r_serratus_ant: ['scapula_r', 'chest'],
+      l_biceps: ['bicep_l'], l_triceps: ['bicep_l'], l_wrist_flex: ['bicep_l'], l_wrist_ext: ['bicep_l'],
+      r_biceps: ['bicep_r'], r_triceps: ['bicep_r'], r_wrist_flex: ['bicep_r'], r_wrist_ext: ['bicep_r'],
+      l_pec_major: ['chest'], l_pec_minor: ['chest'],
+      r_pec_major: ['chest'], r_pec_minor: ['chest'],
+      rectus_abdominis: ['core'], transverse_abdominis: ['core'], obliques: ['core'],
+      erector_spinae_lumbar: ['core', 'spine'], erector_spinae_thoracic: ['spine'],
+      multifidus: ['core', 'spine'],
     };
 
-    const boneAccum: Record<string, { color: number; intensity: number; count: number }> = {};
+    // Higher rank == more clinically severe; wins on collision so the most
+    // diagnostic colour is what the clinician sees on a shared mesh group
+    // (e.g. l_glut_max + l_glut_med both touching `glute_l`).
+    const colorRank = (hex: string): number => {
+      switch (hex) {
+        case '#ef4444': return 5;  // pathology / shortened
+        case '#a855f7': return 4;  // inhibited
+        case '#f97316': return 3;  // overactive / hypertonic
+        case '#3b82f6': return 2;  // lengthened / underactive tone
+        case '#22c55e': return 1;  // overactive activation
+        default: return 0;
+      }
+    };
+
+    const groupColor: Record<string, string> = {};
 
     for (const [muscleId, ov] of entries) {
       if (!ov) continue;
-      const bones = MUSCLE_TO_BONES[muscleId];
-      if (!bones) continue;
+      const groups = MUSCLE_TO_GROUPS[muscleId];
+      if (!groups) continue;
 
-      let color = 0x22c55e;
-      let intensity = 0.4;
-
+      let color = '#22c55e';
       if (ov.pathology !== 'none') {
-        color = 0xef4444; intensity = 0.7;
+        color = '#ef4444';
       } else if (ov.inhibition > 30) {
-        color = 0xa855f7; intensity = 0.4 + (ov.inhibition / 100) * 0.4;
+        color = '#a855f7';
       } else if (ov.tensionOffset > 15) {
-        color = 0xf97316; intensity = 0.5 + (ov.tensionOffset / 40) * 0.3;
+        color = '#f97316';
       } else if (ov.tensionOffset < -15) {
-        color = 0x3b82f6; intensity = 0.5;
+        color = '#3b82f6';
       } else if (ov.lengthOverride === 'shortened') {
-        color = 0xef4444; intensity = 0.5;
+        color = '#ef4444';
       } else if (ov.lengthOverride === 'lengthened') {
-        color = 0x3b82f6; intensity = 0.5;
+        color = '#3b82f6';
       } else if (ov.activationOffset > 15) {
-        color = 0x22c55e; intensity = 0.5;
+        color = '#22c55e';
       } else if (ov.activationOffset < -15) {
-        color = 0xa855f7; intensity = 0.5;
+        color = '#a855f7';
       }
 
-      for (const bone of bones) {
-        if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
-          boneAccum[bone] = { color, intensity, count: (boneAccum[bone]?.count || 0) + 1 };
+      for (const g of groups) {
+        const existing = groupColor[g];
+        if (!existing || colorRank(color) > colorRank(existing)) {
+          groupColor[g] = color;
         }
       }
     }
 
-    return Object.entries(boneAccum).map(([boneName, { color, intensity }]) => ({
-      boneName,
-      color,
-      intensity,
-      glowSize: boneName.includes('Root') || boneName.includes('Spine') ? 0.22 : 0.18,
-    }));
+    return { groups: Object.keys(groupColor), colors: groupColor };
   }, [muscleOverrides]);
 
   const influenceHighlights = useMemo(() => {
@@ -10856,7 +10887,10 @@ ${ddxList}`;
     };
 
     const boneAccum: Record<string, { color: number; intensity: number }> = {};
-    const overrideBones = new Set(muscleOverrideHighlights.map(h => h.boneName));
+    // Task #404 — muscle-override highlights now paint the body mesh
+    // directly (no bone-anchored spheres), so there is no longer an
+    // `overrideBones` set to suppress here. Influence pathway clouds
+    // remain bone-anchored as before.
 
     for (const [groupId, entry] of entries) {
       const bones = GROUP_TO_BONES[groupId];
@@ -10868,7 +10902,6 @@ ${ddxList}`;
       const color = PATHWAY_COLORS[dominant];
 
       for (const bone of bones) {
-        if (overrideBones.has(bone)) continue;
         if (!boneAccum[bone] || intensity > boneAccum[bone].intensity) {
           boneAccum[bone] = { color, intensity };
         }
@@ -10881,7 +10914,7 @@ ${ddxList}`;
       intensity,
       glowSize: boneName.includes('Root') || boneName.includes('Spine') || boneName.includes('Chest') ? 0.20 : 0.16,
     }));
-  }, [influenceMap, muscleOverrideHighlights]);
+  }, [influenceMap]);
 
   const getSeverityColor = (severity: 'mild' | 'moderate' | 'severe') => severity === 'severe' ? 'text-red-400' : severity === 'moderate' ? 'text-orange-400' : 'text-yellow-400';
 
@@ -11483,9 +11516,12 @@ ${ddxList}`;
                 })),
               ]}
               highlightBoneNames={(() => {
+                // Task #404 — muscleOverrideHighlights removed from this
+                // list; muscle-popup edits now tint the GLB mesh groups
+                // through `mergedMuscleHighlightColors` instead of drawing
+                // bone-anchored translucent spheres.
                 const boneSources = overlayVisibility.boneGlow ? [
                   ...(chainHighlightBones || []),
-                  ...muscleOverrideHighlights,
                   ...visualizationBoneHighlights,
                   ...(mechanismHighlightBones as Array<{ boneName: string; color: number; intensity: number; glowSize?: number }>),
                 ] : [];

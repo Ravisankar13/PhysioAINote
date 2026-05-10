@@ -131,7 +131,7 @@ import { getClinicalPresetCategories, applyPresetToConfig, type ClinicalPostureP
 import { KINETIC_CHAINS, type KineticChainDefinition, CHAIN_BONE_MAPPING, getChainBoneNames } from "@/lib/kineticChainExplorer";
 import { computeCrossSystemCorrelation, type CrossSystemCorrelationResult, type PainCorrelation, type CompensationPattern } from "@/lib/crossSystemCorrelation";
 import { generateTreatmentPlan, type TreatmentPlan, type PhaseBlock, type ManualTherapyTechnique, type ExercisePrescription, type RecoveryMilestone, type EvidenceGrade, type AITreatmentItem, type AIExerciseItem, type AIAssessmentItem, type AIDifferential, type RootCauseTreatmentPlan, type RootCauseTreatmentStep } from "@/lib/treatmentPathwayEngine";
-import { MYOFASCIAL_CHAINS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
+import { MYOFASCIAL_CHAINS, FUNCTIONAL_SLINGS, type MyofascialChain, computeWholeBodyTensionScore, propagateChainEffects, getChainMembership, getChainRecommendations, findChainsForBone, type ChainRecommendation, type PropagatedMuscleState, rankPainTensionContributors, computeClinicalConsequences, type ClinicalConsequenceResult } from "@/lib/myofascialChains";
 import { computeInfluenceMap, getInfluencePathwayColor, getInfluencePathwayLabel, getInfluencePathwayAbbrev, getDominantPathway, type InfluenceMap, type InfluencePathway } from "@/lib/muscleInfluenceMap";
 import { type ScarMarker, type AdhesionBand, SCAR_TYPES, getScarImpact } from "@/lib/scarTissueMapping";
 import { computePainDrivers, type PainDriverReport } from "@/lib/painDriverEngine";
@@ -10597,25 +10597,25 @@ ${ddxList}`;
     };
   }, [showUnifiedChainPanel, tensionTabActive, hasManualTensions, baseMuscleTensions.tensions, activeChainIds, painAffectedChainIds, painDriverChainIds, showPropagation, propagationDeltas]);
 
-  // Task #399 — Kinetic chain (Explorer tab) → myofascial chain id mapping.
+  // Task #399 — Kinetic chain (Explorer tab) → muscle group id mapping.
   // The Explorer tab in UnifiedChainPanel uses KINETIC_CHAINS (`selectedChainId`)
   // which carries anatomical labels like "Gastrocnemius" that don't match GLB
-  // muscle group ids. We translate the kinetic chain into the equivalent
-  // MYOFASCIAL_CHAINS entries (whose `muscleId` values DO match GLB groups
-  // like `calf_l`, `glute_r`, `spine`, …) so the muscle-mesh paint pipeline
-  // can colour the actual muscles instead of dropping translucent bone-glow
-  // spheres. Replaces the prior `chainHighlightBones` cloud-sphere overlay.
-  const KINETIC_TO_MYOFASCIAL: Record<string, string[]> = {
-    posterior_chain: ['superficial_back_l', 'superficial_back_r'],
-    anterior_chain: ['superficial_front_l', 'superficial_front_r'],
-    lateral_chain: ['lateral_line_l', 'lateral_line_r'],
-    spiral_chain: ['spiral_line_l', 'spiral_line_r'],
-    deep_longitudinal: ['deep_longitudinal'],
-    posterior_oblique_sling: ['posterior_oblique'],
-    anterior_oblique_sling: ['anterior_oblique'],
-    lateral_subsystem: ['lateral_sling'],
-    upper_extremity_chain: ['arm_line_l', 'arm_line_r'],
-    lower_extremity_chain: ['deep_front_l', 'deep_front_r'],
+  // muscle group ids. We translate the kinetic chain into:
+  //   - MYOFASCIAL_CHAINS ids (chains whose `links[].muscleId` are GLB groups), and
+  //   - FUNCTIONAL_SLINGS ids (slings whose `pairs[]` are GLB groups).
+  // Both feed the muscle-mesh paint pipeline so the actual muscles colour-up
+  // in the chain colour, instead of dropping translucent bone-glow spheres.
+  const KINETIC_TO_MYOFASCIAL: Record<string, { chains?: string[]; slings?: string[] }> = {
+    posterior_chain:        { chains: ['superficial_back_l', 'superficial_back_r'] },
+    anterior_chain:         { chains: ['superficial_front_l', 'superficial_front_r'] },
+    lateral_chain:          { chains: ['lateral_line_l', 'lateral_line_r'] },
+    spiral_chain:           { chains: ['spiral_line_l', 'spiral_line_r'] },
+    upper_extremity_chain:  { chains: ['arm_line_l', 'arm_line_r'] },
+    lower_extremity_chain:  { chains: ['deep_front_l', 'deep_front_r'] },
+    deep_longitudinal:        { slings: ['deep_longitudinal'] },
+    posterior_oblique_sling:  { slings: ['posterior_oblique'] },
+    anterior_oblique_sling:   { slings: ['anterior_oblique'] },
+    lateral_subsystem:        { slings: ['lateral_sling'] },
   };
 
   const chainMuscleHighlights = useMemo<{ groups: string[]; colors: Record<string, string> }>(() => {
@@ -10645,17 +10645,23 @@ ${ddxList}`;
     // Explorer tab: paint muscles for the user-selected kinetic chain
     if (selectedChainId) {
       const kineticChain = KINETIC_CHAINS.find(c => c.id === selectedChainId);
-      const myofascialIds = KINETIC_TO_MYOFASCIAL[selectedChainId] ?? [];
+      const mapping = KINETIC_TO_MYOFASCIAL[selectedChainId] ?? {};
       const kineticColor = kineticChain?.color ?? '#22c55e';
-      for (const myoId of myofascialIds) {
+      const addMuscle = (muscleId: string) => {
+        if (seen.has(muscleId)) return;
+        seen.add(muscleId);
+        groups.push(muscleId);
+        colors[muscleId] = kineticColor;
+      };
+      for (const myoId of mapping.chains ?? []) {
         const chain = MYOFASCIAL_CHAINS.find(c => c.id === myoId);
         if (!chain) continue;
-        for (const link of chain.links) {
-          if (seen.has(link.muscleId)) continue;
-          seen.add(link.muscleId);
-          groups.push(link.muscleId);
-          colors[link.muscleId] = kineticColor;
-        }
+        for (const link of chain.links) addMuscle(link.muscleId);
+      }
+      for (const slingId of mapping.slings ?? []) {
+        const sling = FUNCTIONAL_SLINGS.find(s => s.id === slingId);
+        if (!sling) continue;
+        for (const [a, b] of sling.pairs) { addMuscle(a); addMuscle(b); }
       }
     }
 
